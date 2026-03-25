@@ -1,0 +1,33 @@
+export const MAPA_REGIONAL = {
+  "LM Hub_SP_Campinas_São Martinho": "SPI1",
+  "LM Hub_SP_Leme": "SPI1",
+  "LM Hub_SP_Limeira_Campo Belo": "SPI1",
+  "LM Hub_SP_Mogi Mirim": "SPI1",
+  "LM Hub_SP_Piracicaba": "SPI1",
+  "LM Hub_SP_Sumaré_Nova Veneza": "SPI1",
+  "LM Hub_SP_Araraquara": "SPI2",
+  "LM Hub_SP_Bauru_Centro": "SPI2",
+  "LM Hub_SP_Jaú": "SPI2",
+  "LM Hub_SP_Ribeirão Preto_02": "SPI2",
+  "LM Hub_SP_São Carlos": "SPI2",
+  "LM Hub_SP_Barretos": "SPI3",
+  "LM Hub_SP_Franca_Distrito_Indust": "SPI3",
+  "LM Hub_SP_São José do Rio P": "SPI3",
+  "LM Hub_SP_Votuporanga": "SPI3",
+  "LM Hub_SP_Botucatu": "SPI4",
+  "LM Hub_SP_Atibaia_Ponte_Alta": "SPI4",
+  "LM Hub_SP_Itapetininga": "SPI4",
+  "LM Hub_SP_Itapeva": "SPI4",
+  "LM Hub_SP_Jundiaí": "SPI4",
+  "LM Hub_SP_Sorocaba_Região Norte": "SPI4",
+  "LM Hub_SP_Tatuí": "SPI4",
+  "LM Hub_SP_Várzea Paulista": "SPI4",
+  "LM Hub_SP_Araçatuba": "SPI5",
+  "LM Hub_SP_Assis": "SPI5",
+  "LM Hub_SP_Marília": "SPI5",
+  "LM Hub_SP_Presidente Prudente": "SPI5",
+  "LM Hub_SP_Campinas_PqCidade": "SPI1",
+  "LM Hub_SP_RibeirãoPretoEstação": "SPI2"
+}
+
+export const STATIONS_LIST = Object.keys(MAPA_REGIONAL);
