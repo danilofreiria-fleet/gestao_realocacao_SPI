@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useGoogleLogin } from '@react-oauth/google';
 import { Database } from 'lucide-react'; 
 import axios from 'axios';
+import logoImg from '../assets/logo.png';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -44,8 +45,12 @@ export default function Login() {
         <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
 
         <div className="text-center mb-8 flex flex-col items-center">
-          <div className=" bg-orange-600 p-3 rounded-xl mb-4 shadow-lg">
-            <Database className="text-white" size={32} />
+          <div className="mb-4 h-24 flex items-center justify-center">
+            <img 
+              src={logoImg} 
+              alt="Logo SPI Control" 
+              className="h-full w-auto object-contain drop-shadow-md"
+            />
           </div>
           <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">SPI CONTROL</h1>
           <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Acesso Restrito - Logística</p>
