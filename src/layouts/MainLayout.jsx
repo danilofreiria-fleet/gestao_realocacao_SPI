@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, Database, ChevronLeft, ChevronRight } from 'lucide-react';
+import logoImg from '../assets/logo.png';
 
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false); // NOVO ESTADO DA SIDEBAR
+  const [isCollapsed, setIsCollapsed] = useState(false); 
 
   // Verifica o tema inicial
   useEffect(() => {
@@ -61,12 +62,20 @@ export default function MainLayout() {
         </button>
 
         <div>
-          {/* Logo e Título */}
+            {/* Logo e Título */}
           <div className={`p-6 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 transition-all ${isCollapsed ? 'px-2' : ''}`}>
-            <div className="bg-[#EE4D2D] p-3 rounded-2xl mb-3 shadow-md shrink-0">
-              <Database className="text-white" size={isCollapsed ? 20 : 28} />
+            
+            {/* 🔥 AQUI ENTRA A SUA LOGO */}
+            <div className="mb-3 shrink-0 flex items-center justify-center min-h-[3rem]">
+              <img 
+                src={logoImg} 
+                alt="Logo Sistema" 
+                className={`object-contain transition-all duration-300 ${isCollapsed ? 'w-10' : 'w-28'}`} 
+              />
             </div>
             
+            {/* Se a sua imagem da logo JÁ TIVER O NOME ESCRITO NELA, você pode apagar esse bloco abaixo. 
+                Se for só o desenho, mantenha o bloco abaixo para aparecer o texto "SPI Control" */}
             {!isCollapsed && (
               <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
                 <h1 className="text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">SPI Control</h1>
