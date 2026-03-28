@@ -7,18 +7,20 @@ import axios from 'axios';
 export default function Login() {
   const navigate = useNavigate();
 
-const fazerLogin = useGoogleLogin({
-  scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email",
-  prompt: "consent", // <--- ADICIONE ESTA LINHA AQUI!
-  
-  onSuccess: async (tokenResponse) => {
+  const fazerLogin = useGoogleLogin({
+    scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email",
+    
+    // 🔥 1. APAGUEI O 'prompt: "consent"' para não forçar a tela de aceite toda vez
+    // 🔥 2. ADICIONEI O 'hosted_domain' para facilitar a escolha da conta
+    hosted_domain: "shopee.com", 
+    
+    onSuccess: async (tokenResponse) => {
       try {
         const userInfo = await axios.get(
           'https://www.googleapis.com/oauth2/v3/userinfo',
           { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
         );
 
-        // Substitua "@suaempresa.com" pelo domínio corporativo correto
         if (userInfo.data.email.endsWith("@shopee.com") || userInfo.data.hd === "shopee.com") {
           localStorage.setItem("spiToken", tokenResponse.access_token);
           localStorage.setItem("userEmail", userInfo.data.email);
