@@ -257,7 +257,15 @@ export default function CapFleetCharts({ data }) {
               <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '10px' }} />
               
               {timelineKeys.map((date, index) => (
-                <Bar key={date} dataKey={date} fill={TIMELINE_COLORS[index % TIMELINE_COLORS.length]} />
+                <Bar key={date} dataKey={date} fill={TIMELINE_COLORS[index % TIMELINE_COLORS.length]}>
+                   {/* Adicionando as legendas nas barrinhas da Timeline */}
+                   <LabelList 
+                     dataKey={date} 
+                     position="top" 
+                     formatter={(val) => val > 0 ? `+${Number(val).toFixed(0)}%` : ''} 
+                     style={{ fontSize: 9, fontWeight: 'bold', fill: TIMELINE_COLORS[index % TIMELINE_COLORS.length] }} 
+                   />
+                </Bar>
               ))}
             </BarChart>
           </ResponsiveContainer>

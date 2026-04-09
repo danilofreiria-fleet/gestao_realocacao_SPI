@@ -38,6 +38,7 @@ const DataTable = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('new'); 
   const [editingRowIndex, setEditingRowIndex] = useState(null); 
+  const [originalRowData, setOriginalRowData] = useState(null);
   const [editFormData, setEditFormData] = useState([]);
   
   const [isSaving, setIsSaving] = useState(false);
@@ -69,11 +70,15 @@ const DataTable = () => {
       else if (action.mode === 'new') {
         setModalMode('new');
         const emptyRow = Array(headers.length).fill("");
+        
+        // Posições originais
         emptyRow[3] = action.prefill.data;
         emptyRow[4] = action.prefill.station;
         emptyRow[5] = action.prefill.turno;
-        emptyRow[1] = MAPA_REGIONAL[action.prefill.station] || "";
+        emptyRow[1] = action.prefill.regional || MAPA_REGIONAL[action.prefill.station] || "";
+        emptyRow[2] = action.prefill.semana || ""; // Validando semana no botão "Resolver"
 
+        // Busca do CAP e Setup na aba Base
         const ref = baseData.find(r => String(r[0]).trim() === String(action.prefill.station).trim() && String(r[1]).trim() === String(action.prefill.turno).trim());
         if (ref) {
           emptyRow[8] = ref[4];
@@ -236,6 +241,7 @@ const DataTable = () => {
   const abrirModalEdicao = (row) => {
     setModalMode('edit');
     setEditingRowIndex(row._rowIndex); 
+    setOriginalRowData([...row]);
     const dataCopy = [...row];
     dataCopy[3] = formatDataForInput(dataCopy[3]);
 
@@ -416,8 +422,8 @@ const DataTable = () => {
       payload = payload.map(item => item === undefined || item === null ? "" : item);
 
       if (modalMode === 'edit') {
-        await updateRowData(editingRowIndex, payload);
-        carregarDados(); 
+        await updateRowData(editingRowIndex, payload, originalRowData); 
+        carregarDados();
       } else {
         await insertRowData(payload); 
         await salvarNasOrigens(payload);
@@ -436,7 +442,7 @@ const DataTable = () => {
 const handleExcluir = async () => {
     setIsDeleting(true);
     try {
-      await deleteRowData(editingRowIndex, editFormData); 
+      await deleteRowData(editingRowIndex, originalRowData); 
       setIsModalOpen(false);
       carregarDados();
     } catch (error) {
@@ -603,6 +609,7 @@ const handleExcluir = async () => {
         onClose={() => setIsModalOpen(false)}
         isSaving={isSaving}
         isDeleting={isDeleting}
+        baseData={baseData}
       />
 
     </div>

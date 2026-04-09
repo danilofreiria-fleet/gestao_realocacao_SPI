@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, LabelList } from 'recharts';
 import { AlertTriangle, Maximize2, Minimize2, X, Package } from 'lucide-react';
 
 export default function AtPisoCharts({ data }) {
@@ -110,36 +110,42 @@ export default function AtPisoCharts({ data }) {
 
       {renderChartCard('chart1', "AT's no Piso por Regional", false, (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData.chart1} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <BarChart data={chartData.chart1} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11}} />
             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} />
             <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-            <Bar dataKey="valor" fill="#113366" name="Total AT Piso" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="valor" fill="#113366" name="Total AT Piso" radius={[4, 4, 0, 0]}>
+               <LabelList dataKey="valor" position="top" style={{fill: '#113366', fontSize: 10, fontWeight: 'bold'}} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       ), chartData.chart1.length)}
 
       {renderChartCard('chart2', "AT's no Piso por Semana (ISO)", false, (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData.chart2} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <BarChart data={chartData.chart2} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11}} />
             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} />
             <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-            <Bar dataKey="valor" fill="#EE4D2D" name="Total AT Piso" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="valor" fill="#EE4D2D" name="Total AT Piso" radius={[4, 4, 0, 0]}>
+               <LabelList dataKey="valor" position="top" style={{fill: '#EE4D2D', fontSize: 10, fontWeight: 'bold'}} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       ), chartData.chart2.length)}
 
       {renderChartCard('chart3', "AT's no Piso por Station (Hub)", false, (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData.chart3} margin={{ top: 10, right: 10, left: -20, bottom: 60 }}>
+          <BarChart data={chartData.chart3} margin={{ top: 20, right: 10, left: -20, bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10}} angle={-45} textAnchor="end" interval={0} />
             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} />
             <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-            <Bar dataKey="valor" fill="#113366" name="Total AT Piso" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="valor" fill="#113366" name="Total AT Piso" radius={[4, 4, 0, 0]}>
+               <LabelList dataKey="valor" position="top" style={{fill: '#113366', fontSize: 10, fontWeight: 'bold'}} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       ), chartData.chart3.length)}
@@ -151,13 +157,14 @@ export default function AtPisoCharts({ data }) {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData.chart4} margin={{ top: 20, right: 10, left: -20, bottom: 60 }}>
+            <BarChart data={chartData.chart4} margin={{ top: 25, right: 10, left: -20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10}} angle={-45} textAnchor="end" interval={0} />
               <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} domain={[0, 'auto']} />
               <Tooltip content={<PctTooltip />} cursor={{fill: 'rgba(208,1,27,0.05)'}} />
               <ReferenceLine y={2} stroke="#D0011B" strokeDasharray="5 5" label={{ position: 'top', value: 'Meta (2%)', fill: '#D0011B', fontSize: 10, fontWeight: 'bold' }} />
               <Bar dataKey="valorPct" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="valorPct" position="top" formatter={(val) => `${val}%`} style={{fill: '#D0011B', fontSize: 10, fontWeight: 'bold'}} />
                 {chartData.chart4.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.valorPct > 5 ? '#D0011B' : '#EE4D2D'} />
                 ))}

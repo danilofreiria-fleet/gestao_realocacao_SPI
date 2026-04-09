@@ -60,7 +60,7 @@ export const FORM_FIELDS = [
   { idx: 42, label: 'Justificativa Desvio', type: 'textarea', span: 'col-span-2' },
 ];
 
-const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDelete, onClose, isSaving, isDeleting }) => {
+const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDelete, onClose, isSaving, isDeleting, baseData }) => {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   if (!isOpen) return null;
   const handleClose = () => { setShowConfirmDelete(false); onClose(); };
@@ -79,33 +79,70 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
         </div>
 
         <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {FORM_FIELDS.map((field) => (
-            <div key={field.idx} className={`flex flex-col ${field.span}`}>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">{field.label}</label>
-              {field.type === 'select' ? (
-                <select value={formData[field.idx] || ""} onChange={(e) => onChange(field.idx, e.target.value)} disabled={field.disabled} className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-blue-500 ${field.disabled ? 'opacity-60' : ''}`}><option value="">Selecione...</option>{field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>
-              ) : field.type === 'textarea' ? (
-                <textarea 
-                  value={formData[field.idx] || ""} 
-                  onChange={(e) => onChange(field.idx, e.target.value)} 
-                  disabled={field.disabled} 
-                  maxLength={300} 
-                  className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none h-20 ${field.disabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
-                />
-              ) : (
-                <input 
-                  type={field.type} 
-                  value={formData[field.idx] || ""} 
-                  onChange={(e) => onChange(field.idx, e.target.value)} 
-                  disabled={field.disabled} 
-                  className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${field.disabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
-                />
-              )}
-            </div>
-          ))}
+          {FORM_FIELDS.map((field) => {
+            
+            // 🔥 LÓGICA DO TURNO DINÂMICO
+            let fieldOptions = field.options;
+            let isFieldDisabled = field.disabled;
+
+            if (field.idx === 5) { // Se for o campo Turno (índice 5)
+              const stationAtual = formData[4];
+              if (stationAtual && baseData && baseData.length > 0) {
+                // Caça na aba BASE todos os turnos que existem para essa Station
+                const turnosDoHub = baseData
+                  .filter(r => String(r[0]).trim() === String(stationAtual).trim())
+                  .map(r => String(r[1]).trim())
+                  .filter(t => t); // Remove vazios
+
+                // Remove duplicatas e aplica a lista
+                if (turnosDoHub.length > 0) {
+                  fieldOptions = [...new Set(turnosDoHub)];
+                }
+              } else {
+                // Se não escolheu Station, desabilita e esvazia o Turno
+                fieldOptions = [];
+                isFieldDisabled = true;
+              }
+            }
+
+            return (
+              <div key={field.idx} className={`flex flex-col ${field.span}`}>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">{field.label}</label>
+                {field.type === 'select' ? (
+                  <select 
+                    value={formData[field.idx] || ""} 
+                    onChange={(e) => onChange(field.idx, e.target.value)} 
+                    disabled={isFieldDisabled} 
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    <option value="">
+                      {field.idx === 5 && !formData[4] ? "Selecione a Station..." : "Selecione..."}
+                    </option>
+                    {fieldOptions?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                ) : field.type === 'textarea' ? (
+                  <textarea 
+                    value={formData[field.idx] || ""} 
+                    onChange={(e) => onChange(field.idx, e.target.value)} 
+                    disabled={isFieldDisabled} 
+                    maxLength={300} 
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none h-20 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
+                  />
+                ) : (
+                  <input 
+                    type={field.type} 
+                    value={formData[field.idx] || ""} 
+                    onChange={(e) => onChange(field.idx, e.target.value)} 
+                    disabled={isFieldDisabled} 
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        <div className="p-6 border-t border-slate-100 flex justify-between bg-slate-50 rounded-b-2xl">
+        <div className="p-6 border-t border-slate-100 dark:border-gray-800 flex justify-between bg-slate-50 dark:bg-[#1f232d] rounded-b-2xl">
           <div>
             {mode === 'edit' && !showConfirmDelete && (
               <button onClick={() => setShowConfirmDelete(true)} className="text-red-500 font-bold text-sm flex items-center gap-2"><Trash2 size={16}/> Excluir</button>
@@ -114,12 +151,12 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
               <div className="flex gap-2 items-center">
                 <span className="text-xs font-bold text-red-600">Confirmar?</span>
                 <button onClick={onDelete} className="bg-red-500 text-white px-2 py-1 rounded text-xs">Sim</button>
-                <button onClick={() => setShowConfirmDelete(false)} className="text-slate-500 text-xs">Não</button>
+                <button onClick={() => setShowConfirmDelete(false)} className="text-slate-500 dark:text-gray-400 text-xs">Não</button>
               </div>
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500">Cancelar</button>
+            <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400">Cancelar</button>
             <button onClick={onSave} disabled={isSaving} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow-md disabled:opacity-50 flex items-center gap-2"><Save size={18}/> {isSaving ? "Salvando..." : "Salvar Dados Unificados"}</button>
           </div>
         </div>

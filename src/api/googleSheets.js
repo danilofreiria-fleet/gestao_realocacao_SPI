@@ -123,27 +123,26 @@ export const salvarNasOrigens = async (payload) => {
     // 1. O Report Diário pega exatamente as primeiras 47 colunas (0 a 46)
     const linhaGestao = payload.slice(0, 47);
 
-    // 2. A SOP pega informações pontuais (Ajustado para os índices corretos)
-// A nova linha Controle que vai para a aba SOP (Atualizado os índices 51 a 59)
+    // 2. A SOP pega informações pontuais (Ajustado para os índices corretos 51 a 59)
     const linhaControle = [
-      rowData[3] || "",  // A: Data
-      rowData[1] || "",  // B: Regional
-      rowData[4] || "",  // C: Station
-      rowData[5] || "",  // D: Turno
-      rowData[12] || "", // E: Vol Roteirizado
-      rowData[13] || "", // F: Vol Processado
-      rowData[14] || "", // G: Vol Expedido
-      rowData[51] || "", // H: Realoc Pre (AZ)
-      rowData[52] || "", // I: Realoc Durante (BA)
-      rowData[53] || "", // J: Total Realocados (Calculado) (BB)
-      rowData[54] || "", // K: Não Coube (BC)
-      rowData[55] || "", // L: Outros Motivos (BD)
-      rowData[56] || "", // M: Taxa Correção Fleet (BE)
-      rowData[57] || "", // N: Desvio Piso Fleet (BF)
-      rowData[58] || "", // O: Desvio Piso Hub (BG)
-      rowData[2] || "",  // P: Semana do Ano
-      rowData[59] || ""  // Q: Eficiência Expedição (BH)
-    ];;
+      payload[3] || "",  // A: Data
+      payload[1] || "",  // B: Regional
+      payload[4] || "",  // C: Station
+      payload[5] || "",  // D: Turno
+      payload[12] || "", // E: Vol Roteirizado
+      payload[13] || "", // F: Vol Processado
+      payload[14] || "", // G: Vol Expedido
+      payload[51] || "", // H: Realoc Pre (AZ)
+      payload[52] || "", // I: Realoc Durante (BA)
+      payload[53] || "", // J: Total Realocados (Calculado) (BB)
+      payload[54] || "", // K: Não Coube (BC)
+      payload[55] || "", // L: Outros Motivos (BD)
+      payload[56] || "", // M: Taxa Correção Fleet (BE)
+      payload[57] || "", // N: Desvio Piso Fleet (BF)
+      payload[58] || "", // O: Desvio Piso Hub (BG)
+      payload[2] || "",  // P: Semana do Ano
+      payload[59] || ""  // Q: Eficiência Expedição (BH)
+    ];
 
     const urlGestao = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     const urlControle = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
@@ -223,7 +222,7 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
     // 1. Atualiza Consolidado
     const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_NOME}!A${rowIndex}?valueInputOption=USER_ENTERED`;
-    const responseConsolidado = await fetch(urlConsolidado, {
+    await fetch(urlConsolidado, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ values: [rowData] })
@@ -239,40 +238,23 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     console.log(`Buscando a linha ANTIGA para EDITAR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
 
     const linhaGestao = rowData.slice(0, 47);
-    // A nova linha Controle que vai para a aba SOP (Atualizado os índices 51 a 59)
     const linhaControle = [
-      rowData[3] || "",  // A: Data
-      rowData[1] || "",  // B: Regional
-      rowData[4] || "",  // C: Station
-      rowData[5] || "",  // D: Turno
-      rowData[12] || "", // E: Vol Roteirizado
-      rowData[13] || "", // F: Vol Processado
-      rowData[14] || "", // G: Vol Expedido
-      rowData[51] || "", // H: Realoc Pre (AZ)
-      rowData[52] || "", // I: Realoc Durante (BA)
-      rowData[53] || "", // J: Total Realocados (Calculado) (BB)
-      rowData[54] || "", // K: Não Coube (BC)
-      rowData[55] || "", // L: Outros Motivos (BD)
-      rowData[56] || "", // M: Taxa Correção Fleet (BE)
-      rowData[57] || "", // N: Desvio Piso Fleet (BF)
-      rowData[58] || "", // O: Desvio Piso Hub (BG)
-      rowData[2] || "",  // P: Semana do Ano
-      rowData[59] || ""  // Q: Eficiência Expedição (BH)
+      rowData[3] || "", rowData[1] || "", rowData[4] || "", rowData[5] || "",
+      rowData[12] || "", rowData[13] || "", rowData[14] || "", rowData[51] || "",
+      rowData[52] || "", rowData[53] || "", rowData[54] || "", rowData[55] || "",
+      rowData[56] || "", rowData[57] || "", rowData[58] || "", rowData[2] || "",
+      rowData[59] || ""
     ];
 
-    // 2. Caça e Edita Report Diário
+    // 2. Caça e Edita Report Diário (Removido o UNFORMATTED_VALUE - Agora lê 100% texto)
     try {
-      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G?valueRenderOption=UNFORMATTED_VALUE`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataReport = await respReport.json();
       
       if (dataReport.values) {
         for (let i = dataReport.values.length - 1; i >= 1; i--) {
           const row = dataReport.values[i];
           let dataLida = row[3];
-          if (typeof dataLida === 'number') {
-             const d = new Date((dataLida - 25569) * 86400 * 1000);
-             dataLida = d.toISOString().split('T')[0];
-          }
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
             console.log("Achou no Report! Editando...");
@@ -284,19 +266,15 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       }
     } catch (e) { console.error("Erro Report:", e); }
 
-    // 3. Caça e Edita SOP
+    // 3. Caça e Edita SOP (Removido o UNFORMATTED_VALUE)
     try {
-      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E?valueRenderOption=UNFORMATTED_VALUE`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataSOP = await respSOP.json();
       
       if (dataSOP.values) {
         for (let i = dataSOP.values.length - 1; i >= 1; i--) {
           const row = dataSOP.values[i];
           let dataLida = row[0];
-          if (typeof dataLida === 'number') {
-             const d = new Date((dataLida - 25569) * 86400 * 1000);
-             dataLida = d.toISOString().split('T')[0];
-          }
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
             console.log("Achou na SOP! Editando...");
@@ -308,7 +286,7 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       }
     } catch (e) { console.error("Erro SOP:", e); }
 
-    return await responseConsolidado.json();
+    return { success: true };
   } catch (error) { throw error; }
 };
 
@@ -331,17 +309,13 @@ export const deleteRowData = async (rowIndex, rowData) => {
 
     // 2. Deleta do Report
     try {
-      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G?valueRenderOption=UNFORMATTED_VALUE`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataReport = await respReport.json();
       
       if (dataReport.values) {
         for (let i = dataReport.values.length - 1; i >= 1; i--) {
           const row = dataReport.values[i];
           let dataLida = row[3];
-          if (typeof dataLida === 'number') {
-             const d = new Date((dataLida - 25569) * 86400 * 1000);
-             dataLida = d.toISOString().split('T')[0];
-          }
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
             console.log("Achou no Report! Excluindo...");
@@ -355,17 +329,13 @@ export const deleteRowData = async (rowIndex, rowData) => {
 
     // 3. Deleta da SOP
     try {
-      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E?valueRenderOption=UNFORMATTED_VALUE`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataSOP = await respSOP.json();
       
       if (dataSOP.values) {
         for (let i = dataSOP.values.length - 1; i >= 1; i--) {
           const row = dataSOP.values[i];
           let dataLida = row[0];
-          if (typeof dataLida === 'number') {
-             const d = new Date((dataLida - 25569) * 86400 * 1000);
-             dataLida = d.toISOString().split('T')[0];
-          }
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
             console.log("Achou na SOP! Excluindo...");

@@ -30,14 +30,14 @@ export default function FleetGapCharts({ dashData }) {
     const rhProcessado = new Set();
 
     dashData.forEach(row => {
-      if (extractWeekNumber(row[4]) !== currentWeekNum) return; // Coluna E (Semana)
+      if (extractWeekNumber(row[4]) !== currentWeekNum) return; 
 
-      const stationFullName = String(row[3] || "").trim(); // Coluna D
+      const stationFullName = String(row[3] || "").trim(); 
       if (!stationFullName) return;
 
-      const ativos = parseNum(row[14]);      // Coluna O
-      const necessarios = parseNum(row[18]); // Coluna S
-      const gap = parseNum(row[19]);         // Coluna T
+      const ativos = parseNum(row[14]);      
+      const necessarios = parseNum(row[18]); 
+      const gap = parseNum(row[19]);         
 
       if (ativos === 0 && necessarios === 0 && gap === 0) return;
 
@@ -54,10 +54,9 @@ export default function FleetGapCharts({ dashData }) {
       };
     });
 
-    return Object.values(hubsMap).sort((a, b) => a.gap - b.gap); // Piores Gaps (mais negativos) no topo
+    return Object.values(hubsMap).sort((a, b) => a.gap - b.gap); 
   }, [dashData, currentWeekNum]);
 
-  //array separado que esconde Hubs sem Gap negativo
   const gapOnlyData = useMemo(() => {
     return chartData.filter(hub => hub.gap < 0);
   }, [chartData]);
@@ -79,7 +78,6 @@ export default function FleetGapCharts({ dashData }) {
     return null;
   };
 
-  // Função Auxiliar de Renderização de Cards (Scroll + Tela Cheia)
   const renderChartCard = (id, title, subtitle, content, color) => {
     const isFullscreen = fullscreenChart === id;
     
@@ -97,7 +95,6 @@ export default function FleetGapCharts({ dashData }) {
           </button>
         </div>
         
-        {/* Container com scroll vertical caso tenha muitas barras */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar print:overflow-hidden">
           <div className="w-full h-full min-h-[500px]">
             {content}
@@ -128,21 +125,16 @@ export default function FleetGapCharts({ dashData }) {
       {renderChartCard('gapChart', `Fleet Gap [W-${currentWeekNum}]`, "(Drivers ativos - Necessários) • Oculta positivos • Ordenado pelo pior", (
         gapOnlyData.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400 font-bold">
-             🎉 Não há Gaps negativos reportados nesta semana!
+            🎉 Não há Gaps negativos reportados nesta semana!
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart layout="vertical" data={gapOnlyData} margin={{ top: 20, right: 30, left: 40, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
-              
-              {/* 🔴 MÁGICA 2: reversed={true} inverte o eixo para formato Tornado */}
               <XAxis type="number" tick={{fontSize: 11}} reversed={true} />
-              
               <YAxis dataKey="name" type="category" width={130} tick={{fontSize: 9, fontWeight: 'bold'}} interval={0} orientation="right" />
               <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend />
-              
-              {/* Linha do Zero colada no canto direito */}
               <ReferenceLine x={0} stroke="#333" strokeWidth={2} />
               
               <Bar dataKey="gap" name="Gap de Drivers" fill="#D0011B" radius={[4, 0, 0, 4]}>
@@ -163,8 +155,12 @@ export default function FleetGapCharts({ dashData }) {
             <YAxis dataKey="name" type="category" width={130} tick={{fontSize: 9, fontWeight: 'bold'}} interval={0} />
             <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
             <Legend />
-            <Bar dataKey="ativos" name="Drivers Ativos" fill="#113366" radius={[0, 4, 4, 0]} />
-            <Bar dataKey="necessarios" name="Necessários (Meta)" fill="#EE4D2D" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="ativos" name="Drivers Ativos" fill="#113366" radius={[0, 4, 4, 0]}>
+              <LabelList dataKey="ativos" position="right" style={{ fill: '#113366', fontSize: 10, fontWeight: 'bold' }} />
+            </Bar>
+            <Bar dataKey="necessarios" name="Necessários (Meta)" fill="#EE4D2D" radius={[0, 4, 4, 0]}>
+              <LabelList dataKey="necessarios" position="right" style={{ fill: '#EE4D2D', fontSize: 10, fontWeight: 'bold' }} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       ), "#113366")}
