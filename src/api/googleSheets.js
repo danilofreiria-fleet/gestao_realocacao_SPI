@@ -220,12 +220,23 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
+    // 🔥 BLINDAGEM 1: Transforma "undefined" e "null" em vazio ("") para o Google não rejeitar (Erro 400)
+    const linhaGestao = rowData.slice(0, 47).map(v => (v === undefined || v === null) ? "" : v);
+    const linhaControle = [
+      rowData[3], rowData[1], rowData[4], rowData[5],
+      rowData[12], rowData[13], rowData[14], rowData[51],
+      rowData[52], rowData[53], rowData[54], rowData[55],
+      rowData[56], rowData[57], rowData[58], rowData[2],
+      rowData[59]
+    ].map(v => (v === undefined || v === null) ? "" : v);
+
     // 1. Atualiza Consolidado
-    const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_NOME}!A${rowIndex}?valueInputOption=USER_ENTERED`;
+    const rangeConsolidado = encodeURIComponent(`${ABA_NOME}!A${rowIndex}`);
+    const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${rangeConsolidado}?valueInputOption=USER_ENTERED`;
     await fetch(urlConsolidado, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [rowData] })
+      body: JSON.stringify({ values: [linhaGestao] }) // O Consolidado também recebe as mesmas 47 colunas + realocação
     });
 
     const dataBusca = oldRowData ? oldRowData[3] : rowData[3];
@@ -237,18 +248,10 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     const turnoAlvo = limpaTexto(turnoBusca);
     console.log(`Buscando a linha ANTIGA para EDITAR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
 
-    const linhaGestao = rowData.slice(0, 47);
-    const linhaControle = [
-      rowData[3] || "", rowData[1] || "", rowData[4] || "", rowData[5] || "",
-      rowData[12] || "", rowData[13] || "", rowData[14] || "", rowData[51] || "",
-      rowData[52] || "", rowData[53] || "", rowData[54] || "", rowData[55] || "",
-      rowData[56] || "", rowData[57] || "", rowData[58] || "", rowData[2] || "",
-      rowData[59] || ""
-    ];
-
-    // 2. Caça e Edita Report Diário (Removido o UNFORMATTED_VALUE - Agora lê 100% texto)
+    // 2. Caça e Edita Report Diário
     try {
-      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
+      const rangeReportBusca = encodeURIComponent("'REPORT DIARIO'!A:G");
+      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${rangeReportBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataReport = await respReport.json();
       
       if (dataReport.values) {
@@ -258,17 +261,29 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
             console.log("Achou no Report! Editando...");
-            const urlRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A${i + 1}?valueInputOption=USER_ENTERED`;
-            await fetch(urlRep, { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: [linhaGestao] }) });
+            
+            // 🔥 BLINDAGEM 2: URL Encode perfeito do nome da Aba + Linha
+            const rangeReportEdicao = encodeURIComponent(`'REPORT DIARIO'!A${i + 1}`);
+            const urlRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${rangeReportEdicao}?valueInputOption=USER_ENTERED`;
+            
+            const req = await fetch(urlRep, { 
+              method: "PUT", 
+              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
+              body: JSON.stringify({ values: [linhaGestao] }) 
+            });
+
+            // Se der erro 400 de novo, ele cospe o detalhe exato no console
+            if (!req.ok) console.error("Erro detalhado Report:", await req.text());
             break;
           }
         }
       }
     } catch (e) { console.error("Erro Report:", e); }
 
-    // 3. Caça e Edita SOP (Removido o UNFORMATTED_VALUE)
+    // 3. Caça e Edita SOP
     try {
-      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
+      const rangeSopBusca = encodeURIComponent("CONTROLE!A:E");
+      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${rangeSopBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataSOP = await respSOP.json();
       
       if (dataSOP.values) {
@@ -278,8 +293,17 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
             console.log("Achou na SOP! Editando...");
-            const urlSOP = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A${i + 1}?valueInputOption=USER_ENTERED`;
-            await fetch(urlSOP, { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: [linhaControle] }) });
+            
+            const rangeSopEdicao = encodeURIComponent(`CONTROLE!A${i + 1}`);
+            const urlSOP = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${rangeSopEdicao}?valueInputOption=USER_ENTERED`;
+            
+            const reqSop = await fetch(urlSOP, { 
+              method: "PUT", 
+              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
+              body: JSON.stringify({ values: [linhaControle] }) 
+            });
+
+            if (!reqSop.ok) console.error("Erro detalhado SOP:", await reqSop.text());
             break;
           }
         }
