@@ -213,27 +213,27 @@ const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
 };
 
 // =================================================================
-// PUT (Edição Cirúrgica - Bypassing Protections)
+// PUT
 // =================================================================
 export const updateRowData = async (rowIndex, rowData, oldRowData) => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-// Tratamento de vazios para não quebrar o JSON
+    // Tratamento de vazios para não quebrar o JSON
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
     
-    // 🔥 CRIAMOS UMA VARIÁVEL COM A LINHA INTEIRA PARA O CONSOLIDADO
-    const linhaCompletaConsolidado = rowData.map(safeVal); 
-    const linhaGestao = rowData.slice(0, 47).map(safeVal); // Mantemos essa só para o Report
+    // 🔥 O SEGREDO ESTÁ AQUI: Forçando a linha a ter 60 posições exatas!
+    // Isso evita o "buraco" do Javascript e garante que a atualização passe da coluna AQ e chegue na BD
+    const linhaCompletaConsolidado = Array.from({ length: 60 }, (_, i) => safeVal(rowData[i])); 
 
-    // 1. Atualiza Consolidado em Tempo Real (Todas as colunas)
+    // 1. Atualiza Consolidado em Tempo Real (Da coluna A até BH)
     const rangeConsolidado = encodeURIComponent(`${ABA_NOME}!A${rowIndex}`);
     const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${rangeConsolidado}?valueInputOption=USER_ENTERED`;
     await fetch(urlConsolidado, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [linhaCompletaConsolidado] }) // 🔥 AGORA VAI TUDO!
+      body: JSON.stringify({ values: [linhaCompletaConsolidado] }) 
     });
 
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
