@@ -220,91 +220,106 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // Tratamento de vazios para não quebrar o JSON
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
 
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
-    const stationAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
+    const hubAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
     const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
-    console.log(`Buscando a linha ANTIGA para EDITAR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
 
-    // 🔥 MAPAS DO BISTURI: Quais campos do Form vão para quais colunas
-    
-    // Mapa 1: Report Diário
+    // 1. MAPA GESTÃO (REPORT DIÁRIO)
     const mapaReport = [
       { idx: 3, col: 'D' }, { idx: 4, col: 'E' }, { idx: 5, col: 'F' },
-      { idx: 6, col: 'G' }, { idx: 7, col: 'H' }, 
-      { idx: 11, col: 'L' }, { idx: 12, col: 'M' }, { idx: 13, col: 'N' }, { idx: 14, col: 'O' },
-      { idx: 19, col: 'T' }, { idx: 20, col: 'U' }, { idx: 21, col: 'V' }, { idx: 22, col: 'W' }, { idx: 23, col: 'X' }, 
-      { idx: 25, col: 'Z' }, { idx: 26, col: 'AA' }, { idx: 27, col: 'AB' }, { idx: 28, col: 'AC' },
+      { idx: 6, col: 'G' }, { idx: 7, col: 'H' }, { idx: 11, col: 'L' }, 
+      { idx: 12, col: 'M' }, { idx: 13, col: 'N' }, { idx: 14, col: 'O' },
+      { idx: 19, col: 'T' }, { idx: 20, col: 'U' }, { idx: 21, col: 'V' }, 
+      { idx: 22, col: 'W' }, { idx: 23, col: 'X' }, { idx: 25, col: 'Z' }, 
+      { idx: 26, col: 'AA' }, { idx: 27, col: 'AB' }, { idx: 28, col: 'AC' },
       { idx: 35, col: 'AJ' }, { idx: 37, col: 'AL' }, { idx: 38, col: 'AM' },
       { idx: 41, col: 'AP' }, { idx: 42, col: 'AQ' }
     ];
 
-    // Mapa 2: SOP (Realocação)
+    // 2. MAPA SOP (CONTROLE)
     const mapaSOP = [
-      { idx: 3, col: 'A' },  { idx: 4, col: 'C' },  { idx: 5, col: 'D' }, 
+      { idx: 3, col: 'A' }, { idx: 4, col: 'C' }, { idx: 5, col: 'D' }, 
       { idx: 12, col: 'E' }, { idx: 13, col: 'F' }, { idx: 14, col: 'G' }, 
       { idx: 51, col: 'H' }, { idx: 52, col: 'I' }, { idx: 54, col: 'K' }, { idx: 55, col: 'L' } 
     ];
 
-    // Mapa 3: Consolidado (Tudo do Report + as posições exatas da SOP)
+    // 3. MAPA CONSOLIDADO (Ajustado milimetricamente ao seu script Apps Script)
     const mapaConsolidado = [
-      ...mapaReport, 
-      { idx: 51, col: 'AZ' }, // Realoc Pré
-      { idx: 52, col: 'BA' }, // Realoc Durante
-      { idx: 54, col: 'BC' }, // Não Coube
-      { idx: 55, col: 'BD' }  // Outros Motivos
+      ...mapaReport, // Mantém a paridade com as primeiras 47 colunas
+      { idx: 51, col: 'AZ' }, // Realoc Pré Exp
+      { idx: 52, col: 'BA' }, // Realoc Durante Exp
+      { idx: 54, col: 'BC' }, // Não Exp (Não Coube)
+      { idx: 55, col: 'BD' }  // Não Exp (Outros)
     ];
 
-    // --- 1. EXECUÇÃO CONSOLIDADO (Tempo Real) ---
-    try {
-      // Usamos aspas simples no nome da aba porque ela tem hífen!
-      const dataToUpdateConsolidado = mapaConsolidado.map(campo => ({
-        range: `'${ABA_NOME}'!${campo.col}${rowIndex}`,
-        values: [[ safeVal(rowData[campo.idx]) ]]
-      }));
+    console.log("🚀 Iniciando Edição Tripla Cirúrgica...");
 
-      const urlConsolBatch = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`;
-      const reqConsol = await fetch(urlConsolBatch, { 
-        method: "POST", 
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
-        body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdateConsolidado }) 
-      });
-      if (!reqConsol.ok) console.error("Erro no Consolidado:", await reqConsol.text());
-      else console.log("Achou no Consolidado! Editando de forma cirúrgica...");
-    } catch (e) { console.error("Erro Consolidado Catch:", e); }
+    // --- EXECUÇÃO CONSOLIDADO (Sincronização Imediata) ---
+    const payloadConsolidado = mapaConsolidado.map(item => ({
+      range: `'${ABA_NOME}'!${item.col}${rowIndex}`,
+      values: [[ safeVal(rowData[item.idx]) ]]
+    }));
+    
+    console.log("DEBUG CONSOLIDADO:", payloadConsolidado.filter(p => p.range.includes('B'))); // Log para ver BA, BC, BD no console
 
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadConsolidado })
+    });
 
-    // --- 2. EXECUÇÃO REPORT DIÁRIO ---
-    try {
-      const rangeReportBusca = encodeURIComponent("'REPORT DIARIO'!A:G");
-      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${rangeReportBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
-      const dataReport = await respReport.json();
-      
-      if (dataReport.values) {
-        for (let i = dataReport.values.length - 1; i >= 1; i--) {
-          const row = dataReport.values[i];
-          if (padronizarData(row[3]) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
-            console.log("Achou no Report! Editando de forma cirúrgica...");
-            
-            const dataToUpdateReport = mapaReport.map(campo => ({
-              range: `'REPORT DIARIO'!${campo.col}${i + 1}`,
-              values: [[ safeVal(rowData[campo.idx]) ]]
-            }));
-
-            const urlRepBatch = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`;
-            await fetch(urlRepBatch, { 
-              method: "POST", 
-              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
-              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdateReport }) 
-            });
-            break;
-          }
+    // --- EXECUÇÃO REPORT DIÁRIO (Busca e Edita) ---
+    const respRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}`, { headers: { "Authorization": `Bearer ${token}` } });
+    const dataRep = await respRep.json();
+    if (dataRep.values) {
+      for (let i = dataRep.values.length - 1; i >= 1; i--) {
+        const r = dataRep.values[i];
+        if (padronizarData(r[3]) === dataAlvo && limpaTexto(r[4]) === hubAlvo && limpaTexto(r[5]) === turnoAlvo) {
+          const payloadRep = mapaReport.map(item => ({
+            range: `'REPORT DIARIO'!${item.col}${i + 1}`,
+            values: [[ safeVal(rowData[item.idx]) ]]
+          }));
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
+          });
+          console.log("✅ Report Diário Atualizado!");
+          break;
         }
       }
-    } catch (e) { console.error("Erro Report:", e); }
+    }
 
+    // --- EXECUÇÃO SOP (Busca e Edita) ---
+    const respSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}`, { headers: { "Authorization": `Bearer ${token}` } });
+    const dataSop = await respSop.json();
+    if (dataSop.values) {
+      for (let i = dataSop.values.length - 1; i >= 1; i--) {
+        const r = dataSop.values[i];
+        if (padronizarData(r[0]) === dataAlvo && limpaTexto(r[2]) === hubAlvo && limpaTexto(r[3]) === turnoAlvo) {
+          const payloadSop = mapaSOP.map(item => ({
+            range: `CONTROLE!${item.col}${i + 1}`,
+            values: [[ safeVal(rowData[item.idx]) ]]
+          }));
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadSop })
+          });
+          console.log("✅ SOP Atualizada!");
+          break;
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Erro Crítico na Edição:", error);
+    throw error;
+  }
+};
 
     // --- 3. EXECUÇÃO SOP ---
     try {
@@ -335,9 +350,6 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       }
     } catch (e) { console.error("Erro SOP:", e); }
 
-    return { success: true };
-  } catch (error) { throw error; }
-};
 
 // =================================================================
 // DELETE (Exclusão)
