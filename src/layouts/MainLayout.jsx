@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, Database, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
 export default function MainLayout() {
@@ -8,6 +8,9 @@ export default function MainLayout() {
   const location = useLocation();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false); 
+  
+  // 🔥 NOVO ESTADO: Guarda o tempo restante em milissegundos
+  const [tempoRestante, setTempoRestante] = useState(null);
 
   // Verifica o tema inicial
   useEffect(() => {
@@ -20,37 +23,38 @@ export default function MainLayout() {
     }
   }, []);
 
-  // 🔥 NOVO: Vigia de Sessão (Expulsa após 60 minutos)
+  // 🔥 VIGIA DE SESSÃO COM CRONÔMETRO VISUAL (1 SEGUNDO)
   useEffect(() => {
-    const verificarSessao = () => {
+    const TEMPO_LIMITE = 60 * 60 * 1000; // 60 minutos em milissegundos
+
+    const atualizarCronometro = () => {
       const loginTime = localStorage.getItem("spiTokenTime");
       
       if (loginTime) {
-        // Pega a hora atual menos a hora que fez login
         const tempoLogado = Date.now() - parseInt(loginTime, 10);
-        
-        // 60 minutos * 60 segundos * 1000 milissegundos
-        const TEMPO_LIMITE = 60 * 60 * 1000; 
+        const restante = TEMPO_LIMITE - tempoLogado;
 
-        if (tempoLogado > TEMPO_LIMITE) {
-          // Expulsa o usuário limpando a memória do navegador
+        if (restante <= 0) {
+          // Expulsa o usuário
           localStorage.removeItem("spiToken");
           localStorage.removeItem("userEmail");
           localStorage.removeItem("spiTokenTime");
           
           alert("Sua sessão expirou por segurança (60 minutos). Por favor, faça login novamente.");
-          navigate("/"); // Manda de volta para a tela de Login
+          navigate("/"); 
+        } else {
+          // Atualiza o reloginho na tela
+          setTempoRestante(restante);
         }
       }
     };
 
-    // Verifica assim que a tela abre ou a rota muda
-    verificarSessao();
-
-    // Deixa um vigia rodando silenciosamente a cada 1 minuto (60000 ms)
-    const intervalo = setInterval(verificarSessao, 60000);
+    atualizarCronometro(); // Roda a primeira vez na hora
     
-    return () => clearInterval(intervalo); // Limpa o vigia se a pessoa sair da tela
+    // Agora o intervalo roda a cada 1000ms (1 segundo) para vermos o relógio descendo
+    const intervalo = setInterval(atualizarCronometro, 1000);
+    
+    return () => clearInterval(intervalo);
   }, [navigate]);
 
   const toggleDarkMode = () => {
@@ -68,7 +72,7 @@ export default function MainLayout() {
   const handleLogout = () => {
     localStorage.removeItem('spiToken');
     localStorage.removeItem('userEmail');
-    localStorage.removeItem('spiTokenTime'); // 🔥 Limpa o tempo de login ao sair manualmente
+    localStorage.removeItem('spiTokenTime');
     navigate('/');
   };
 
@@ -77,6 +81,14 @@ export default function MainLayout() {
     { path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> },
     { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
   ];
+
+  // 🔥 FUNÇÃO PARA FORMATAR O TEMPO (Ex: 59:59)
+  const formatarTempo = (ms) => {
+    if (ms === null) return "--:--";
+    const minutos = Math.floor(ms / 60000);
+    const segundos = Math.floor((ms % 60000) / 1000);
+    return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 transition-colors duration-300 overflow-hidden">
@@ -96,10 +108,8 @@ export default function MainLayout() {
         </button>
 
         <div>
-            {/* Logo e Título */}
+          {/* Logo e Título */}
           <div className={`p-6 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 transition-all ${isCollapsed ? 'px-2' : ''}`}>
-            
-            {/* 🔥 AQUI ENTRA A SUA LOGO */}
             <div className="mb-3 shrink-0 flex items-center justify-center min-h-[3rem]">
               <img 
                 src={logoImg} 
@@ -108,8 +118,6 @@ export default function MainLayout() {
               />
             </div>
             
-            {/* Se a sua imagem da logo JÁ TIVER O NOME ESCRITO NELA, você pode apagar esse bloco abaixo. 
-                Se for só o desenho, mantenha o bloco abaixo para aparecer o texto "SPI Control" */}
             {!isCollapsed && (
               <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
                 <h1 className="text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">SPI Control</h1>
@@ -126,7 +134,7 @@ export default function MainLayout() {
                 <button
                   key={item.name}
                   onClick={() => navigate(item.path)}
-                  title={isCollapsed ? item.name : ""} // Exibe o nome ao passar o mouse se estiver fechado
+                  title={isCollapsed ? item.name : ""} 
                   className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${
                     isActive 
                       ? 'bg-[#EE4D2D] text-white shadow-md' 
@@ -141,8 +149,18 @@ export default function MainLayout() {
           </nav>
         </div>
 
-        {/* Rodapé da Sidebar (Tema e Logout) */}
+        {/* Rodapé da Sidebar (Tema, Cronômetro e Logout) */}
         <div className={`p-4 border-t border-gray-100 dark:border-gray-800 space-y-2 ${isCollapsed ? 'px-2' : ''}`}>
+          
+          {/* 🔥 VISUAL DO CRONÔMETRO */}
+          <div 
+            title={isCollapsed ? `Sessão expira em: ${formatarTempo(tempoRestante)}` : ""}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-2 rounded-xl text-xs font-bold ${tempoRestante && tempoRestante < 300000 ? 'text-red-500 animate-pulse' : 'text-slate-400 dark:text-gray-500'}`}
+          >
+            <div className="shrink-0"><Timer size={16} /></div>
+            {!isCollapsed && <span className="truncate">Sessão: {formatarTempo(tempoRestante)}</span>}
+          </div>
+
           <button 
             onClick={toggleDarkMode}
             title={isCollapsed ? "Mudar Tema" : ""}
@@ -165,9 +183,8 @@ export default function MainLayout() {
         </div>
       </aside>
 
-      {/* ÁREA DE CONTEÚDO (Onde as telas aparecem) */}
+      {/* ÁREA DE CONTEÚDO */}
       <main className="flex-1 overflow-hidden flex flex-col print:overflow-visible">
-        {/* Adicionamos print:p-0 para tirar as margens no papel */}
         <div className="flex-1 overflow-y-auto p-8 print:p-0 print:overflow-visible">
            <Outlet /> 
         </div>
