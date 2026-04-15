@@ -222,27 +222,16 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
     // Tratamento de vazios para não quebrar o JSON
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
-    
-    // 🔥 O SEGREDO ESTÁ AQUI: Forçando a linha a ter 60 posições exatas!
-    // Isso evita o "buraco" do Javascript e garante que a atualização passe da coluna AQ e chegue na BD
-    const linhaCompletaConsolidado = Array.from({ length: 60 }, (_, i) => safeVal(rowData[i])); 
-
-    // 1. Atualiza Consolidado em Tempo Real (Da coluna A até BH)
-    const rangeConsolidado = encodeURIComponent(`${ABA_NOME}!A${rowIndex}`);
-    const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${rangeConsolidado}?valueInputOption=USER_ENTERED`;
-    await fetch(urlConsolidado, {
-      method: "PUT",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [linhaCompletaConsolidado] }) 
-    });
 
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
     const stationAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
     const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
     console.log(`Buscando a linha ANTIGA para EDITAR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
 
-    // 🔥 MAPA 1: BISTURI DO REPORT DIARIO
-    const colunasCirurgicasReport = [
+    // 🔥 MAPAS DO BISTURI: Quais campos do Form vão para quais colunas
+    
+    // Mapa 1: Report Diário
+    const mapaReport = [
       { idx: 3, col: 'D' }, { idx: 4, col: 'E' }, { idx: 5, col: 'F' },
       { idx: 6, col: 'G' }, { idx: 7, col: 'H' }, 
       { idx: 11, col: 'L' }, { idx: 12, col: 'M' }, { idx: 13, col: 'N' }, { idx: 14, col: 'O' },
@@ -252,7 +241,42 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       { idx: 41, col: 'AP' }, { idx: 42, col: 'AQ' }
     ];
 
-    // 2. Caça e Edita Report Diário
+    // Mapa 2: SOP (Realocação)
+    const mapaSOP = [
+      { idx: 3, col: 'A' },  { idx: 4, col: 'C' },  { idx: 5, col: 'D' }, 
+      { idx: 12, col: 'E' }, { idx: 13, col: 'F' }, { idx: 14, col: 'G' }, 
+      { idx: 51, col: 'H' }, { idx: 52, col: 'I' }, { idx: 54, col: 'K' }, { idx: 55, col: 'L' } 
+    ];
+
+    // Mapa 3: Consolidado (Tudo do Report + as posições exatas da SOP)
+    const mapaConsolidado = [
+      ...mapaReport, 
+      { idx: 51, col: 'AZ' }, // Realoc Pré
+      { idx: 52, col: 'BA' }, // Realoc Durante
+      { idx: 54, col: 'BC' }, // Não Coube
+      { idx: 55, col: 'BD' }  // Outros Motivos
+    ];
+
+    // --- 1. EXECUÇÃO CONSOLIDADO (Tempo Real) ---
+    try {
+      // Usamos aspas simples no nome da aba porque ela tem hífen!
+      const dataToUpdateConsolidado = mapaConsolidado.map(campo => ({
+        range: `'${ABA_NOME}'!${campo.col}${rowIndex}`,
+        values: [[ safeVal(rowData[campo.idx]) ]]
+      }));
+
+      const urlConsolBatch = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`;
+      const reqConsol = await fetch(urlConsolBatch, { 
+        method: "POST", 
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
+        body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdateConsolidado }) 
+      });
+      if (!reqConsol.ok) console.error("Erro no Consolidado:", await reqConsol.text());
+      else console.log("Achou no Consolidado! Editando de forma cirúrgica...");
+    } catch (e) { console.error("Erro Consolidado Catch:", e); }
+
+
+    // --- 2. EXECUÇÃO REPORT DIÁRIO ---
     try {
       const rangeReportBusca = encodeURIComponent("'REPORT DIARIO'!A:G");
       const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${rangeReportBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
@@ -261,45 +285,28 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       if (dataReport.values) {
         for (let i = dataReport.values.length - 1; i >= 1; i--) {
           const row = dataReport.values[i];
-          let dataLida = row[3];
-
-          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
-            console.log("Achou no Report! Editando de forma cirúrgica (bypassing protections)...");
+          if (padronizarData(row[3]) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
+            console.log("Achou no Report! Editando de forma cirúrgica...");
             
-            const dataToUpdate = colunasCirurgicasReport.map(campo => ({
+            const dataToUpdateReport = mapaReport.map(campo => ({
               range: `'REPORT DIARIO'!${campo.col}${i + 1}`,
               values: [[ safeVal(rowData[campo.idx]) ]]
             }));
 
             const urlRepBatch = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`;
-            const req = await fetch(urlRepBatch, { 
+            await fetch(urlRepBatch, { 
               method: "POST", 
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
-              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdate }) 
+              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdateReport }) 
             });
-
-            if (!req.ok) console.error("Erro detalhado Report:", await req.text());
             break;
           }
         }
       }
     } catch (e) { console.error("Erro Report:", e); }
 
-    // 🔥 MAPA 2: BISTURI DA SOP (Pula Regional, Semanas e Fórmulas de Totais)
-    const colunasCirurgicasSOP = [
-      { idx: 3, col: 'A' },  // Data
-      { idx: 4, col: 'C' },  // Station
-      { idx: 5, col: 'D' },  // Turno
-      { idx: 12, col: 'E' }, // Vol Rot
-      { idx: 13, col: 'F' }, // Vol Proc
-      { idx: 14, col: 'G' }, // Vol Exp
-      { idx: 51, col: 'H' }, // Realoc Pre
-      { idx: 52, col: 'I' }, // Realoc Durante
-      { idx: 54, col: 'K' }, // Não Coube
-      { idx: 55, col: 'L' }  // Outros Motivos
-    ];
 
-    // 3. Caça e Edita SOP (Agora de forma cirúrgica)
+    // --- 3. EXECUÇÃO SOP ---
     try {
       const rangeSopBusca = encodeURIComponent("CONTROLE!A:E");
       const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${rangeSopBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
@@ -308,24 +315,20 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       if (dataSOP.values) {
         for (let i = dataSOP.values.length - 1; i >= 1; i--) {
           const row = dataSOP.values[i];
-          let dataLida = row[0];
-
-          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
-            console.log("Achou na SOP! Editando de forma cirúrgica (bypassing protections)...");
+          if (padronizarData(row[0]) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
+            console.log("Achou na SOP! Editando de forma cirúrgica...");
             
-            const dataToUpdateSOP = colunasCirurgicasSOP.map(campo => ({
+            const dataToUpdateSOP = mapaSOP.map(campo => ({
               range: `CONTROLE!${campo.col}${i + 1}`,
               values: [[ safeVal(rowData[campo.idx]) ]]
             }));
 
             const urlSopBatch = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`;
-            const reqSop = await fetch(urlSopBatch, { 
+            await fetch(urlSopBatch, { 
               method: "POST", 
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdateSOP }) 
             });
-
-            if (!reqSop.ok) console.error("Erro detalhado SOP:", await reqSop.text());
             break;
           }
         }
