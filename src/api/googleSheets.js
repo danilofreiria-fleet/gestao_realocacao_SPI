@@ -220,17 +220,20 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // Tratamento de vazios para não quebrar o JSON
+// Tratamento de vazios para não quebrar o JSON
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
-    const linhaGestao = rowData.slice(0, 47).map(safeVal);
+    
+    // 🔥 CRIAMOS UMA VARIÁVEL COM A LINHA INTEIRA PARA O CONSOLIDADO
+    const linhaCompletaConsolidado = rowData.map(safeVal); 
+    const linhaGestao = rowData.slice(0, 47).map(safeVal); // Mantemos essa só para o Report
 
-    // 1. Atualiza Consolidado (A base que nós criamos não tem trava, então vai a linha toda)
+    // 1. Atualiza Consolidado em Tempo Real (Todas as colunas)
     const rangeConsolidado = encodeURIComponent(`${ABA_NOME}!A${rowIndex}`);
     const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${rangeConsolidado}?valueInputOption=USER_ENTERED`;
     await fetch(urlConsolidado, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [linhaGestao] }) 
+      body: JSON.stringify({ values: [linhaCompletaConsolidado] }) // 🔥 AGORA VAI TUDO!
     });
 
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
