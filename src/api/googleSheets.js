@@ -213,7 +213,7 @@ const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
 };
 
 // =================================================================
-// PUT (Edição Cirúrgica)
+// PUT (Edição Cirúrgica - Bypassing Protections)
 // =================================================================
 export const updateRowData = async (rowIndex, rowData, oldRowData) => {
   try {
@@ -222,17 +222,9 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
     // Tratamento de vazios para não quebrar o JSON
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
-
     const linhaGestao = rowData.slice(0, 47).map(safeVal);
-    const linhaControle = [
-      rowData[3], rowData[1], rowData[4], rowData[5],
-      rowData[12], rowData[13], rowData[14], rowData[51],
-      rowData[52], rowData[53], rowData[54], rowData[55],
-      rowData[56], rowData[57], rowData[58], rowData[2],
-      rowData[59]
-    ].map(safeVal);
 
-    // 1. Atualiza Consolidado (Aqui a marreta funciona porque somos donos da base)
+    // 1. Atualiza Consolidado (A base que nós criamos não tem trava, então vai a linha toda)
     const rangeConsolidado = encodeURIComponent(`${ABA_NOME}!A${rowIndex}`);
     const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${rangeConsolidado}?valueInputOption=USER_ENTERED`;
     await fetch(urlConsolidado, {
@@ -246,7 +238,7 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
     console.log(`Buscando a linha ANTIGA para EDITAR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
 
-    // 🔥 O MAPA DO BISTURI: Exatamente as colunas editáveis, pulando as fórmulas protegidas!
+    // 🔥 MAPA 1: BISTURI DO REPORT DIARIO
     const colunasCirurgicasReport = [
       { idx: 3, col: 'D' }, { idx: 4, col: 'E' }, { idx: 5, col: 'F' },
       { idx: 6, col: 'G' }, { idx: 7, col: 'H' }, 
@@ -254,10 +246,10 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       { idx: 19, col: 'T' }, { idx: 20, col: 'U' }, { idx: 21, col: 'V' }, { idx: 22, col: 'W' }, { idx: 23, col: 'X' }, 
       { idx: 25, col: 'Z' }, { idx: 26, col: 'AA' }, { idx: 27, col: 'AB' }, { idx: 28, col: 'AC' },
       { idx: 35, col: 'AJ' }, { idx: 37, col: 'AL' }, { idx: 38, col: 'AM' },
-      { idx: 41, col: 'AP' }, { idx: 42, col: 'AQ' } // <-- Sua famosa célula AQ4507 aqui!
+      { idx: 41, col: 'AP' }, { idx: 42, col: 'AQ' }
     ];
 
-    // 2. Caça e Edita Report Diário (Edição Cirúrgica)
+    // 2. Caça e Edita Report Diário
     try {
       const rangeReportBusca = encodeURIComponent("'REPORT DIARIO'!A:G");
       const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${rangeReportBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
@@ -271,7 +263,6 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
             console.log("Achou no Report! Editando de forma cirúrgica (bypassing protections)...");
             
-            // Monta o payload do batchUpdate apenas com as colunas desprotegidas
             const dataToUpdate = colunasCirurgicasReport.map(campo => ({
               range: `'REPORT DIARIO'!${campo.col}${i + 1}`,
               values: [[ safeVal(rowData[campo.idx]) ]]
@@ -279,12 +270,9 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
             const urlRepBatch = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`;
             const req = await fetch(urlRepBatch, { 
-              method: "POST", // batchUpdate usa POST
+              method: "POST", 
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
-              body: JSON.stringify({
-                valueInputOption: "USER_ENTERED",
-                data: dataToUpdate
-              }) 
+              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdate }) 
             });
 
             if (!req.ok) console.error("Erro detalhado Report:", await req.text());
@@ -294,7 +282,21 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       }
     } catch (e) { console.error("Erro Report:", e); }
 
-    // 3. Caça e Edita SOP (Mantivemos o PUT padrão aqui se a SOP não tiver essas travas intercaladas)
+    // 🔥 MAPA 2: BISTURI DA SOP (Pula Regional, Semanas e Fórmulas de Totais)
+    const colunasCirurgicasSOP = [
+      { idx: 3, col: 'A' },  // Data
+      { idx: 4, col: 'C' },  // Station
+      { idx: 5, col: 'D' },  // Turno
+      { idx: 12, col: 'E' }, // Vol Rot
+      { idx: 13, col: 'F' }, // Vol Proc
+      { idx: 14, col: 'G' }, // Vol Exp
+      { idx: 51, col: 'H' }, // Realoc Pre
+      { idx: 52, col: 'I' }, // Realoc Durante
+      { idx: 54, col: 'K' }, // Não Coube
+      { idx: 55, col: 'L' }  // Outros Motivos
+    ];
+
+    // 3. Caça e Edita SOP (Agora de forma cirúrgica)
     try {
       const rangeSopBusca = encodeURIComponent("CONTROLE!A:E");
       const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${rangeSopBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
@@ -306,15 +308,18 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
           let dataLida = row[0];
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
-            console.log("Achou na SOP! Editando...");
+            console.log("Achou na SOP! Editando de forma cirúrgica (bypassing protections)...");
             
-            const rangeSopEdicao = encodeURIComponent(`CONTROLE!A${i + 1}`);
-            const urlSOP = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${rangeSopEdicao}?valueInputOption=USER_ENTERED`;
-            
-            const reqSop = await fetch(urlSOP, { 
-              method: "PUT", 
+            const dataToUpdateSOP = colunasCirurgicasSOP.map(campo => ({
+              range: `CONTROLE!${campo.col}${i + 1}`,
+              values: [[ safeVal(rowData[campo.idx]) ]]
+            }));
+
+            const urlSopBatch = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`;
+            const reqSop = await fetch(urlSopBatch, { 
+              method: "POST", 
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
-              body: JSON.stringify({ values: [linhaControle] }) 
+              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: dataToUpdateSOP }) 
             });
 
             if (!reqSop.ok) console.error("Erro detalhado SOP:", await reqSop.text());
