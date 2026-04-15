@@ -20,6 +20,39 @@ export default function MainLayout() {
     }
   }, []);
 
+  // 🔥 NOVO: Vigia de Sessão (Expulsa após 60 minutos)
+  useEffect(() => {
+    const verificarSessao = () => {
+      const loginTime = localStorage.getItem("spiTokenTime");
+      
+      if (loginTime) {
+        // Pega a hora atual menos a hora que fez login
+        const tempoLogado = Date.now() - parseInt(loginTime, 10);
+        
+        // 60 minutos * 60 segundos * 1000 milissegundos
+        const TEMPO_LIMITE = 60 * 60 * 1000; 
+
+        if (tempoLogado > TEMPO_LIMITE) {
+          // Expulsa o usuário limpando a memória do navegador
+          localStorage.removeItem("spiToken");
+          localStorage.removeItem("userEmail");
+          localStorage.removeItem("spiTokenTime");
+          
+          alert("Sua sessão expirou por segurança (60 minutos). Por favor, faça login novamente.");
+          navigate("/"); // Manda de volta para a tela de Login
+        }
+      }
+    };
+
+    // Verifica assim que a tela abre ou a rota muda
+    verificarSessao();
+
+    // Deixa um vigia rodando silenciosamente a cada 1 minuto (60000 ms)
+    const intervalo = setInterval(verificarSessao, 60000);
+    
+    return () => clearInterval(intervalo); // Limpa o vigia se a pessoa sair da tela
+  }, [navigate]);
+
   const toggleDarkMode = () => {
     if (isDarkMode) {
       document.documentElement.classList.remove('dark');
@@ -35,6 +68,7 @@ export default function MainLayout() {
   const handleLogout = () => {
     localStorage.removeItem('spiToken');
     localStorage.removeItem('userEmail');
+    localStorage.removeItem('spiTokenTime'); // 🔥 Limpa o tempo de login ao sair manualmente
     navigate('/');
   };
 
@@ -48,7 +82,7 @@ export default function MainLayout() {
     <div className="flex h-screen bg-gray-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 transition-colors duration-300 overflow-hidden">
       
       {/* SIDEBAR COM LARGURA DINÂMICA */}
-<aside 
+      <aside 
         className={`relative bg-white dark:bg-[#1f232d] border-r border-gray-200 dark:border-gray-800 flex flex-col justify-between shadow-lg z-20 transition-all duration-300 ease-in-out print:hidden ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
@@ -131,7 +165,7 @@ export default function MainLayout() {
         </div>
       </aside>
 
-{/* ÁREA DE CONTEÚDO (Onde as telas aparecem) */}
+      {/* ÁREA DE CONTEÚDO (Onde as telas aparecem) */}
       <main className="flex-1 overflow-hidden flex flex-col print:overflow-visible">
         {/* Adicionamos print:p-0 para tirar as margens no papel */}
         <div className="flex-1 overflow-y-auto p-8 print:p-0 print:overflow-visible">
