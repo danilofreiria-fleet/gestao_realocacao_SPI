@@ -213,42 +213,54 @@ const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
 };
 
 // =================================================================
-// PUT (Edição)
+// PUT (Edição Cirúrgica)
 // =================================================================
 export const updateRowData = async (rowIndex, rowData, oldRowData) => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // 1. Atualiza Consolidado
-    const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_NOME}!A${rowIndex}?valueInputOption=USER_ENTERED`;
+    // Tratamento de vazios para não quebrar o JSON
+    const safeVal = (v) => (v === undefined || v === null) ? "" : v;
+
+    const linhaGestao = rowData.slice(0, 47).map(safeVal);
+    const linhaControle = [
+      rowData[3], rowData[1], rowData[4], rowData[5],
+      rowData[12], rowData[13], rowData[14], rowData[51],
+      rowData[52], rowData[53], rowData[54], rowData[55],
+      rowData[56], rowData[57], rowData[58], rowData[2],
+      rowData[59]
+    ].map(safeVal);
+
+    // 1. Atualiza Consolidado (Aqui a marreta funciona porque somos donos da base)
+    const rangeConsolidado = encodeURIComponent(`${ABA_NOME}!A${rowIndex}`);
+    const urlConsolidado = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${rangeConsolidado}?valueInputOption=USER_ENTERED`;
     await fetch(urlConsolidado, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [rowData] })
+      body: JSON.stringify({ values: [linhaGestao] }) 
     });
 
-    const dataBusca = oldRowData ? oldRowData[3] : rowData[3];
-    const hubBusca = oldRowData ? oldRowData[4] : rowData[4];
-    const turnoBusca = oldRowData ? oldRowData[5] : rowData[5];
-
-    const dataAlvo = padronizarData(dataBusca);
-    const stationAlvo = limpaTexto(hubBusca);
-    const turnoAlvo = limpaTexto(turnoBusca);
+    const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
+    const stationAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
+    const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
     console.log(`Buscando a linha ANTIGA para EDITAR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
 
-    const linhaGestao = rowData.slice(0, 47);
-    const linhaControle = [
-      rowData[3] || "", rowData[1] || "", rowData[4] || "", rowData[5] || "",
-      rowData[12] || "", rowData[13] || "", rowData[14] || "", rowData[51] || "",
-      rowData[52] || "", rowData[53] || "", rowData[54] || "", rowData[55] || "",
-      rowData[56] || "", rowData[57] || "", rowData[58] || "", rowData[2] || "",
-      rowData[59] || ""
+    // 🔥 O MAPA DO BISTURI: Exatamente as colunas editáveis, pulando as fórmulas protegidas!
+    const colunasCirurgicasReport = [
+      { idx: 3, col: 'D' }, { idx: 4, col: 'E' }, { idx: 5, col: 'F' },
+      { idx: 6, col: 'G' }, { idx: 7, col: 'H' }, 
+      { idx: 11, col: 'L' }, { idx: 12, col: 'M' }, { idx: 13, col: 'N' }, { idx: 14, col: 'O' },
+      { idx: 19, col: 'T' }, { idx: 20, col: 'U' }, { idx: 21, col: 'V' }, { idx: 22, col: 'W' }, { idx: 23, col: 'X' }, 
+      { idx: 25, col: 'Z' }, { idx: 26, col: 'AA' }, { idx: 27, col: 'AB' }, { idx: 28, col: 'AC' },
+      { idx: 35, col: 'AJ' }, { idx: 37, col: 'AL' }, { idx: 38, col: 'AM' },
+      { idx: 41, col: 'AP' }, { idx: 42, col: 'AQ' } // <-- Sua famosa célula AQ4507 aqui!
     ];
 
-    // 2. Caça e Edita Report Diário (Removido o UNFORMATTED_VALUE - Agora lê 100% texto)
+    // 2. Caça e Edita Report Diário (Edição Cirúrgica)
     try {
-      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
+      const rangeReportBusca = encodeURIComponent("'REPORT DIARIO'!A:G");
+      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${rangeReportBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataReport = await respReport.json();
       
       if (dataReport.values) {
@@ -257,18 +269,35 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
           let dataLida = row[3];
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
-            console.log("Achou no Report! Editando...");
-            const urlRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A${i + 1}?valueInputOption=USER_ENTERED`;
-            await fetch(urlRep, { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: [linhaGestao] }) });
+            console.log("Achou no Report! Editando de forma cirúrgica (bypassing protections)...");
+            
+            // Monta o payload do batchUpdate apenas com as colunas desprotegidas
+            const dataToUpdate = colunasCirurgicasReport.map(campo => ({
+              range: `'REPORT DIARIO'!${campo.col}${i + 1}`,
+              values: [[ safeVal(rowData[campo.idx]) ]]
+            }));
+
+            const urlRepBatch = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`;
+            const req = await fetch(urlRepBatch, { 
+              method: "POST", // batchUpdate usa POST
+              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
+              body: JSON.stringify({
+                valueInputOption: "USER_ENTERED",
+                data: dataToUpdate
+              }) 
+            });
+
+            if (!req.ok) console.error("Erro detalhado Report:", await req.text());
             break;
           }
         }
       }
     } catch (e) { console.error("Erro Report:", e); }
 
-    // 3. Caça e Edita SOP (Removido o UNFORMATTED_VALUE)
+    // 3. Caça e Edita SOP (Mantivemos o PUT padrão aqui se a SOP não tiver essas travas intercaladas)
     try {
-      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
+      const rangeSopBusca = encodeURIComponent("CONTROLE!A:E");
+      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${rangeSopBusca}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataSOP = await respSOP.json();
       
       if (dataSOP.values) {
@@ -278,8 +307,17 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
           if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
             console.log("Achou na SOP! Editando...");
-            const urlSOP = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A${i + 1}?valueInputOption=USER_ENTERED`;
-            await fetch(urlSOP, { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: [linhaControle] }) });
+            
+            const rangeSopEdicao = encodeURIComponent(`CONTROLE!A${i + 1}`);
+            const urlSOP = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${rangeSopEdicao}?valueInputOption=USER_ENTERED`;
+            
+            const reqSop = await fetch(urlSOP, { 
+              method: "PUT", 
+              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
+              body: JSON.stringify({ values: [linhaControle] }) 
+            });
+
+            if (!reqSop.ok) console.error("Erro detalhado SOP:", await reqSop.text());
             break;
           }
         }
