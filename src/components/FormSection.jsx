@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Save, Trash2, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Trash2, AlertTriangle, CheckSquare } from 'lucide-react';
 
 const MAPA_REGIONAL = {
   "LM Hub_SP_Campinas_São Martinho": "SPI1", "LM Hub_SP_Leme": "SPI1", "LM Hub_SP_Limeira_Campo Belo": "SPI1",
@@ -35,11 +35,11 @@ export const FORM_FIELDS = [
   { idx: 13, label: 'Vol. Proc.', type: 'number', span: 'col-span-1' },            
   { idx: 14, label: 'Vol. Exp.', type: 'number', span: 'col-span-1' },             
 
-  // --- NOVOS CAMPOS: REALOCAÇÃO SOP (ÍNDICES CORRIGIDOS PARA AZ, BA, BC, BD) ---
-  { idx: 51, label: 'Realoc. Pré Exp.', type: 'number', span: 'col-span-1' },        // Coluna AZ
-  { idx: 52, label: 'Realoc. Durante Exp.', type: 'number', span: 'col-span-1' },    // Coluna BA
-  { idx: 54, label: 'Não Exp. (Não Coube)', type: 'number', span: 'col-span-1' },    // Coluna BC
-  { idx: 55, label: 'Não Exp. (Outros)', type: 'number', span: 'col-span-1' },       // Coluna BD
+  // --- NOVOS CAMPOS: REALOCAÇÃO SOP ---
+  { idx: 51, label: 'Realoc. Pré Exp.', type: 'number', span: 'col-span-1' },        
+  { idx: 52, label: 'Realoc. Durante Exp.', type: 'number', span: 'col-span-1' },    
+  { idx: 54, label: 'Não Exp. (Não Coube)', type: 'number', span: 'col-span-1' },    
+  { idx: 55, label: 'Não Exp. (Outros)', type: 'number', span: 'col-span-1' },       
   
   // --- OFERTAS E CARREGADOS ---
   { idx: 19, label: 'AT Piso', type: 'number', span: 'col-span-1' },               
@@ -62,8 +62,29 @@ export const FORM_FIELDS = [
 
 const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDelete, onClose, isSaving, isDeleting, baseData }) => {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  
+  // 🔥 NOVOS ESTADOS PARA A REGRA DO AT PISO
+  const [focusedField, setFocusedField] = useState(null);
+  const [atPisoConfirmado, setAtPisoConfirmado] = useState(false);
+
+  // Reseta a confirmação sempre que o modal for aberto
+  useEffect(() => {
+    if (isOpen) {
+      setAtPisoConfirmado(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
-  const handleClose = () => { setShowConfirmDelete(false); onClose(); };
+  
+  const handleClose = () => { 
+    setShowConfirmDelete(false); 
+    setFocusedField(null);
+    onClose(); 
+  };
+
+  // 🔥 VALIDAÇÃO: Impede o salvamento se AT Piso for > 0 e a caixa não estiver marcada
+  const volumeAtPiso = Number(formData[19]) || 0;
+  const bloqueiaSalvamento = volumeAtPiso > 0 && !atPisoConfirmado;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -81,38 +102,37 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
         <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {FORM_FIELDS.map((field) => {
             
-            // 🔥 LÓGICA DO TURNO DINÂMICO
+            // Lógica do Turno Dinâmico
             let fieldOptions = field.options;
             let isFieldDisabled = field.disabled;
 
-            if (field.idx === 5) { // Se for o campo Turno (índice 5)
+            if (field.idx === 5) { 
               const stationAtual = formData[4];
               if (stationAtual && baseData && baseData.length > 0) {
-                // Caça na aba BASE todos os turnos que existem para essa Station
                 const turnosDoHub = baseData
                   .filter(r => String(r[0]).trim() === String(stationAtual).trim())
                   .map(r => String(r[1]).trim())
-                  .filter(t => t); // Remove vazios
-
-                // Remove duplicatas e aplica a lista
+                  .filter(t => t); 
                 if (turnosDoHub.length > 0) {
                   fieldOptions = [...new Set(turnosDoHub)];
                 }
               } else {
-                // Se não escolheu Station, desabilita e esvazia o Turno
                 fieldOptions = [];
                 isFieldDisabled = true;
               }
             }
 
             return (
-              <div key={field.idx} className={`flex flex-col ${field.span}`}>
+              <div key={field.idx} className={`flex flex-col relative ${field.span}`}>
                 <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">{field.label}</label>
+                
                 {field.type === 'select' ? (
                   <select 
                     value={formData[field.idx] || ""} 
                     onChange={(e) => onChange(field.idx, e.target.value)} 
-                    disabled={isFieldDisabled} 
+                    disabled={isFieldDisabled}
+                    onFocus={() => setFocusedField(field.idx)}
+                    onBlur={() => setFocusedField(null)}
                     className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <option value="">
@@ -125,7 +145,9 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                     value={formData[field.idx] || ""} 
                     onChange={(e) => onChange(field.idx, e.target.value)} 
                     disabled={isFieldDisabled} 
-                    maxLength={300} 
+                    maxLength={300}
+                    onFocus={() => setFocusedField(field.idx)}
+                    onBlur={() => setFocusedField(null)} 
                     className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none h-20 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
                   />
                 ) : (
@@ -133,9 +155,40 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                     type={field.type} 
                     value={formData[field.idx] || ""} 
                     onChange={(e) => onChange(field.idx, e.target.value)} 
-                    disabled={isFieldDisabled} 
+                    disabled={isFieldDisabled}
+                    onFocus={() => setFocusedField(field.idx)}
+                    onBlur={() => setFocusedField(null)}
                     className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
                   />
+                )}
+
+                {/* 🔥 LÓGICA EXCLUSIVA DO AT PISO (Índice 19) */}
+                {field.idx === 19 && (
+                  <div className="w-full mt-1">
+                    {/* Banner Vermelho ao focar no campo */}
+                    {focusedField === 19 && (
+                      <div className="absolute z-10 w-[250px] bg-red-600 text-white text-[10px] font-black p-2.5 rounded shadow-xl flex gap-2 items-start animate-in fade-in zoom-in top-full mt-1 left-0 border border-red-700">
+                        <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                        <span className="leading-tight">AT's NO PISO SÃO *APENAS* AS ROTAS QUE NÃO FORAM EXPEDIDAS NO D-0 E SERÃO EXPEDIDAS NO D+1</span>
+                      </div>
+                    )}
+
+                    {/* Caixa de Confirmação quando Valor > 0 */}
+                    {volumeAtPiso > 0 && (
+                      <div className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 rounded-md flex items-start gap-2 animate-in fade-in">
+                        <input
+                          type="checkbox"
+                          id="confirm-at-piso"
+                          checked={atPisoConfirmado}
+                          onChange={(e) => setAtPisoConfirmado(e.target.checked)}
+                          className="mt-0.5 shrink-0 w-4 h-4 text-red-600 rounded cursor-pointer"
+                        />
+                        <label htmlFor="confirm-at-piso" className="text-[9px] font-bold text-red-700 dark:text-red-400 leading-tight cursor-pointer uppercase">
+                          Você confirma que as AT's no Piso assinaladas só serão expedidas no D+1?
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -155,9 +208,24 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400">Cancelar</button>
-            <button onClick={onSave} disabled={isSaving} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow-md disabled:opacity-50 flex items-center gap-2"><Save size={18}/> {isSaving ? "Salvando..." : "Salvar Dados Unificados"}</button>
+            
+            {/* O Botão de salvar fica bloqueado se AT > 0 e a caixa não estiver marcada */}
+            <div title={bloqueiaSalvamento ? "Confirme a regra das AT's no Piso para salvar" : ""}>
+              <button 
+                onClick={onSave} 
+                disabled={isSaving || bloqueiaSalvamento} 
+                className={`text-white px-6 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all ${
+                  bloqueiaSalvamento 
+                    ? 'bg-slate-400 cursor-not-allowed opacity-70' 
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                <Save size={18}/> 
+                {isSaving ? "Salvando..." : "Salvar Dados Unificados"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
