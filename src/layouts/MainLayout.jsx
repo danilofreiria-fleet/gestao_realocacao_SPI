@@ -71,14 +71,18 @@ export default function MainLayout() {
 
   const handleLogout = () => {
     localStorage.removeItem('spiToken');
+    localStorage.removeItem('isGestor');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('spiTokenTime');
     navigate('/');
   };
 
-  const menuItems = [
+  const isGestor = localStorage.getItem("isGestor") === "true";
+
+const menuItems = [
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
-    { path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> },
+    // Só inclui o Dashboard se a variável isGestor for verdadeira
+    ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
     { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
   ];
 

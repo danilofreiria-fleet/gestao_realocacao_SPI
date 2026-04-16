@@ -439,3 +439,35 @@ export const getDadosAtPiso = async () => {
     return [];
   }
 };
+
+
+// =================================================================
+// VERIFICAÇÃO DE ACESSO AO DASHBOARD
+// =================================================================
+export const verificarAcessoGestor = async (emailUsuario, token) => {
+  try {
+    if (!token) return false;
+
+    // Busca a coluna A da aba de acessos
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ACESSOS_DASHBOARD!A:A`;
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    });
+    
+    if (!response.ok) return false;
+    
+    const result = await response.json();
+    if (!result.values) return false;
+
+    // Transforma a matriz do Google em uma lista simples de textos em minúsculo
+    const emailsPermitidos = result.values.map(linha => String(linha[0]).trim().toLowerCase());
+    
+    // Verifica se o e-mail logado está na lista
+    return emailsPermitidos.includes(String(emailUsuario).trim().toLowerCase());
+  } catch (error) {
+    console.error("Erro ao verificar permissões de gestor:", error);
+    return false; // Na dúvida, bloqueia.
+  }
+};

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getConsolidadoData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
 import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown } from 'lucide-react';
@@ -11,6 +12,18 @@ const MESES = [
 ];
 
 export default function Dashboard() {
+
+const navigate = useNavigate(); // <-- Inicializa o navegador de páginas
+
+  // GARANTIA DE USUÁRIO
+  useEffect(() => {
+    // Se localStorage NÃO estiver escrito que é Gestor, manda embora!
+    if (localStorage.getItem("isGestor") !== "true") {
+      alert("Acesso restrito. Somente gestores podem visualizar o Dashboard de KPIs.");
+      navigate("/app/tabela"); // Chuta de volta pra tela inicial
+    }
+  }, [navigate]);
+
   const [loading, setLoading] = useState(true);
   const [rawData, setRawData] = useState([]);
   

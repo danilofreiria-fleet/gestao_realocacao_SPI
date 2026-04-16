@@ -4,6 +4,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { Database } from 'lucide-react'; 
 import axios from 'axios';
 import logoImg from '../assets/logo.png';
+import { verificarAcessoGestor } from '../api/googleSheets';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ export default function Login() {
     scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email",
     hosted_domain: "shopee.com", 
     
-    onSuccess: async (tokenResponse) => {
+onSuccess: async (tokenResponse) => {
       try {
         const userInfo = await axios.get(
           'https://www.googleapis.com/oauth2/v3/userinfo',
@@ -20,11 +21,20 @@ export default function Login() {
         );
 
         if (userInfo.data.email.endsWith("@shopee.com") || userInfo.data.hd === "shopee.com") {
-          localStorage.setItem("spiToken", tokenResponse.access_token);
-          localStorage.setItem("userEmail", userInfo.data.email);
-          
-          // 🔥 NOVO: Salva o momento exato do login em milissegundos
+          const emailLogado = userInfo.data.email;
+          const token = tokenResponse.access_token;
+
+          localStorage.setItem("spiToken", token);
+          localStorage.setItem("userEmail", emailLogado);
           localStorage.setItem("spiTokenTime", Date.now().toString()); 
+          
+          // 🔥 NOVO: Pergunta para a API se ele é Gestor e salva o crachá
+          const isGestor = await verificarAcessoGestor(emailLogado, token);
+          if (isGestor) {
+            localStorage.setItem("isGestor", "true");
+          } else {
+            localStorage.removeItem("isGestor"); // Garante que não tenha lixo
+          }
           
           navigate("/app/tabela"); 
         } else {
