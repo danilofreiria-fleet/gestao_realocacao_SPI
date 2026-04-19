@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
-import { AlertOctagon, Maximize2, Minimize2, X } from 'lucide-react';
+import { ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine } from 'recharts';
+import { AlertOctagon, Maximize2, Minimize2, X, CalendarDays, Calendar } from 'lucide-react';
 
 const TIMELINE_COLORS = [
   '#660000', '#8B0000', '#B22222', '#C8102E', '#DC143C', 
@@ -8,9 +8,14 @@ const TIMELINE_COLORS = [
   '#FFA07A', '#FA8072', '#E9967A', '#F08080', '#CD5C5C'
 ];
 
+const NAMES_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 export default function CapFleetCharts({ data }) {
   const [fullscreenChart, setFullscreenChart] = useState(null);
 
+  // ========================================================
+  // PARSERS
+  // ========================================================
   const parseUniversalDate = (dateStr) => {
     if (!dateStr) return null;
     let s = String(dateStr).trim().split('T')[0].split(' ')[0];
@@ -25,6 +30,11 @@ export default function CapFleetCharts({ data }) {
     return null;
   };
 
+  const extractWeekNumber = (str) => {
+    const match = String(str || "").match(/\d+/);
+    return match ? parseInt(match[0], 10) : 999;
+  };
+
   const parsePct = (val) => {
     if (!val) return 0;
     let s = String(val).trim();
@@ -37,8 +47,14 @@ export default function CapFleetCharts({ data }) {
 
   const cleanName = (name) => String(name).replace('LM Hub_SP_', '');
 
-  const { weekData, regData, hubData, pctRegData, pctHubData, timelineData, timelineKeys } = useMemo(() => {
-    const aggWeek = {}; const aggReg = {}; const aggHub = {};
+  // ========================================================
+  // MOTOR DE CÁLCULO E VARIAÇÕES
+  // ========================================================
+  const processedData = useMemo(() => {
+    if (!data || data.length === 0) return {};
+
+    const aggTimeWeek = {}; const aggTimeMonth = {};
+    const aggReg = {}; const aggHub = {};
     const aggPctReg = {}; const aggPctHub = {};
     const tData = {}; const datesMap = new Map();
 
@@ -54,14 +70,24 @@ export default function CapFleetCharts({ data }) {
       const semana = row[2] || 'N/A';
       const dateStr = row[3] || '';
       const station = cleanName(row[4] || 'N/A');
+      const dateObj = parseUniversalDate(dateStr);
       
       const pctValue = parsePct(row[45]); 
       const status = String(row[46] || '').toUpperCase();
-
       const isLimit = status.includes('LIMITE') || status.includes('NÃO ATENDE') || status.includes('NAO ATENDE');
 
+      let monthKey = 'N/A';
+      if (dateObj) {
+        monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+      }
+
+      // Prepara os objetos
+      if (!aggTimeWeek[semana]) aggTimeWeek[semana] = { limitCount: 0, pctSum: 0, pctCount: 0 };
+      if (!aggTimeMonth[monthKey]) aggTimeMonth[monthKey] = { limitCount: 0, pctSum: 0, pctCount: 0 };
+
       if (isLimit) {
-        aggWeek[semana] = (aggWeek[semana] || 0) + 1;
+        aggTimeWeek[semana].limitCount += 1;
+        aggTimeMonth[monthKey].limitCount += 1;
         aggReg[regional] = (aggReg[regional] || 0) + 1;
         aggHub[station] = (aggHub[station] || 0) + 1;
       }
@@ -69,6 +95,13 @@ export default function CapFleetCharts({ data }) {
       if (pctValue > 100) {
         const excess = pctValue - 100; 
 
+        // Tempo
+        aggTimeWeek[semana].pctSum += excess;
+        aggTimeWeek[semana].pctCount += 1;
+        aggTimeMonth[monthKey].pctSum += excess;
+        aggTimeMonth[monthKey].pctCount += 1;
+
+        // Reg / Hub
         if (!aggPctReg[regional]) aggPctReg[regional] = { sum: 0, count: 0 };
         aggPctReg[regional].sum += excess;
         aggPctReg[regional].count += 1;
@@ -77,10 +110,10 @@ export default function CapFleetCharts({ data }) {
         aggPctHub[station].sum += excess;
         aggPctHub[station].count += 1;
 
-        const d = parseUniversalDate(dateStr);
-        if (d && d.getTime() >= fifteenDaysAgo) {
-          const dateFormatted = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-          datesMap.set(d.getTime(), dateFormatted);
+        // Timeline
+        if (dateObj && dateObj.getTime() >= fifteenDaysAgo) {
+          const dateFormatted = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+          datesMap.set(dateObj.getTime(), dateFormatted);
           
           if (!tData[station]) tData[station] = {};
           if (!tData[station][dateFormatted]) {
@@ -91,6 +124,37 @@ export default function CapFleetCharts({ data }) {
         }
       }
     });
+
+    const calculateVar = (curr, prev) => {
+      if (!prev || prev === 0) return 0;
+      return Number((((curr - prev) / prev) * 100).toFixed(1));
+    };
+
+    const formatTimeDataWithVar = (rawObj, isMonth = false) => {
+      return Object.keys(rawObj)
+        .filter(k => k !== 'N/A')
+        .sort((a, b) => isMonth ? a.localeCompare(b) : extractWeekNumber(a) - extractWeekNumber(b))
+        .map((key, index, arr) => {
+          let name = key;
+          if (isMonth) {
+            const [year, month] = key.split('-');
+            name = `${NAMES_MESES[parseInt(month, 10) - 1]}/${year.substring(2)}`;
+          }
+          const d = rawObj[key];
+          const prev = index > 0 ? rawObj[arr[index - 1]] : null;
+
+          const avgExcess = d.pctCount > 0 ? Number((d.pctSum / d.pctCount).toFixed(2)) : 0;
+          const prevAvgExcess = prev && prev.pctCount > 0 ? Number((prev.pctSum / prev.pctCount).toFixed(2)) : 0;
+
+          return {
+            name,
+            limitCount: d.limitCount,
+            varLimitPct: calculateVar(d.limitCount, prev?.limitCount),
+            avgExcess,
+            varAvgExcessPct: calculateVar(avgExcess, prevAvgExcess)
+          };
+        });
+    };
 
     const formatCount = (obj) => Object.keys(obj).map(k => ({ name: k, count: obj[k] })).sort((a,b) => b.count - a.count);
     const formatAvg = (obj) => Object.keys(obj).map(k => ({ name: k, avg: Number((obj[k].sum / obj[k].count).toFixed(2)) })).sort((a,b) => b.avg - a.avg);
@@ -111,7 +175,8 @@ export default function CapFleetCharts({ data }) {
     });
 
     return {
-      weekData: Object.keys(aggWeek).map(k => ({ name: k, count: aggWeek[k] })).sort((a,b) => a.name.localeCompare(b.name)),
+      timeWeek: formatTimeDataWithVar(aggTimeWeek, false),
+      timeMonth: formatTimeDataWithVar(aggTimeMonth, true),
       regData: formatCount(aggReg),
       hubData: formatCount(aggHub),
       pctRegData: formatAvg(aggPctReg),
@@ -121,10 +186,37 @@ export default function CapFleetCharts({ data }) {
     };
   }, [data]);
 
+  // ========================================================
+  // GRÁFICOS E TOOLTIPS COM VARIAÇÃO E SCROLL
+  // ========================================================
+  const CustomVarTooltip = ({ active, payload, label, suffix = '', valueName, lineKey }) => {
+    if (active && payload && payload.length) {
+      const valData = payload.find(p => p.dataKey !== lineKey);
+      const varData = payload.find(p => p.dataKey === lineKey);
+
+      return (
+        <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-slate-200 dark:border-gray-700">
+          <p className="font-black text-slate-800 dark:text-white border-b border-slate-100 dark:border-gray-800 pb-2 mb-2 text-base">{label}</p>
+          {valData && (
+            <p className="font-bold text-[#113366] dark:text-[#4da3ff]">
+              {valueName}: <span className="text-xl">{valData.value.toLocaleString('pt-BR')}</span>{suffix}
+            </p>
+          )}
+          {varData && (
+            <p className="font-bold mt-1 text-[#EE4D2D] dark:text-[#ff7b63]">
+              Variação: <span className="text-xl">{varData.value > 0 ? '+' : ''}{varData.value}%</span> vs Anterior
+            </p>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
   const CountTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) return (
-      <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-slate-200">
-        <p className="font-bold border-b pb-2 mb-2">{label}</p>
+      <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-slate-200 dark:border-gray-700">
+        <p className="font-bold border-b border-slate-100 dark:border-gray-800 pb-2 mb-2 text-slate-800 dark:text-white">{label}</p>
         <p className="text-[#D0011B] font-bold">Estouros de Limite: {payload[0].value}</p>
       </div>
     );
@@ -133,9 +225,9 @@ export default function CapFleetCharts({ data }) {
 
   const PctTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) return (
-      <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-slate-200">
-        <p className="font-bold border-b pb-2 mb-2">{label}</p>
-        <p className="text-[#EE4D2D] font-bold">Média Excedente Geral: +{payload[0].value}%</p>
+      <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-slate-200 dark:border-gray-700">
+        <p className="font-bold border-b border-slate-100 dark:border-gray-800 pb-2 mb-2 text-slate-800 dark:text-white">{label}</p>
+        <p className="text-[#EE4D2D] font-bold">Média Excedente: +{payload[0].value}%</p>
       </div>
     );
     return null;
@@ -143,8 +235,8 @@ export default function CapFleetCharts({ data }) {
 
   const TimelineTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) return (
-      <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-slate-200">
-        <p className="font-bold border-b pb-2 mb-2 text-[#113366]">{label}</p>
+      <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-slate-200 dark:border-gray-700">
+        <p className="font-bold border-b border-slate-100 dark:border-gray-800 pb-2 mb-2 text-[#113366] dark:text-[#4da3ff]">{label}</p>
         <div className="max-h-48 overflow-y-auto custom-scrollbar pr-2">
           {payload.filter(p => p.value > 0).slice().reverse().map((entry, index) => (
             <p key={index} style={{ color: entry.color }} className="text-[11px] font-bold mb-1 flex justify-between gap-4">
@@ -157,20 +249,93 @@ export default function CapFleetCharts({ data }) {
     return null;
   };
 
-  const renderChartCard = (id, title, content, colSpan = "col-span-1") => {
+  // 🔥 COMPONENTE QUE DESENHA O GRÁFICO DE VARIAÇÃO (BARRA + LINHA)
+  const BarLineVariationChart = ({ data, barKey, lineKey, valueName, color, suffix = '' }) => (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 'bold' }} angle={-45} textAnchor="end" interval={0} />
+        
+        {/* Eixo Esquerdo: Absoluto */}
+        <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+        
+        {/* Eixo Direito: Variação % */}
+        <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#113366' }} tickFormatter={(val) => `${val}%`} domain={['auto', 'auto']} />
+        
+        <Tooltip content={<CustomVarTooltip suffix={suffix} valueName={valueName} lineKey={lineKey} />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+        <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+        <ReferenceLine yAxisId="right" y={0} stroke="#113366" strokeDasharray="3 3" />
+
+        <Bar yAxisId="left" dataKey={barKey} name={valueName} fill={color} radius={[4, 4, 0, 0]} barSize={40}>
+          <LabelList dataKey={barKey} position="top" formatter={(val) => suffix === '%' && val > 0 ? `+${val}%` : val} style={{ fill: color, fontSize: 10, fontWeight: 'bold' }} />
+        </Bar>
+
+        <Line yAxisId="right" type="monotone" dataKey={lineKey} name="Variação % vs Anterior" stroke="#113366" strokeWidth={3} dot={{ r: 5, strokeWidth: 3, fill: 'white' }} activeDot={{ r: 6 }} >
+          <LabelList dataKey={lineKey} position="top" formatter={(val) => `${val > 0 ? '+' : ''}${val}%`} style={{ fill: '#113366', fontSize: 10, fontWeight: 'bold', textShadow: '1px 1px 2px rgba(255,255,255,0.8)' }} />
+        </Line>
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+
+  const ToggleableTimeCard = ({ id, titleBase, dataKey, lineKey, valueName, color, suffix = '', colSpan = "col-span-1" }) => {
+    const [timeframe, setTimeframe] = useState('week'); 
+    const isFullscreen = fullscreenChart === id;
+    
+    const chartData = timeframe === 'week' ? processedData.timeWeek : processedData.timeMonth;
+    const title = `${titleBase} [% VAR. PER ${timeframe === 'week' ? 'WEEK' : 'MONTH'}]`;
+
+    const cardContent = (
+      <div className={`bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative transition-all ${isFullscreen ? 'w-full h-full p-8' : `h-[450px] p-6 ${colSpan}`} print:break-inside-avoid print:h-[450px]`}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 border-b border-slate-100 dark:border-gray-800 pb-4 shrink-0 gap-3">
+          <h3 className={`font-black text-[#D0011B] dark:text-[#ff6b6b] uppercase ${isFullscreen ? 'text-2xl' : 'text-sm xl:text-base'}`}>{title}</h3>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-slate-100 dark:bg-gray-800 p-1 rounded-lg">
+              <button onClick={() => setTimeframe('week')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeframe === 'week' ? 'bg-white dark:bg-[#15171e] shadow text-[#113366] dark:text-[#4da3ff]' : 'text-slate-400 hover:text-slate-600'}`}><CalendarDays size={14}/> Sem</button>
+              <button onClick={() => setTimeframe('month')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeframe === 'month' ? 'bg-white dark:bg-[#15171e] shadow text-[#113366] dark:text-[#4da3ff]' : 'text-slate-400 hover:text-slate-600'}`}><Calendar size={14}/> Mês</button>
+            </div>
+            <button onClick={() => setFullscreenChart(isFullscreen ? null : id)} className="text-slate-400 hover:text-[#EE4D2D] bg-slate-50 hover:bg-orange-50 dark:bg-gray-800 p-2 rounded-lg transition-colors print:hidden">
+              {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto custom-scrollbar print:overflow-visible">
+          <div className={`${isFullscreen ? 'w-full h-full' : 'min-w-[600px] min-h-[350px] w-full h-full'}`}>
+            <BarLineVariationChart data={chartData} barKey={dataKey} lineKey={lineKey} valueName={valueName} color={color} suffix={suffix} />
+          </div>
+        </div>
+      </div>
+    );
+
+    if (isFullscreen) {
+      return (
+        <div className="fixed inset-4 z-[99999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6 print:hidden">
+          <div className="w-full h-full relative">
+             {cardContent}
+             <button onClick={() => setFullscreenChart(null)} className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-lg"><X size={24}/></button>
+          </div>
+        </div>
+      );
+    }
+    return cardContent;
+  };
+
+  const renderStaticCard = (id, title, content, colSpan = "col-span-1", minW = "min-w-[400px]", minH = "min-h-[350px]") => {
     const isFullscreen = fullscreenChart === id;
     const cardContent = (
-      <div className={`bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative transition-all ${isFullscreen ? 'w-full h-full p-8' : `h-[400px] p-6 ${colSpan}`} print:break-inside-avoid print:h-[450px]`}>
+      <div className={`bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative transition-all ${isFullscreen ? 'w-full h-full p-8' : `h-[450px] p-6 ${colSpan}`} print:break-inside-avoid print:h-[450px]`}>
         <div className="flex justify-between items-start mb-4 border-b border-slate-100 dark:border-gray-800 pb-4 shrink-0">
-          <h3 className={`font-black text-[#D0011B] uppercase flex items-center gap-2 ${isFullscreen ? 'text-2xl' : 'text-sm'}`}>
-            {title}
-          </h3>
-          <button onClick={() => setFullscreenChart(isFullscreen ? null : id)} className="text-slate-400 hover:text-[#EE4D2D] bg-slate-50 hover:bg-orange-50 dark:bg-gray-800 p-2 rounded-lg transition-colors print:hidden" title={isFullscreen ? "Minimizar" : "Expandir"}>
+          <h3 className={`font-black text-[#D0011B] dark:text-[#ff6b6b] uppercase flex items-center gap-2 ${isFullscreen ? 'text-2xl' : 'text-sm xl:text-base'}`}>{title}</h3>
+          <button onClick={() => setFullscreenChart(isFullscreen ? null : id)} className="text-slate-400 hover:text-[#EE4D2D] bg-slate-50 hover:bg-orange-50 dark:bg-gray-800 p-2 rounded-lg transition-colors print:hidden">
             {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar print:overflow-hidden">
-          <div className="w-full h-full min-h-[300px]">{content}</div>
+        
+        {/* CONTAINER COM SCROLL AUTOMÁTICO */}
+        <div className="flex-1 overflow-auto custom-scrollbar print:overflow-visible">
+          <div className={`${isFullscreen ? 'w-full h-full' : `${minW} ${minH} w-full h-full`}`}>
+            {content}
+          </div>
         </div>
       </div>
     );
@@ -193,7 +358,7 @@ export default function CapFleetCharts({ data }) {
   return (
     <div className="space-y-6 pt-6 print:pt-0">
       
-      {/* 🔥 NOVO BANNER ESTILIZADO */}
+      {/* BANNER */}
       <div className="bg-[#113366] rounded-2xl shadow-sm overflow-hidden border border-[#113366] print:break-inside-avoid">
         <div className="text-white text-center py-4 px-6 flex flex-col items-center justify-center gap-1">
           <h2 className="text-xl md:text-2xl font-black uppercase tracking-widest flex items-center gap-2">
@@ -205,23 +370,30 @@ export default function CapFleetCharts({ data }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:block print:space-y-6">
         
-        {renderChartCard('capWeek', 'CAP FLEET LIMIT [PER WEEK]', (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart layout="vertical" data={weekData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-              <XAxis type="number" tick={{fontSize: 11}} />
-              <YAxis dataKey="name" type="category" width={50} tick={{fontSize: 10, fontWeight: 'bold'}} />
-              <Tooltip content={<CountTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
-              <Bar dataKey="count" fill="#D0011B" radius={[0, 4, 4, 0]}>
-                <LabelList dataKey="count" position="right" style={{fill: '#D0011B', fontSize: 11, fontWeight: 'bold'}} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ))}
+        {/* CARDS DE TEMPO (SEMANA / MÊS) AGORA COM LINHA DE VARIAÇÃO */}
+        <ToggleableTimeCard 
+          id="timeLimits" 
+          titleBase="TOTAL DE ESTOUROS" 
+          dataKey="limitCount" 
+          lineKey="varLimitPct"
+          valueName="Qtd de Estouros"
+          color="#D0011B" 
+        />
+        
+        <ToggleableTimeCard 
+          id="timeExcess" 
+          titleBase="MÉDIA DE EXCESSO" 
+          dataKey="avgExcess" 
+          lineKey="varAvgExcessPct"
+          valueName="Média de Excesso (%)"
+          suffix="%"
+          color="#EE4D2D" 
+        />
 
-        {renderChartCard('capReg', 'CAP FLEET LIMIT [PER REG]', (
+        {/* CARDS REGIONAIS (Scroll Vertical se necessário) */}
+        {renderStaticCard('capReg', 'CAP FLEET LIMIT [PER REGIONAL]', (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart layout="vertical" data={regData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+            <BarChart layout="vertical" data={processedData.regData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
               <XAxis type="number" tick={{fontSize: 11}} />
               <YAxis dataKey="name" type="category" width={50} tick={{fontSize: 10, fontWeight: 'bold'}} />
@@ -231,11 +403,26 @@ export default function CapFleetCharts({ data }) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        ))}
+        ), "col-span-1", "min-w-[300px]", "min-h-[400px]")}
 
-        {renderChartCard('capHub', 'CAP FLEET LIMIT [HUB OFFENDERS]', (
+        {renderStaticCard('pctReg', 'MÉDIA EXCESSO [% PER REGIONAL]', (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={hubData} margin={{ top: 20, right: 10, left: -20, bottom: 60 }}>
+            <BarChart data={processedData.pctRegData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11}} />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} tickFormatter={(val) => `${val}%`} />
+              <Tooltip content={<PctTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
+              <Bar dataKey="avg" fill="#D0011B" radius={[4, 4, 0, 0]} barSize={50}>
+                <LabelList dataKey="avg" position="top" formatter={(val) => `+${val}%`} style={{fill: '#D0011B', fontSize: 10, fontWeight: 'bold'}} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ), "col-span-1", "min-w-[300px]", "min-h-[350px]")}
+
+        {/* CARDS HUB (Scroll Horizontal Longo - min-w-900px) */}
+        {renderStaticCard('capHub', 'ESTOUROS [HUB OFFENDERS]', (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={processedData.hubData} margin={{ top: 20, right: 10, left: -20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 9}} angle={-45} textAnchor="end" interval={0} />
               <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} />
@@ -245,20 +432,34 @@ export default function CapFleetCharts({ data }) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        ), "lg:col-span-2")}
+        ), "lg:col-span-2", "min-w-[900px]", "min-h-[350px]")}
 
-        {renderChartCard('capTimeline', 'CAP FLEET LIMIT [% TIMELINE LAST 15 DAYS]', (
+        {renderStaticCard('pctHub', 'MÉDIA EXCESSO [% PER HUB]', (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={timelineData} margin={{ top: 20, right: 10, left: -10, bottom: 60 }}>
+            <BarChart data={processedData.pctHubData} margin={{ top: 20, right: 10, left: -20, bottom: 60 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 9}} angle={-45} textAnchor="end" interval={0} />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} tickFormatter={(val) => `${val}%`} />
+              <Tooltip content={<PctTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
+              <Bar dataKey="avg" fill="#EE4D2D" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="avg" position="top" formatter={(val) => `+${val}%`} style={{fill: '#EE4D2D', fontSize: 10, fontWeight: 'bold'}} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ), "lg:col-span-2", "min-w-[900px]", "min-h-[350px]")}
+
+        {/* TIMELINE (Requer muito espaço horizontal, scroll de min 1200px) */}
+        {renderStaticCard('capTimeline', 'TIMELINE DE EXCESSO [% ÚLTIMOS 15 DIAS]', (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={processedData.timelineData} margin={{ top: 20, right: 10, left: -10, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 9}} angle={-45} textAnchor="end" interval={0} />
               <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} tickFormatter={(val) => `${val}%`} />
               <Tooltip content={<TimelineTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '10px' }} />
               
-              {timelineKeys.map((date, index) => (
+              {processedData.timelineKeys.map((date, index) => (
                 <Bar key={date} dataKey={date} fill={TIMELINE_COLORS[index % TIMELINE_COLORS.length]}>
-                   {/* Adicionando as legendas nas barrinhas da Timeline */}
                    <LabelList 
                      dataKey={date} 
                      position="top" 
@@ -269,35 +470,7 @@ export default function CapFleetCharts({ data }) {
               ))}
             </BarChart>
           </ResponsiveContainer>
-        ), "lg:col-span-2")}
-
-        {renderChartCard('pctReg', 'CAP FLEET LIMIT [% PER REG]', (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={pctRegData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} tickFormatter={(val) => `${val}%`} />
-              <Tooltip content={<PctTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
-              <Bar dataKey="avg" fill="#D0011B" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="avg" position="top" formatter={(val) => `+${val}%`} style={{fill: '#D0011B', fontSize: 10, fontWeight: 'bold'}} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ))}
-
-        {renderChartCard('pctHub', 'CAP FLEET LIMIT [% PER HUB]', (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={pctHubData} margin={{ top: 20, right: 10, left: -10, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 9}} angle={-45} textAnchor="end" interval={0} />
-              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11}} tickFormatter={(val) => `${val}%`} />
-              <Tooltip content={<PctTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
-              <Bar dataKey="avg" fill="#EE4D2D" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="avg" position="top" formatter={(val) => `+${val}%`} style={{fill: '#EE4D2D', fontSize: 10, fontWeight: 'bold'}} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ))}
+        ), "lg:col-span-2", "min-w-[1200px]", "min-h-[400px]")}
 
       </div>
     </div>

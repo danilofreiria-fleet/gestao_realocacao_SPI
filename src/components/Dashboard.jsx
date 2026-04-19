@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData } from '../api/googleSheets';
+// 🔥 IMPORTANTE: Certifique-se de que TODAS as funções de puxar dados estejam aqui!
+import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso } from '../api/googleSheets';
 import Visualizations from './Visualizations';
 import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown } from 'lucide-react';
 
@@ -12,20 +13,23 @@ const MESES = [
 ];
 
 export default function Dashboard() {
-
-const navigate = useNavigate(); // <-- Inicializa o navegador de páginas
+  const navigate = useNavigate();
 
   // GARANTIA DE USUÁRIO
   useEffect(() => {
-    // Se localStorage NÃO estiver escrito que é Gestor, manda embora!
     if (localStorage.getItem("isGestor") !== "true") {
       alert("Acesso restrito. Somente gestores podem visualizar o Dashboard de KPIs.");
-      navigate("/app/tabela"); // Chuta de volta pra tela inicial
+      navigate("/app/tabela");
     }
   }, [navigate]);
 
   const [loading, setLoading] = useState(true);
+  
+  // ESTADOS GLOBAIS DE DADOS
   const [rawData, setRawData] = useState([]);
+  const [dashData, setDashData] = useState([]);
+  const [baseData, setBaseData] = useState([]);
+  const [atPisoData, setAtPisoData] = useState([]);
   
   const [filtros, setFiltros] = useState({
     regional: '', station: '', turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
@@ -44,14 +48,47 @@ const navigate = useNavigate(); // <-- Inicializa o navegador de páginas
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // 🔥 CARREGAMENTO CENTRALIZADO ULTRA RÁPIDO
   useEffect(() => {
     const carregarDados = async () => {
       setLoading(true);
       try {
-        const data = await getConsolidadoData();
-        if (data && data.length > 1) setRawData(data.slice(1));
-      } catch (error) { console.error("Erro ao carregar Dashboard", error); }
-      finally { setLoading(false); }
+        const [dataConsol, dataRH, dataBase, dataPiso] = await Promise.all([
+          getConsolidadoData(),
+          getDadosRHDashboard(),
+          getBaseReferenceData(),
+          getDadosAtPiso()
+        ]);
+        
+        if (dataConsol && dataConsol.length > 1) setRawData(dataConsol.slice(1));
+        
+        // Formatação do dashData (RH) que estava no Visualizations antes
+        if (dataRH) {
+          const getTime = (dateStr) => {
+            if (!dateStr) return 0;
+            let s = String(dateStr).trim().split('T')[0].split(' ')[0];
+            if (s.includes('/')) {
+              const [d, m, a] = s.split('/');
+              return new Date(a, m - 1, d).getTime();
+            }
+            if (s.includes('-')) {
+              const [a, m, d] = s.split('-');
+              return new Date(a, m - 1, d).getTime();
+            }
+            return new Date(s).getTime() || 0;
+          };
+          const sorted = dataRH.slice(1).sort((a,b) => getTime(b[1]) - getTime(a[1]));
+          setDashData(sorted);
+        }
+
+        if (dataBase) setBaseData(dataBase);
+        if (dataPiso) setAtPisoData(dataPiso);
+        
+      } catch (error) { 
+        console.error("Erro ao carregar Dashboard", error); 
+      } finally { 
+        setLoading(false); 
+      }
     };
     carregarDados();
   }, []);
@@ -143,7 +180,7 @@ const navigate = useNavigate(); // <-- Inicializa o navegador de páginas
     return (
       <div className="flex h-full items-center justify-center flex-col gap-4">
         <div className="w-12 h-12 border-4 border-[#EE4D2D] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 font-bold animate-pulse">Calculando Indicadores...</p>
+        <p className="text-slate-500 font-bold animate-pulse">Carregando e Cruzando Indicadores de Malha e RH...</p>
       </div>
     );
   }
@@ -151,8 +188,6 @@ const navigate = useNavigate(); // <-- Inicializa o navegador de páginas
   return (
     <div className="flex flex-col h-full space-y-6 print:space-y-0 print:block">
       
-      {/* HEADER E FILTROS */}
-      {/* 🔥 MUDANÇA AQUI: Removido o z-30 e adicionado relative para corrigir a Tela Cheia */}
       <div className="relative bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 shrink-0 print:hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
@@ -224,9 +259,15 @@ const navigate = useNavigate(); // <-- Inicializa o navegador de páginas
         </div>
       </div>
 
-      {/* 🔥 MUDANÇA AQUI: Removido o z-10 para que o gráfico expandido não fique preso atrás do filtro */}
       <div className="flex-1 overflow-y-auto print:overflow-visible">
-        <Visualizations data={dadosFiltrados} rawData={rawData} />
+        {/* Passando todos os dados limpos para a renderização */}
+        <Visualizations 
+          data={dadosFiltrados} 
+          rawData={rawData} 
+          dashData={dashData} 
+          atPisoData={atPisoData} 
+          baseData={baseData} 
+        />
       </div>
 
     </div>

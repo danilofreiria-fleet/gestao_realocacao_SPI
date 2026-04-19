@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend, LabelList } from 'recharts';
-import { Zap, Maximize2, Minimize2, X } from 'lucide-react';
+import { Maximize2, Minimize2, X, Info } from 'lucide-react';
 
-export default function FleetGapCharts({ dashData }) {
+export default function FleetGapCharts({ baseData }) {
   const [fullscreenChart, setFullscreenChart] = useState(null);
   
   const parseNum = (val) => {
@@ -11,56 +11,47 @@ export default function FleetGapCharts({ dashData }) {
     return Number(s) || 0;
   };
 
-  const extractWeekNumber = (str) => {
-    const match = String(str || "").match(/\d+/);
-    return match ? parseInt(match[0], 10) : -1;
-  };
+  // ========================================================
+  // NOVA LÓGICA ULTRA-RÁPIDA (DIRETO DA BASE)
+  // ========================================================
+  const chartData = React.useMemo(() => {
+    if (!baseData || baseData.length === 0) return [];
 
-  const currentWeekNum = useMemo(() => {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  }, []);
+    const finalMap = {};
+    const hubsProcessados = new Set(); 
+    
+    baseData.slice(1).forEach(row => {
+      const stationFullName = String(row[0] || "").trim(); // Coluna A
+      
+      // Lê apenas a primeira vez que o Hub aparece (ignora as outras linhas de turnos)
+      if (stationFullName && !hubsProcessados.has(stationFullName)) {
+        const cap = parseNum(row[2]);     // Coluna C (CAP)
+        const sprRef = parseNum(row[6]);  // Coluna G (SPR)
+        const ativos = parseNum(row[9]);  // Coluna J (Ativos - Inserido via Script)
+        
+        if (sprRef > 0) {
+          const idealDia = cap / sprRef;
+          const necessarios = Math.round(idealDia * 1.20); // +20% margem
+          const gap = ativos - necessarios;
 
-  const chartData = useMemo(() => {
-    if (!dashData || dashData.length === 0) return [];
-
-    const hubsMap = {};
-    const rhProcessado = new Set();
-
-    dashData.forEach(row => {
-      if (extractWeekNumber(row[4]) !== currentWeekNum) return; 
-
-      const stationFullName = String(row[3] || "").trim(); 
-      if (!stationFullName) return;
-
-      const ativos = parseNum(row[14]);      
-      const necessarios = parseNum(row[18]); 
-      const gap = parseNum(row[19]);         
-
-      if (ativos === 0 && necessarios === 0 && gap === 0) return;
-
-      if (rhProcessado.has(stationFullName)) return;
-      rhProcessado.add(stationFullName);
-
-      const cleanStationName = stationFullName.replace('LM Hub_SP_', '');
-
-      hubsMap[cleanStationName] = {
-        name: cleanStationName,
-        ativos: ativos,
-        necessarios: necessarios,
-        gap: gap
-      };
+          if (ativos !== 0 || necessarios !== 0) {
+            const cleanStationName = stationFullName.replace('LM Hub_SP_', '');
+            finalMap[cleanStationName] = {
+              name: cleanStationName,
+              ativos: ativos,
+              necessarios: necessarios,
+              gap: gap
+            };
+          }
+          hubsProcessados.add(stationFullName); 
+        }
+      }
     });
 
-    return Object.values(hubsMap).sort((a, b) => a.gap - b.gap); 
-  }, [dashData, currentWeekNum]);
+    return Object.values(finalMap).sort((a, b) => a.gap - b.gap); 
+  }, [baseData]);
 
-  const gapOnlyData = useMemo(() => {
-    return chartData.filter(hub => hub.gap < 0);
-  }, [chartData]);
-
+  const gapOnlyData = React.useMemo(() => chartData.filter(hub => hub.gap < 0), [chartData]);
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -72,6 +63,7 @@ export default function FleetGapCharts({ dashData }) {
               {entry.name}: {entry.value}
             </p>
           ))}
+          <p className="text-[10px] text-slate-400 mt-2 italic font-medium">* Necessário e Ativos puxados da aba BASE</p>
         </div>
       );
     }
@@ -80,23 +72,23 @@ export default function FleetGapCharts({ dashData }) {
 
   const renderChartCard = (id, title, subtitle, content, color) => {
     const isFullscreen = fullscreenChart === id;
-    
     const cardContent = (
-      <div className={`bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative transition-all ${isFullscreen ? 'w-full h-full p-8' : 'h-[600px] p-6'} print:break-inside-avoid print:h-[600px]`}>
+      <div className={`bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative transition-all ${isFullscreen ? 'w-full h-full p-8' : 'h-[600px] p-6'} print:break-inside-avoid`}>
         <div className="flex justify-between items-start mb-4 border-b border-slate-100 dark:border-gray-800 pb-4 shrink-0">
           <div>
             <h3 className={`font-black uppercase flex items-center gap-2 ${isFullscreen ? 'text-2xl' : 'text-lg'}`} style={{ color: color }}>
               {title}
             </h3>
-            <p className="text-xs text-slate-400 font-bold uppercase mt-1">{subtitle}</p>
+            <p className="text-xs text-slate-400 font-bold uppercase mt-1 flex items-center gap-1">
+              <Info size={12}/> {subtitle}
+            </p>
           </div>
-          <button onClick={() => setFullscreenChart(isFullscreen ? null : id)} className="text-slate-400 hover:text-[#EE4D2D] bg-slate-50 hover:bg-orange-50 dark:bg-gray-800 p-2 rounded-lg transition-colors print:hidden" title={isFullscreen ? "Minimizar" : "Expandir Tela Cheia"}>
+          <button onClick={() => setFullscreenChart(isFullscreen ? null : id)} className="text-slate-400 hover:text-[#EE4D2D] bg-slate-50 hover:bg-orange-50 dark:bg-gray-800 p-2 rounded-lg transition-colors print:hidden">
             {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
         </div>
-        
-        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar print:overflow-hidden">
-          <div className="w-full h-full min-h-[500px]">
+        <div className="flex-1 overflow-auto custom-scrollbar">
+          <div className="w-full h-full min-h-[500px] min-w-[600px]">
             {content}
           </div>
         </div>
@@ -120,12 +112,10 @@ export default function FleetGapCharts({ dashData }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid print:grid-cols-2 print:gap-4">
-      
-      {/* GRÁFICO 1: FLEET GAP */}
-      {renderChartCard('gapChart', `Fleet Gap [W-${currentWeekNum}]`, "(Drivers ativos - Necessários) • Oculta positivos • Ordenado pelo pior", (
+      {renderChartCard('gapChart', `Fleet Gap [Cenário Atual]`, "Cálculo: Ativos - Meta Diária (CAP/SPR + 20%)", (
         gapOnlyData.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400 font-bold">
-            🎉 Não há Gaps negativos reportados nesta semana!
+            🎉 Todos os Hubs estão com a frota equalizada ou acima da meta!
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -136,7 +126,6 @@ export default function FleetGapCharts({ dashData }) {
               <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend />
               <ReferenceLine x={0} stroke="#333" strokeWidth={2} />
-              
               <Bar dataKey="gap" name="Gap de Drivers" fill="#D0011B" radius={[4, 0, 0, 4]}>
                 <LabelList dataKey="gap" position="left" style={{ fill: '#D0011B', fontSize: 10, fontWeight: 'bold' }} />
               </Bar>
@@ -145,9 +134,7 @@ export default function FleetGapCharts({ dashData }) {
         )
       ), "#D0011B")}
 
-
-      {/* GRÁFICO 2: ATIVOS VS NECESSÁRIOS */}
-      {renderChartCard('ativosMetaChart', `Drivers: Ativos vs Meta [W-${currentWeekNum}]`, "Comparação Absoluta por Hub", (
+      {renderChartCard('ativosMetaChart', `Drivers: Ativos vs Meta [Cenário Atual]`, "Drivers Ativos vs Necessidade Diária Absoluta", (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart layout="vertical" data={chartData} margin={{ top: 20, right: 30, left: 40, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
@@ -158,13 +145,12 @@ export default function FleetGapCharts({ dashData }) {
             <Bar dataKey="ativos" name="Drivers Ativos" fill="#113366" radius={[0, 4, 4, 0]}>
               <LabelList dataKey="ativos" position="right" style={{ fill: '#113366', fontSize: 10, fontWeight: 'bold' }} />
             </Bar>
-            <Bar dataKey="necessarios" name="Necessários (Meta)" fill="#EE4D2D" radius={[0, 4, 4, 0]}>
+            <Bar dataKey="necessarios" name="Necessários (Meta Diária + 20%)" fill="#EE4D2D" radius={[0, 4, 4, 0]}>
               <LabelList dataKey="necessarios" position="right" style={{ fill: '#EE4D2D', fontSize: 10, fontWeight: 'bold' }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       ), "#113366")}
-
     </div>
   );
 }

@@ -96,7 +96,7 @@ export const getBaseReferenceData = async () => {
     if (!token) return [];
 
     // Busca exatamente da coluna A até a F na aba "BASE"
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/BASE!A:F`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/BASE!A:k`;
     
     const response = await fetch(url, {
       method: "GET",
