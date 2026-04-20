@@ -11,24 +11,27 @@ export default function Login() {
 
   const fazerLogin = useGoogleLogin({
     scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email",
-    hosted_domain: "shopee.com", 
+    // 🔥 1. hosted_domain COMENTADO para o Google deixar outras contas tentarem logar
+    // hosted_domain: "shopee.com", 
     
-onSuccess: async (tokenResponse) => {
+    onSuccess: async (tokenResponse) => {
       try {
-        const userInfo = await axios.get(
+        const response = await axios.get(
           'https://www.googleapis.com/oauth2/v3/userinfo',
           { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
         );
 
-        if (userInfo.data.email.endsWith("@shopee.com") || userInfo.data.hd === "shopee.com") {
-          const emailLogado = userInfo.data.email;
+        const emailLogado = response.data.email;
+
+        // 🔥 2. NOVA CATRACA: Aceita o e-mail interno OU o e-mail externo
+        if (emailLogado.endsWith("@shopee.com") || emailLogado.endsWith("@shopeemobile-external.com")) {
           const token = tokenResponse.access_token;
 
           localStorage.setItem("spiToken", token);
           localStorage.setItem("userEmail", emailLogado);
           localStorage.setItem("spiTokenTime", Date.now().toString()); 
           
-          // 🔥 NOVO: Pergunta para a API se ele é Gestor e salva o crachá
+          // Pergunta para a API se ele é Gestor e salva o crachá
           const isGestor = await verificarAcessoGestor(emailLogado, token);
           if (isGestor) {
             localStorage.setItem("isGestor", "true");
