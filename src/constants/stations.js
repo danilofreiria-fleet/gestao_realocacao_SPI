@@ -27,7 +27,7 @@ export const MAPA_REGIONAL = {
   "LM Hub_SP_Marília": "SPI5",
   "LM Hub_SP_Presidente Prudente": "SPI5",
   "LM Hub_SP_Campinas_PqCidade": "SPI1",
-  "LM Hub_SP_RibeirãoPretoEstação": "SPI2"
+  "LM Hub_SP_RibeirãoPretoEstaça": "SPI2"
 }
 
 export const STATIONS_LIST = Object.keys(MAPA_REGIONAL);
