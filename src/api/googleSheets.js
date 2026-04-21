@@ -121,27 +121,29 @@ export const salvarNasOrigens = async (payload) => {
     if (!token) throw new Error("Usuário não autenticado.");
 
     // 1. O Report Diário pega exatamente as primeiras 47 colunas (0 a 46)
+    // O slice não sofre do problema de apagar zeros!
     const linhaGestao = payload.slice(0, 47);
 
-    // 2. A SOP pega informações pontuais (Ajustado para os índices corretos 51 a 59)
+    // 2. A SOP pega informações pontuais
+    // 🔥 CORREÇÃO: Trocado '||' por '??' para não destruir os números 0!
     const linhaControle = [
-      payload[3] || "",  // A: Data
-      payload[1] || "",  // B: Regional
-      payload[4] || "",  // C: Station
-      payload[5] || "",  // D: Turno
-      payload[12] || "", // E: Vol Roteirizado
-      payload[13] || "", // F: Vol Processado
-      payload[14] || "", // G: Vol Expedido
-      payload[51] || "", // H: Realoc Pre (AZ)
-      payload[52] || "", // I: Realoc Durante (BA)
-      payload[53] || "", // J: Total Realocados (Calculado) (BB)
-      payload[54] || "", // K: Não Coube (BC)
-      payload[55] || "", // L: Outros Motivos (BD)
-      payload[56] || "", // M: Taxa Correção Fleet (BE)
-      payload[57] || "", // N: Desvio Piso Fleet (BF)
-      payload[58] || "", // O: Desvio Piso Hub (BG)
-      payload[2] || "",  // P: Semana do Ano
-      payload[59] || ""  // Q: Eficiência Expedição (BH)
+      payload[3] ?? "",  // A: Data
+      payload[1] ?? "",  // B: Regional
+      payload[4] ?? "",  // C: Station
+      payload[5] ?? "",  // D: Turno
+      payload[12] ?? "", // E: Vol Roteirizado
+      payload[13] ?? "", // F: Vol Processado
+      payload[14] ?? "", // G: Vol Expedido
+      payload[51] ?? "", // H: Realoc Pre (AZ)
+      payload[52] ?? "", // I: Realoc Durante (BA)
+      payload[53] ?? "", // J: Total Realocados (Calculado) (BB)
+      payload[54] ?? "", // K: Não Coube (BC)
+      payload[55] ?? "", // L: Outros Motivos (BD)
+      payload[56] ?? "", // M: Taxa Correção Fleet (BE)
+      payload[57] ?? "", // N: Desvio Piso Fleet (BF)
+      payload[58] ?? "", // O: Desvio Piso Hub (BG)
+      payload[2] ?? "",  // P: Semana do Ano
+      payload[59] ?? ""  // Q: Eficiência Expedição (BH)
     ];
 
     const urlGestao = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
@@ -213,55 +215,29 @@ const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
 };
 
 // =================================================================
-// PUT
+// PUT (Edição em Bloco Cirúrgico)
 // =================================================================
 export const updateRowData = async (rowIndex, rowData, oldRowData) => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
+    // Função protetora: garante que null/undefined vire "", mas RESPEITA o 0
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
 
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
     const hubAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
     const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
 
-    // 1. MAPA GESTÃO (REPORT DIÁRIO)
-    const mapaReport = [
-      { idx: 3, col: 'D' }, { idx: 4, col: 'E' }, { idx: 5, col: 'F' },
-      { idx: 6, col: 'G' }, { idx: 7, col: 'H' }, { idx: 11, col: 'L' }, 
-      { idx: 12, col: 'M' }, { idx: 13, col: 'N' }, { idx: 14, col: 'O' },
-      { idx: 19, col: 'T' }, { idx: 20, col: 'U' }, { idx: 21, col: 'V' }, 
-      { idx: 22, col: 'W' }, { idx: 23, col: 'X' }, { idx: 25, col: 'Z' }, 
-      { idx: 26, col: 'AA' }, { idx: 27, col: 'AB' }, { idx: 28, col: 'AC' },
-      { idx: 35, col: 'AJ' }, { idx: 37, col: 'AL' }, { idx: 38, col: 'AM' },
-      { idx: 41, col: 'AP' }, { idx: 42, col: 'AQ' }
-    ];
+    console.log("🚀 INICIANDO EDIÇÃO TRIPLA EM BLOCO...");
 
-    // 2. MAPA SOP (CONTROLE)
-    const mapaSOP = [
-      { idx: 3, col: 'A' }, { idx: 4, col: 'C' }, { idx: 5, col: 'D' }, 
-      { idx: 12, col: 'E' }, { idx: 13, col: 'F' }, { idx: 14, col: 'G' }, 
-      { idx: 51, col: 'H' }, { idx: 52, col: 'I' }, { idx: 54, col: 'K' }, { idx: 55, col: 'L' } 
-    ];
-
-    // 3. MAPA CONSOLIDADO
-    const mapaConsolidado = [
-      ...mapaReport, 
-      { idx: 51, col: 'AZ' }, // Realoc Pré Exp
-      { idx: 52, col: 'BA' }, // Realoc Durante Exp
-      { idx: 54, col: 'BC' }, // Não Exp (Não Coube)
-      { idx: 55, col: 'BD' }  // Não Exp (Outros)
-    ];
-
-    console.log("🚀 INICIANDO EDIÇÃO TRIPLA CIRÚRGICA...");
-
-    // --- 1. EXECUÇÃO CONSOLIDADO (Sincronização Imediata) ---
+    // --- 1. EXECUÇÃO CONSOLIDADO (Aba Principal) ---
     try {
-      const payloadConsolidado = mapaConsolidado.map(item => ({
-        range: `'${ABA_NOME}'!${item.col}${rowIndex}`,
-        values: [[ safeVal(rowData[item.idx]) ]]
-      }));
+      const payloadConsolidado = [{
+        // Ao mandar apenas a coluna A, a API preenche automaticamente a linha para a direita
+        range: `'${ABA_NOME}'!A${rowIndex}`,
+        values: [rowData.map(safeVal)]
+      }];
       
       const reqConsol = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`, {
         method: "POST",
@@ -269,7 +245,7 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
         body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadConsolidado })
       });
       if (!reqConsol.ok) console.error("❌ Erro no Consolidado:", await reqConsol.text());
-      else console.log("✅ 1/3 - Consolidado Atualizado!");
+      else console.log("✅ 1/3 - Consolidado Atualizado (Linha Inteira)!");
     } catch (e) { console.error("Erro Consolidado:", e); }
 
 
@@ -281,16 +257,20 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
         for (let i = dataRep.values.length - 1; i >= 1; i--) {
           const r = dataRep.values[i];
           if (padronizarData(r[3]) === dataAlvo && limpaTexto(r[4]) === hubAlvo && limpaTexto(r[5]) === turnoAlvo) {
-            const payloadRep = mapaReport.map(item => ({
-              range: `'REPORT DIARIO'!${item.col}${i + 1}`,
-              values: [[ safeVal(rowData[item.idx]) ]]
-            }));
+            
+            // Pega exatamente as colunas pertencentes ao Report (incluindo cálculos)
+            const linhaGestao = rowData.slice(0, 47).map(safeVal);
+
+            const payloadRep = [{
+              range: `'REPORT DIARIO'!A${i + 1}`,
+              values: [linhaGestao]
+            }];
             await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
             });
-            console.log("✅ 2/3 - Report Diário Atualizado!");
+            console.log("✅ 2/3 - Report Diário Atualizado (Linha Inteira)!");
             break;
           }
         }
@@ -306,16 +286,38 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
         for (let i = dataSop.values.length - 1; i >= 1; i--) {
           const r = dataSop.values[i];
           if (padronizarData(r[0]) === dataAlvo && limpaTexto(r[2]) === hubAlvo && limpaTexto(r[3]) === turnoAlvo) {
-            const payloadSop = mapaSOP.map(item => ({
-              range: `CONTROLE!${item.col}${i + 1}`,
-              values: [[ safeVal(rowData[item.idx]) ]]
-            }));
+            
+            // Reconstrói a linha da SOP exatamente como fazemos no POST
+            const linhaControle = [
+              safeVal(rowData[3]),  // A: Data
+              safeVal(rowData[1]),  // B: Regional
+              safeVal(rowData[4]),  // C: Station
+              safeVal(rowData[5]),  // D: Turno
+              safeVal(rowData[12]), // E: Vol Rot
+              safeVal(rowData[13]), // F: Vol Proc
+              safeVal(rowData[14]), // G: Vol Exp
+              safeVal(rowData[51]), // H: Realoc Pre
+              safeVal(rowData[52]), // I: Realoc Durante
+              safeVal(rowData[53]), // J: Total Realocados (AGORA VAI SALVAR!)
+              safeVal(rowData[54]), // K: Não Coube
+              safeVal(rowData[55]), // L: Outros Motivos
+              safeVal(rowData[56]), // M: Taxa Correção Fleet
+              safeVal(rowData[57]), // N: Desvio Piso Fleet
+              safeVal(rowData[58]), // O: Desvio Piso Hub
+              safeVal(rowData[2]),  // P: Semana do Ano
+              safeVal(rowData[59])  // Q: Eficiência Expedição
+            ];
+
+            const payloadSop = [{
+              range: `CONTROLE!A${i + 1}`,
+              values: [linhaControle]
+            }];
             await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadSop })
             });
-            console.log("✅ 3/3 - SOP Atualizada!");
+            console.log("✅ 3/3 - SOP Atualizada (Linha Inteira)!");
             break;
           }
         }
@@ -328,7 +330,6 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     throw error;
   }
 };
-
 
 
 // =================================================================

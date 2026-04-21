@@ -262,35 +262,48 @@ const DataTable = () => {
     setIsModalOpen(true);
   };
 
-  const handleEditChange = (index, value) => {
-    const newData = [...editFormData];
-    newData.capHubVirtual = editFormData.capHubVirtual;
-    newData.capFleetVirtual = editFormData.capFleetVirtual;
-    newData[index] = value;
-    
-    if (index === 3) newData[2] = calcularSemana(value); 
-    if (index === 4) newData[1] = MAPA_REGIONAL[value] || ""; 
+const handleEditChange = (index, value) => {
+    setEditFormData(prevData => {
+      // 1. Cria uma cópia do estado anterior (a fila segura do React)
+      const newData = [...prevData];
+      
+      // 2. Garante que as propriedades virtuais (que não são índices numéricos) sejam mantidas
+      newData.capHubVirtual = prevData.capHubVirtual;
+      newData.capFleetVirtual = prevData.capFleetVirtual;
+      
+      // 3. Atualiza o campo específico
+      newData[index] = value;
+      
+      // 4. Lógica das regras de negócio atreladas a esse campo
+      if (index === 3) newData[2] = calcularSemana(value); 
+      if (index === 4) newData[1] = MAPA_REGIONAL[value] || ""; 
 
-    if (index === 4 || index === 5) {
-      const stationAtual = index === 4 ? value : newData[4];
-      const turnoAtual = index === 5 ? value : newData[5];
+      // 5. Se mudou a Station (4) ou Turno (5), recalcula o CAP/Setup
+      if (index === 4 || index === 5) {
+        const stationAtual = index === 4 ? value : newData[4];
+        const turnoAtual = index === 5 ? value : newData[5];
 
-      const ref = baseData.find(r => String(r[0]).trim() === String(stationAtual).trim() && String(r[1]).trim() === String(turnoAtual).trim());
+        const ref = baseData.find(r => 
+          String(r[0]).trim() === String(stationAtual).trim() && 
+          String(r[1]).trim() === String(turnoAtual).trim()
+        );
 
-      if (ref) {
-        newData[8] = ref[4]; 
-        newData[9] = ref[5]; 
-        newData.capHubVirtual = ref[2];   
-        newData.capFleetVirtual = ref[3]; 
-      } else {
-        newData[8] = "";
-        newData[9] = "";
-        newData.capHubVirtual = "";
-        newData.capFleetVirtual = "";
+        if (ref) {
+          newData[8] = ref[4]; 
+          newData[9] = ref[5]; 
+          newData.capHubVirtual = ref[2];   
+          newData.capFleetVirtual = ref[3]; 
+        } else {
+          newData[8] = "";
+          newData[9] = "";
+          newData.capHubVirtual = "";
+          newData.capFleetVirtual = "";
+        }
       }
-    }
 
-    setEditFormData(newData);
+      // 6. Retorna a cópia atualizada para a "fila"
+      return newData;
+    });
   };
 
   const parseBrNumber = (val) => {
@@ -300,10 +313,22 @@ const DataTable = () => {
     return Number(s) || 0;
   };
 
-  const calcularCampos = (data) => {
+const calcularCampos = (data) => {
     const getNum = (idx) => parseBrNumber(data[idx]);
     const formatPercent = (val) => String((val * 100).toFixed(2)).replace('.', ',') + "%";
 
+    // 🔥 NOVA LÓGICA DO STATUS (V e X)
+    // Verifica se os volumes principais não estão vazios. 
+    // Obs: Como o botão "Sem Operação" joga o número "0", ele conta como preenchido perfeitamente!
+    const temVolumes = data[11] !== "" && data[12] !== "" && data[13] !== "" && data[14] !== "";
+    
+    if (temVolumes) {
+      data[0] = "✅";
+    } else {
+      data[0] = "❌";
+    }
+
+    // A partir daqui, seus cálculos normais continuam...
     data[10] = calcularHoras(data[6], data[7]);
 
     const atRot = getNum(11); 
@@ -540,7 +565,10 @@ const handleExcluir = async () => {
             <thead className="bg-slate-100 dark:bg-[#15171e] text-slate-500 dark:text-gray-400 uppercase text-[10px] sticky top-0 z-20">
               <tr>
                 <th className="px-4 py-3 font-bold sticky left-0 bg-slate-100 dark:bg-[#15171e] z-30 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#1f2937]">Ações</th>
-                {headers.map((col, i) => <th key={i} className="px-4 py-3 font-bold border-b border-slate-200 dark:border-gray-800">{col}</th>)}
+                {/* 🔥 TRAVA APLICADA NO CABEÇALHO */}
+                {headers.map((col, i) => i === 0 ? null : (
+                  <th key={i} className="px-4 py-3 font-bold border-b border-slate-200 dark:border-gray-800">{col}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -551,6 +579,9 @@ const handleExcluir = async () => {
                   </td>
                   
                   {headers.map((_, cellIndex) => {
+                    // 🔥 TRAVA APLICADA NA CÉLULA (Oculta a coluna 0)
+                    if (cellIndex === 0) return null;
+
                     const isLongText = cellIndex === 41 || cellIndex === 42;
                     const content = row[cellIndex];
                     const keyId = `${rowIndex}-${cellIndex}`;

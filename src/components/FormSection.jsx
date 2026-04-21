@@ -63,14 +63,18 @@ export const FORM_FIELDS = [
 const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDelete, onClose, isSaving, isDeleting, baseData }) => {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   
-  // 🔥 NOVOS ESTADOS PARA A REGRA DO AT PISO
+  // ESTADOS
   const [focusedField, setFocusedField] = useState(null);
   const [atPisoConfirmado, setAtPisoConfirmado] = useState(false);
+  
+  // 🔥 NOVO ESTADO: Sem operação no turno
+  const [semOperacao, setSemOperacao] = useState(false);
 
-  // Reseta a confirmação sempre que o modal for aberto
+  // Reseta as confirmações sempre que o modal for aberto
   useEffect(() => {
     if (isOpen) {
       setAtPisoConfirmado(false);
+      setSemOperacao(false);
     }
   }, [isOpen]);
 
@@ -82,9 +86,32 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
     onClose(); 
   };
 
-  // 🔥 VALIDAÇÃO: Impede o salvamento se AT Piso for > 0 e a caixa não estiver marcada
+  // 🔥 NOVA FUNÇÃO: Preenchimento Automático de Zeros
+  const handleSemOperacaoToggle = (e) => {
+    const isChecked = e.target.checked;
+    setSemOperacao(isChecked);
+
+    if (isChecked) {
+      // Varre todos os campos configurados
+      FORM_FIELDS.forEach(field => {
+        // Se for campo de número, joga 0
+        if (field.type === 'number') {
+          onChange(field.idx, 0);
+        }
+      });
+      // Preenche o Ponto de Atenção automaticamente
+      onChange(41, "Sem Expedição no turno");
+    }
+  };
+
+  // 🔥 VALIDAÇÕES DE SALVAMENTO
   const volumeAtPiso = Number(formData[19]) || 0;
-  const bloqueiaSalvamento = volumeAtPiso > 0 && !atPisoConfirmado;
+  
+  // Verifica se os 3 campos vitais têm algum valor preenchido
+  const camposObrigatoriosPreenchidos = Boolean(formData[3] && formData[4] && formData[5]);
+  
+  // Bloqueia se a regra do AT Piso for violada OU se faltar campo obrigatório
+  const bloqueiaSalvamento = (volumeAtPiso > 0 && !atPisoConfirmado) || !camposObrigatoriosPreenchidos;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -99,7 +126,22 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
           <button onClick={handleClose} className="text-slate-400 hover:text-red-500 transition-colors"><X size={24} /></button>
         </div>
 
-        <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* 🔥 NOVO: Checkbox de Sem Operação */}
+        <div className="px-6 pt-4 pb-2">
+          <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-[#15171e] dark:hover:bg-gray-800 p-3 rounded-lg border border-slate-200 dark:border-gray-700 w-max transition-colors">
+            <input 
+              type="checkbox" 
+              checked={semOperacao}
+              onChange={handleSemOperacaoToggle}
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+            />
+            <span className="text-sm font-bold text-slate-700 dark:text-gray-300 uppercase tracking-wide">
+              Sem operação neste turno
+            </span>
+          </label>
+        </div>
+
+        <div className="p-6 pt-2 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {FORM_FIELDS.map((field) => {
             
             // Lógica do Turno Dinâmico
@@ -122,18 +164,25 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
               }
             }
 
+            // Descobre se o campo atual é um dos 3 obrigatórios
+            const isObrigatorio = [3, 4, 5].includes(field.idx);
+
             return (
               <div key={field.idx} className={`flex flex-col relative ${field.span}`}>
-                <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">{field.label}</label>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1 flex items-center">
+                  {field.label}
+                  {/* 🔥 NOVO: Mostra asterisco vermelho se for obrigatório */}
+                  {isObrigatorio && <span className="text-red-500 ml-1 text-xs">*</span>}
+                </label>
                 
                 {field.type === 'select' ? (
                   <select 
-                    value={formData[field.idx] || ""} 
+                    value={formData[field.idx] ?? ""} 
                     onChange={(e) => onChange(field.idx, e.target.value)} 
                     disabled={isFieldDisabled}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && !formData[field.idx] ? 'border-red-300 dark:border-red-800/50' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2 text-sm focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <option value="">
                       {field.idx === 5 && !formData[4] ? "Selecione a Station..." : "Selecione..."}
@@ -142,7 +191,7 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                   </select>
                 ) : field.type === 'textarea' ? (
                   <textarea 
-                    value={formData[field.idx] || ""} 
+                    value={formData[field.idx] ?? ""} 
                     onChange={(e) => onChange(field.idx, e.target.value)} 
                     disabled={isFieldDisabled} 
                     maxLength={1000}
@@ -153,19 +202,18 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                 ) : (
                   <input 
                     type={field.type} 
-                    value={formData[field.idx] || ""} 
+                    value={formData[field.idx] ?? ""} 
                     onChange={(e) => onChange(field.idx, e.target.value)} 
                     disabled={isFieldDisabled}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && !formData[field.idx] ? 'border-red-300 dark:border-red-800/50' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
                   />
                 )}
 
-                {/* 🔥 LÓGICA EXCLUSIVA DO AT PISO (Índice 19) */}
+                {/* LÓGICA EXCLUSIVA DO AT PISO (Índice 19) */}
                 {field.idx === 19 && (
                   <div className="w-full mt-1">
-                    {/* Banner Vermelho ao focar no campo */}
                     {focusedField === 19 && (
                       <div className="absolute z-10 w-[250px] bg-red-600 text-white text-[10px] font-black p-2.5 rounded shadow-xl flex gap-2 items-start animate-in fade-in zoom-in top-full mt-1 left-0 border border-red-700">
                         <AlertTriangle size={16} className="shrink-0 mt-0.5" />
@@ -173,7 +221,6 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                       </div>
                     )}
 
-                    {/* Caixa de Confirmação quando Valor > 0 */}
                     {volumeAtPiso > 0 && (
                       <div className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 rounded-md flex items-start gap-2 animate-in fade-in">
                         <input
@@ -211,8 +258,7 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
           <div className="flex gap-2 items-center">
             <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400">Cancelar</button>
             
-            {/* O Botão de salvar fica bloqueado se AT > 0 e a caixa não estiver marcada */}
-            <div title={bloqueiaSalvamento ? "Confirme a regra das AT's no Piso para salvar" : ""}>
+            <div title={!camposObrigatoriosPreenchidos ? "Preencha Data, Station e Turno" : bloqueiaSalvamento ? "Confirme a regra das AT's no Piso para salvar" : ""}>
               <button 
                 onClick={onSave} 
                 disabled={isSaving || bloqueiaSalvamento} 
