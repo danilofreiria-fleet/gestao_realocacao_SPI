@@ -49,43 +49,41 @@ const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
 };
 
 // =================================================================
-// SISTEMA DE LOGS (Auditoria Silenciosa)
+// SISTEMA DE LOGS (Com Backup em Array/JSON na Coluna H)
 // =================================================================
-export const registrarLog = async (acao, dataRef, station, turno, statusInfo, arrayDeDados = []) => {
+export const registrarLog = async (acao, dataRef, station, turno, statusInfo, rawData = null) => {
   try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) return;
+
     const userEmail = localStorage.getItem("userEmail") || "Analista"; 
     const dataHoraAtual = new Date().toLocaleString('pt-BR');
 
-    // 🔥 AQUI ESTÁ A MÁGICA DO BACKUP:
-    // Ele pega o arrayDeDados (ex: ["2026", "W10", "1182035", ...]) 
-    // e transforma num texto literal para caber na coluna H do Log
-    const backupSnapshot = arrayDeDados && arrayDeDados.length > 0 
-      ? JSON.stringify(arrayDeDados) 
+    // 🔥 MÁGICA DO BACKUP: Transforma o array em texto para caber numa célula
+    const backupSnapshot = rawData && rawData.length > 0 
+      ? JSON.stringify(rawData) 
       : "[]";
 
     const logData = [
       dataHoraAtual,
       userEmail,
-      acao,             // "CRIAR", "EDITAR" ou "EXCLUIR"
+      acao,             
       dataRef || "",    
       station || "",    
       turno || "",      
       statusInfo || "Sucesso",
-      backupSnapshot    // 🔥 COLUNA H: Vai ficar exatamente igual ao seu exemplo ["2026", "W10", ...]
+      backupSnapshot    // 🔥 COLUNA H: Onde o Array vai morar!
     ];
 
-    fetch(WEB_APP_URL, {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_LOGS}/values/LOGS!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+    fetch(url, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        action: "log", 
-        values: logData 
-      })
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ values: [logData] })
     }).catch(() => {});
-    
   } catch (e) {
-    console.error("Falha ao gravar log (Silencioso):", e);
+    console.error("Falha ao gravar log:", e);
   }
 };
 
