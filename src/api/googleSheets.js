@@ -357,6 +357,73 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     throw error;
   }
 };
+// =================================================================
+// DELETE (Exclusão)
+// =================================================================
+export const deleteRowData = async (rowIndex, rowData) => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    const dataAlvo = padronizarData(rowData[3]);
+    const stationAlvo = limpaTexto(rowData[4]);
+    const turnoAlvo = limpaTexto(rowData[5]);
+    console.log(`Buscando para EXCLUIR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
+
+    // 1. Deleta do Consolidado
+    const gidConsolidado = await getSheetIdByName(SPREADSHEET_ID, ABA_NOME, token);
+    await executeDeleteAPI(SPREADSHEET_ID, gidConsolidado, rowIndex, token);
+
+    // 2. Deleta do Report
+    try {
+      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
+      const dataReport = await respReport.json();
+      
+      if (dataReport.values) {
+        for (let i = dataReport.values.length - 1; i >= 1; i--) {
+          const row = dataReport.values[i];
+          let dataLida = row[3];
+
+          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
+            console.log("Achou no Report! Excluindo...");
+            const gidReport = await getSheetIdByName(ID_PLANILHA_REPORTS, "REPORT DIARIO", token);
+            await executeDeleteAPI(ID_PLANILHA_REPORTS, gidReport, i + 1, token);
+            break; 
+          }
+        }
+      }
+    } catch (e) { console.error("Erro Report:", e); }
+
+    // 3. Deleta da SOP
+    try {
+      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
+      const dataSOP = await respSOP.json();
+      
+      if (dataSOP.values) {
+        for (let i = dataSOP.values.length - 1; i >= 1; i--) {
+          const row = dataSOP.values[i];
+          let dataLida = row[0];
+
+          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
+            console.log("Achou na SOP! Excluindo...");
+            const gidSOP = await getSheetIdByName(ID_PLANILHA_SOP, "CONTROLE", token);
+            await executeDeleteAPI(ID_PLANILHA_SOP, gidSOP, i + 1, token);
+            break;
+          }
+        }
+      }
+    } catch (e) { console.error("Erro SOP:", e); }
+
+    // Ache essa linha e adicione o rowData no final:
+registrarLog("EXCLUIR", dataAlvo, stationAlvo, turnoAlvo, "Excluído com sucesso", rowData);
+
+    return { success: true };
+  } catch (error) { 
+    // 🔥 LOG: ERRO EXCLUIR
+    registrarLog("ERRO_EXCLUIR", rowData[3], rowData[4], rowData[5], String(error.message));
+    throw error; 
+  }
+};
 
 // =================================================================
 // POST (Criar Nova Linha - Via Apps Script) [LEGADO/OPCIONAL]
