@@ -222,7 +222,7 @@ export const salvarNasOrigens = async (payload) => {
 };
 
 // =================================================================
-// PUT (Edição em Bloco Cirúrgico)
+// PUT (Edição em Bloco Cirúrgico com Auto-Cura / Upsert)
 // =================================================================
 export const updateRowData = async (rowIndex, rowData, oldRowData) => {
   try {
@@ -259,12 +259,14 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     try {
       const respRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataRep = await respRep.json();
+      let encontrouReport = false;
+      const linhaGestao = rowData.slice(0, 47).map(safeVal);
+
       if (dataRep.values) {
         for (let i = dataRep.values.length - 1; i >= 1; i--) {
           const r = dataRep.values[i];
           if (padronizarData(r[3]) === dataAlvo && limpaTexto(r[4]) === hubAlvo && limpaTexto(r[5]) === turnoAlvo) {
-            
-            const linhaGestao = rowData.slice(0, 47).map(safeVal);
+            encontrouReport = true;
             const payloadRep = [{ range: `'REPORT DIARIO'!A${i + 1}`, values: [linhaGestao] }];
             
             const reqRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
@@ -273,10 +275,22 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
             });
             if (!reqRep.ok) throw new Error(await reqRep.text());
-            console.log("✅ 2/3 - Report Diário Atualizado (Linha Inteira)!");
+            console.log("✅ 2/3 - Report Diário Atualizado (Linha Existente)!");
             break;
           }
         }
+      }
+
+      // 🔥 AUTO-CURA: Se não achou a linha para editar, cria uma nova!
+      if (!encontrouReport) {
+        const urlAppendRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        const reqAppend = await fetch(urlAppendRep, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ values: [linhaGestao] })
+        });
+        if (!reqAppend.ok) throw new Error(await reqAppend.text());
+        console.log("✅ 2/3 - Report Diário Atualizado (Nova Linha Injetada)!");
       }
     } catch (e) { 
       throw new Error(`Falha no Report: ${e.message}`); 
@@ -286,19 +300,21 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     try {
       const respSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataSop = await respSop.json();
+      let encontrouSop = false;
+      
+      const linhaControle = [
+        safeVal(rowData[3]), safeVal(rowData[1]), safeVal(rowData[4]), safeVal(rowData[5]),
+        safeVal(rowData[12]), safeVal(rowData[13]), safeVal(rowData[14]), safeVal(rowData[51]),
+        safeVal(rowData[52]), safeVal(rowData[53]), safeVal(rowData[54]), safeVal(rowData[55]),
+        safeVal(rowData[56]), safeVal(rowData[57]), safeVal(rowData[58]), safeVal(rowData[2]),
+        safeVal(rowData[59])
+      ];
+
       if (dataSop.values) {
         for (let i = dataSop.values.length - 1; i >= 1; i--) {
           const r = dataSop.values[i];
           if (padronizarData(r[0]) === dataAlvo && limpaTexto(r[2]) === hubAlvo && limpaTexto(r[3]) === turnoAlvo) {
-            
-            const linhaControle = [
-              safeVal(rowData[3]), safeVal(rowData[1]), safeVal(rowData[4]), safeVal(rowData[5]),
-              safeVal(rowData[12]), safeVal(rowData[13]), safeVal(rowData[14]), safeVal(rowData[51]),
-              safeVal(rowData[52]), safeVal(rowData[53]), safeVal(rowData[54]), safeVal(rowData[55]),
-              safeVal(rowData[56]), safeVal(rowData[57]), safeVal(rowData[58]), safeVal(rowData[2]),
-              safeVal(rowData[59])
-            ];
-            
+            encontrouSop = true;
             const payloadSop = [{ range: `CONTROLE!A${i + 1}`, values: [linhaControle] }];
             
             const reqSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
@@ -307,100 +323,38 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadSop })
             });
             if (!reqSop.ok) throw new Error(await reqSop.text());
-            console.log("✅ 3/3 - SOP Atualizada (Linha Inteira)!");
+            console.log("✅ 3/3 - SOP Atualizada (Linha Existente)!");
             break;
           }
         }
+      }
+
+      // 🔥 AUTO-CURA: Se o analista adicionou Realocação depois, cria a linha na SOP agora!
+      if (!encontrouSop) {
+        const urlAppendSop = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        const reqAppendSop = await fetch(urlAppendSop, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ values: [linhaControle] })
+        });
+        if (!reqAppendSop.ok) throw new Error(await reqAppendSop.text());
+        console.log("✅ 3/3 - SOP Atualizada (Nova Linha Injetada)!");
       }
     } catch (e) { 
       throw new Error(`Falha na SOP: ${e.message}`); 
     }
 
-    // 🔥 LOG: SUCESSO EDITAR
-    // Ache essa linha e adicione o rowData no final:
-registrarLog("EDITAR", dataAlvo, hubAlvo, turnoAlvo, "Editado com sucesso", rowData);
+    registrarLog("EDITAR", dataAlvo, hubAlvo, turnoAlvo, "Editado nas origens com sucesso", rowData);
 
     return { success: true };
   } catch (error) {
     console.error("❌ Erro Crítico na Edição:", error);
-    
-    // Captura os dados originais ou novos para o log, mesmo se der erro
     const dataAlvoErr = oldRowData ? oldRowData[3] : rowData[3];
     const hubAlvoErr = oldRowData ? oldRowData[4] : rowData[4];
     const turnoAlvoErr = oldRowData ? oldRowData[5] : rowData[5];
     
-    // 🔥 LOG: ERRO EDITAR
     registrarLog("ERRO_EDITAR", dataAlvoErr, hubAlvoErr, turnoAlvoErr, String(error.message));
-    
     throw error;
-  }
-};
-
-// =================================================================
-// DELETE (Exclusão)
-// =================================================================
-export const deleteRowData = async (rowIndex, rowData) => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
-
-    const dataAlvo = padronizarData(rowData[3]);
-    const stationAlvo = limpaTexto(rowData[4]);
-    const turnoAlvo = limpaTexto(rowData[5]);
-    console.log(`Buscando para EXCLUIR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
-
-    // 1. Deleta do Consolidado
-    const gidConsolidado = await getSheetIdByName(SPREADSHEET_ID, ABA_NOME, token);
-    await executeDeleteAPI(SPREADSHEET_ID, gidConsolidado, rowIndex, token);
-
-    // 2. Deleta do Report
-    try {
-      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
-      const dataReport = await respReport.json();
-      
-      if (dataReport.values) {
-        for (let i = dataReport.values.length - 1; i >= 1; i--) {
-          const row = dataReport.values[i];
-          let dataLida = row[3];
-
-          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
-            console.log("Achou no Report! Excluindo...");
-            const gidReport = await getSheetIdByName(ID_PLANILHA_REPORTS, "REPORT DIARIO", token);
-            await executeDeleteAPI(ID_PLANILHA_REPORTS, gidReport, i + 1, token);
-            break; 
-          }
-        }
-      }
-    } catch (e) { console.error("Erro Report:", e); }
-
-    // 3. Deleta da SOP
-    try {
-      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
-      const dataSOP = await respSOP.json();
-      
-      if (dataSOP.values) {
-        for (let i = dataSOP.values.length - 1; i >= 1; i--) {
-          const row = dataSOP.values[i];
-          let dataLida = row[0];
-
-          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
-            console.log("Achou na SOP! Excluindo...");
-            const gidSOP = await getSheetIdByName(ID_PLANILHA_SOP, "CONTROLE", token);
-            await executeDeleteAPI(ID_PLANILHA_SOP, gidSOP, i + 1, token);
-            break;
-          }
-        }
-      }
-    } catch (e) { console.error("Erro SOP:", e); }
-
-    // Ache essa linha e adicione o rowData no final:
-registrarLog("EXCLUIR", dataAlvo, stationAlvo, turnoAlvo, "Excluído com sucesso", rowData);
-
-    return { success: true };
-  } catch (error) { 
-    // 🔥 LOG: ERRO EXCLUIR
-    registrarLog("ERRO_EXCLUIR", rowData[3], rowData[4], rowData[5], String(error.message));
-    throw error; 
   }
 };
 
