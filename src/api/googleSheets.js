@@ -143,14 +143,16 @@ export const insertRowData = async (rowData) => {
     
     const jsonResult = await response.json();
 
-    // 🔥 LOG: SUCESSO CRIAR
-    registrarLog("CRIAR", rowData[3], rowData[4], rowData[5], "Salvo no Consolidado Principal");
+    // 🔥 LOG DE SUCESSO: Veja o 'rowData' aqui no finalzinho!
+    registrarLog("CRIAR", rowData[3], rowData[4], rowData[5], "Salvo no Consolidado Principal", rowData);
 
     return jsonResult;
   } catch (error) {
     console.error("Erro na API (POST append):", error);
-    // 🔥 LOG: ERRO CRIAR
-    registrarLog("ERRO_CRIAR", rowData[3], rowData[4], rowData[5], String(error.message));
+    
+    // 🔥 LOG DE ERRO: Se der erro, a gente salva o 'rowData' do mesmo jeito pra não perder o que o analista digitou!
+    registrarLog("ERRO_CRIAR", rowData[3], rowData[4], rowData[5], String(error.message), rowData);
+    
     throw error;
   }
 };
@@ -315,7 +317,8 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     }
 
     // 🔥 LOG: SUCESSO EDITAR
-    registrarLog("EDITAR", dataAlvo, hubAlvo, turnoAlvo, "Editado com sucesso nas 3 origens");
+    // Ache essa linha e adicione o rowData no final:
+registrarLog("EDITAR", dataAlvo, hubAlvo, turnoAlvo, "Editado com sucesso", rowData);
 
     return { success: true };
   } catch (error) {
@@ -390,8 +393,8 @@ export const deleteRowData = async (rowIndex, rowData) => {
       }
     } catch (e) { console.error("Erro SOP:", e); }
 
-    // 🔥 LOG: SUCESSO EXCLUIR
-    registrarLog("EXCLUIR", rowData[3], rowData[4], rowData[5], "Excluído com sucesso das origens");
+    // Ache essa linha e adicione o rowData no final:
+registrarLog("EXCLUIR", dataAlvo, stationAlvo, turnoAlvo, "Excluído com sucesso", rowData);
 
     return { success: true };
   } catch (error) { 
