@@ -1,5 +1,6 @@
 import React from 'react';
 import OnePageSPI from './charts/OnePageSPI';
+import OnePageMensal from './charts/OnePageMensal'; // 🚀 Novo Import
 import AtPisoDiarioTable from './charts/AtPisoDiarioTable';
 import FleetGapCharts from './charts/FleetGapCharts';
 import CapFleetCharts from './charts/CapFleetCharts';
@@ -10,11 +11,15 @@ const Visualizations = ({ data, rawData, dashData, atPisoData, baseData }) => {
   return (
     <div className="space-y-10 pb-10">
       
-      <OnePageSPI rawData={rawData} dashData={dashData} />
+      {/* Visão Semanal (W-17) */}
+      <OnePageSPI rawData={rawData} baseData={baseData} />
+
+      {/* 🚀 Visão Mensal Acumulada (Abril / 2026) */}
+      <OnePageMensal rawData={rawData} baseData={baseData} />
       
       <AtPisoDiarioTable data={data} rawData={rawData} atPisoData={atPisoData} />
       
-      {/* Fleet Gap agora só precisa do baseData! */}
+      {/* Fleet Gap consumindo a aba BASE */}
       <FleetGapCharts baseData={baseData} />
 
       {data && data.length > 0 ? (

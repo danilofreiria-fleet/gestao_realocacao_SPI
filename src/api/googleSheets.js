@@ -5,24 +5,81 @@ const WEB_APP_URL = import.meta.env.VITE_WEB_APP_URL;
 const SPREADSHEET_ID = import.meta.env.VITE_SPREADSHEET_ID_PRINCIPAL; 
 const ID_PLANILHA_REPORTS = import.meta.env.VITE_SPREADSHEET_ID_REPORTS;
 const ID_PLANILHA_SOP = import.meta.env.VITE_SPREADSHEET_ID_SOP;
+const ID_PLANILHA_LOGS = import.meta.env.VITE_SPREADSHEET_ID_LOGS;
 
 const ABA_NOME = "CONSOLIDADO-GESTÃO-SPI_REALOCAÇÃO";
 
 // =================================================================
-// POST (Criar Nova Linha - Via Apps Script)
+// HELPERS DE COMPARAÇÃO (À PROVA DE BALAS)
 // =================================================================
-export const sendDataToSheets = async (payload) => {
+const padronizarData = (str) => {
+  if (!str) return "";
+  let val = String(str).trim().split(" ")[0]; 
+  if (val.includes('/')) {
+    const [d, m, y] = val.split('/');
+    let year = y.length === 2 ? `20${y}` : y;
+    return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  if (val.includes('-')) {
+    const [y, m, d] = val.split('T')[0].split('-');
+    let year = y.length === 2 ? `20${y}` : y;
+    return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return val;
+};
+
+const limpaTexto = (str) => String(str || "").trim().toLowerCase();
+
+const getSheetIdByName = async (spreadsheetId, sheetName, token) => {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`;
+  const response = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+  const data = await response.json();
+  const sheet = data.sheets.find(s => s.properties.title === sheetName);
+  if (!sheet) throw new Error(`Aba '${sheetName}' não encontrada.`);
+  return sheet.properties.sheetId;
+};
+
+const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId: sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber } } }] })
+  });
+};
+
+// =================================================================
+// SISTEMA DE LOGS (Auditoria Silenciosa)
+// =================================================================
+export const registrarLog = async (acao, dataRef, station, turno, statusInfo) => {
   try {
-    const response = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      mode: 'no-cors', 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { success: true };
-  } catch (error) {
-    console.error("Erro na API (POST):", error);
-    throw error;
+    const token = localStorage.getItem("spiToken");
+    if (!token) return;
+
+    // Tenta pegar o e-mail se houver, senão registra como Analista
+    const userEmail = localStorage.getItem("userEmail") || "Analista"; 
+    const dataHoraAtual = new Date().toLocaleString('pt-BR');
+
+    const logData = [
+      dataHoraAtual,
+      userEmail,
+      acao,             // Ex: "CRIAR", "EDITAR", "EXCLUIR"
+      dataRef || "",    // Data do formulário
+      station || "",    // Hub
+      turno || "",      // Turno
+      statusInfo || "Sucesso"
+    ];
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_LOGS}/values/LOGS!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+    // Fetch sem await para não travar a experiência do usuário ("Fire and Forget")
+    fetch(url, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ values: [logData] })
+    }).catch(() => {});
+  } catch (e) {
+    console.error("Falha ao gravar log (Silencioso):", e);
   }
 };
 
@@ -67,7 +124,6 @@ export const insertRowData = async (rowData) => {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // O insertDataOption=INSERT_ROWS garante que ele crie uma linha nova e não sobrescreva atalhos
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_NOME}!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
     const response = await fetch(url, {
@@ -80,35 +136,18 @@ export const insertRowData = async (rowData) => {
     });
 
     if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-    return await response.json();
+    
+    const jsonResult = await response.json();
+
+    // 🔥 LOG: SUCESSO CRIAR
+    registrarLog("CRIAR", rowData[3], rowData[4], rowData[5], "Salvo no Consolidado Principal");
+
+    return jsonResult;
   } catch (error) {
     console.error("Erro na API (POST append):", error);
+    // 🔥 LOG: ERRO CRIAR
+    registrarLog("ERRO_CRIAR", rowData[3], rowData[4], rowData[5], String(error.message));
     throw error;
-  }
-};
-
-// =================================================================
-// GET BASE (Busca os dados de CAP e Setup na aba BASE da MESMA planilha)
-// =================================================================
-export const getBaseReferenceData = async () => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) return [];
-
-    // Busca exatamente da coluna A até a F na aba "BASE"
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/BASE!A:k`;
-    
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-    });
-    
-    if (!response.ok) return [];
-    const result = await response.json();
-    return result.values || [];
-  } catch (error) {
-    console.error("Erro na API (GET BASE):", error);
-    return [];
   }
 };
 
@@ -121,11 +160,9 @@ export const salvarNasOrigens = async (payload) => {
     if (!token) throw new Error("Usuário não autenticado.");
 
     // 1. O Report Diário pega exatamente as primeiras 47 colunas (0 a 46)
-    // O slice não sofre do problema de apagar zeros!
     const linhaGestao = payload.slice(0, 47);
 
-    // 2. A SOP pega informações pontuais
-    // 🔥 CORREÇÃO: Trocado '||' por '??' para não destruir os números 0!
+    // 2. A SOP pega informações pontuais (mantendo o ?? para não perder zeros)
     const linhaControle = [
       payload[3] ?? "",  // A: Data
       payload[1] ?? "",  // B: Regional
@@ -149,7 +186,6 @@ export const salvarNasOrigens = async (payload) => {
     const urlGestao = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     const urlControle = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
-    // Dispara as duas gravações simultaneamente
     const [resGestao, resControle] = await Promise.all([
       fetch(urlGestao, {
         method: "POST",
@@ -164,54 +200,19 @@ export const salvarNasOrigens = async (payload) => {
     ]);
 
     if (!resGestao.ok || !resControle.ok) {
-       console.error("Erro em uma das requisições", await resGestao.text(), await resControle.text());
-       throw new Error("Falha ao salvar em uma das planilhas de origem.");
+       throw new Error(`Falha nas Origens - Report: ${resGestao.status} | SOP: ${resControle.status}`);
     }
+
+    // 🔥 LOG: SUCESSO ORIGENS
+    registrarLog("CRIAR_ORIGENS", payload[3], payload[4], payload[5], "Salvo simultaneamente no Report e SOP");
 
     return true;
   } catch (error) {
     console.error("Erro ao salvar nas origens:", error);
+    // 🔥 LOG: ERRO ORIGENS
+    registrarLog("ERRO_CRIAR_ORIGENS", payload[3], payload[4], payload[5], String(error.message));
     throw error;
   }
-};
-
-// =================================================================
-// HELPERS DE COMPARAÇÃO (À PROVA DE BALAS)
-// =================================================================
-const padronizarData = (str) => {
-  if (!str) return "";
-  let val = String(str).trim().split(" ")[0]; 
-  if (val.includes('/')) {
-    const [d, m, y] = val.split('/');
-    let year = y.length === 2 ? `20${y}` : y;
-    return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-  if (val.includes('-')) {
-    const [y, m, d] = val.split('T')[0].split('-');
-    let year = y.length === 2 ? `20${y}` : y;
-    return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-  return val;
-};
-
-const limpaTexto = (str) => String(str || "").trim().toLowerCase();
-
-const getSheetIdByName = async (spreadsheetId, sheetName, token) => {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`;
-  const response = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
-  const data = await response.json();
-  const sheet = data.sheets.find(s => s.properties.title === sheetName);
-  if (!sheet) throw new Error(`Aba '${sheetName}' não encontrada.`);
-  return sheet.properties.sheetId;
-};
-
-const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-  await fetch(url, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId: sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber } } }] })
-  });
 };
 
 // =================================================================
@@ -222,7 +223,6 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // Função protetora: garante que null/undefined vire "", mas RESPEITA o 0
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
 
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
@@ -231,10 +231,9 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
 
     console.log("🚀 INICIANDO EDIÇÃO TRIPLA EM BLOCO...");
 
-    // --- 1. EXECUÇÃO CONSOLIDADO (Aba Principal) ---
+    // --- 1. EXECUÇÃO CONSOLIDADO ---
     try {
       const payloadConsolidado = [{
-        // Ao mandar apenas a coluna A, a API preenche automaticamente a linha para a direita
         range: `'${ABA_NOME}'!A${rowIndex}`,
         values: [rowData.map(safeVal)]
       }];
@@ -244,10 +243,11 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadConsolidado })
       });
-      if (!reqConsol.ok) console.error("❌ Erro no Consolidado:", await reqConsol.text());
-      else console.log("✅ 1/3 - Consolidado Atualizado (Linha Inteira)!");
-    } catch (e) { console.error("Erro Consolidado:", e); }
-
+      if (!reqConsol.ok) throw new Error(await reqConsol.text());
+      console.log("✅ 1/3 - Consolidado Atualizado (Linha Inteira)!");
+    } catch (e) { 
+      throw new Error(`Falha no Consolidado: ${e.message}`); 
+    }
 
     // --- 2. EXECUÇÃO REPORT DIÁRIO ---
     try {
@@ -258,25 +258,23 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
           const r = dataRep.values[i];
           if (padronizarData(r[3]) === dataAlvo && limpaTexto(r[4]) === hubAlvo && limpaTexto(r[5]) === turnoAlvo) {
             
-            // Pega exatamente as colunas pertencentes ao Report (incluindo cálculos)
             const linhaGestao = rowData.slice(0, 47).map(safeVal);
-
-            const payloadRep = [{
-              range: `'REPORT DIARIO'!A${i + 1}`,
-              values: [linhaGestao]
-            }];
-            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
+            const payloadRep = [{ range: `'REPORT DIARIO'!A${i + 1}`, values: [linhaGestao] }];
+            
+            const reqRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
             });
+            if (!reqRep.ok) throw new Error(await reqRep.text());
             console.log("✅ 2/3 - Report Diário Atualizado (Linha Inteira)!");
             break;
           }
         }
       }
-    } catch (e) { console.error("Erro Report:", e); }
-
+    } catch (e) { 
+      throw new Error(`Falha no Report: ${e.message}`); 
+    }
 
     // --- 3. EXECUÇÃO SOP ---
     try {
@@ -287,50 +285,49 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
           const r = dataSop.values[i];
           if (padronizarData(r[0]) === dataAlvo && limpaTexto(r[2]) === hubAlvo && limpaTexto(r[3]) === turnoAlvo) {
             
-            // Reconstrói a linha da SOP exatamente como fazemos no POST
             const linhaControle = [
-              safeVal(rowData[3]),  // A: Data
-              safeVal(rowData[1]),  // B: Regional
-              safeVal(rowData[4]),  // C: Station
-              safeVal(rowData[5]),  // D: Turno
-              safeVal(rowData[12]), // E: Vol Rot
-              safeVal(rowData[13]), // F: Vol Proc
-              safeVal(rowData[14]), // G: Vol Exp
-              safeVal(rowData[51]), // H: Realoc Pre
-              safeVal(rowData[52]), // I: Realoc Durante
-              safeVal(rowData[53]), // J: Total Realocados (AGORA VAI SALVAR!)
-              safeVal(rowData[54]), // K: Não Coube
-              safeVal(rowData[55]), // L: Outros Motivos
-              safeVal(rowData[56]), // M: Taxa Correção Fleet
-              safeVal(rowData[57]), // N: Desvio Piso Fleet
-              safeVal(rowData[58]), // O: Desvio Piso Hub
-              safeVal(rowData[2]),  // P: Semana do Ano
-              safeVal(rowData[59])  // Q: Eficiência Expedição
+              safeVal(rowData[3]), safeVal(rowData[1]), safeVal(rowData[4]), safeVal(rowData[5]),
+              safeVal(rowData[12]), safeVal(rowData[13]), safeVal(rowData[14]), safeVal(rowData[51]),
+              safeVal(rowData[52]), safeVal(rowData[53]), safeVal(rowData[54]), safeVal(rowData[55]),
+              safeVal(rowData[56]), safeVal(rowData[57]), safeVal(rowData[58]), safeVal(rowData[2]),
+              safeVal(rowData[59])
             ];
-
-            const payloadSop = [{
-              range: `CONTROLE!A${i + 1}`,
-              values: [linhaControle]
-            }];
-            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
+            
+            const payloadSop = [{ range: `CONTROLE!A${i + 1}`, values: [linhaControle] }];
+            
+            const reqSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadSop })
             });
+            if (!reqSop.ok) throw new Error(await reqSop.text());
             console.log("✅ 3/3 - SOP Atualizada (Linha Inteira)!");
             break;
           }
         }
       }
-    } catch (e) { console.error("Erro SOP:", e); }
+    } catch (e) { 
+      throw new Error(`Falha na SOP: ${e.message}`); 
+    }
+
+    // 🔥 LOG: SUCESSO EDITAR
+    registrarLog("EDITAR", dataAlvo, hubAlvo, turnoAlvo, "Editado com sucesso nas 3 origens");
 
     return { success: true };
   } catch (error) {
     console.error("❌ Erro Crítico na Edição:", error);
+    
+    // Captura os dados originais ou novos para o log, mesmo se der erro
+    const dataAlvoErr = oldRowData ? oldRowData[3] : rowData[3];
+    const hubAlvoErr = oldRowData ? oldRowData[4] : rowData[4];
+    const turnoAlvoErr = oldRowData ? oldRowData[5] : rowData[5];
+    
+    // 🔥 LOG: ERRO EDITAR
+    registrarLog("ERRO_EDITAR", dataAlvoErr, hubAlvoErr, turnoAlvoErr, String(error.message));
+    
     throw error;
   }
 };
-
 
 // =================================================================
 // DELETE (Exclusão)
@@ -389,8 +386,57 @@ export const deleteRowData = async (rowIndex, rowData) => {
       }
     } catch (e) { console.error("Erro SOP:", e); }
 
+    // 🔥 LOG: SUCESSO EXCLUIR
+    registrarLog("EXCLUIR", rowData[3], rowData[4], rowData[5], "Excluído com sucesso das origens");
+
     return { success: true };
-  } catch (error) { throw error; }
+  } catch (error) { 
+    // 🔥 LOG: ERRO EXCLUIR
+    registrarLog("ERRO_EXCLUIR", rowData[3], rowData[4], rowData[5], String(error.message));
+    throw error; 
+  }
+};
+
+// =================================================================
+// POST (Criar Nova Linha - Via Apps Script) [LEGADO/OPCIONAL]
+// =================================================================
+export const sendDataToSheets = async (payload) => {
+  try {
+    const response = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      mode: 'no-cors', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Erro na API (POST):", error);
+    throw error;
+  }
+};
+
+// =================================================================
+// GET BASE (Busca os dados de CAP e Setup na aba BASE)
+// =================================================================
+export const getBaseReferenceData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) return [];
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/BASE!A:Z`;
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    });
+    
+    if (!response.ok) return [];
+    const result = await response.json();
+    return result.values || [];
+  } catch (error) {
+    console.error("Erro na API (GET BASE):", error);
+    return [];
+  }
 };
 
 // =================================================================
@@ -408,12 +454,16 @@ export const getDadosRHDashboard = async () => {
       headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
 
-    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+    if (!response.ok) {
+        console.warn("Aba DADOS_DASHBOARD ausente. Retornando vazio para não quebrar a tela.");
+        return [];
+    }
+    
     const result = await response.json();
     return result.values || [];
   } catch (error) {
     console.error("Erro na API (GET DADOS RH):", error);
-    throw error;
+    return []; 
   }
 };
 
@@ -441,7 +491,6 @@ export const getDadosAtPiso = async () => {
   }
 };
 
-
 // =================================================================
 // VERIFICAÇÃO DE ACESSO AO DASHBOARD
 // =================================================================
@@ -449,7 +498,6 @@ export const verificarAcessoGestor = async (emailUsuario, token) => {
   try {
     if (!token) return false;
 
-    // Busca a coluna A da aba de acessos
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ACESSOS_DASHBOARD!A:A`;
     
     const response = await fetch(url, {
@@ -462,13 +510,10 @@ export const verificarAcessoGestor = async (emailUsuario, token) => {
     const result = await response.json();
     if (!result.values) return false;
 
-    // Transforma a matriz do Google em uma lista simples de textos em minúsculo
     const emailsPermitidos = result.values.map(linha => String(linha[0]).trim().toLowerCase());
-    
-    // Verifica se o e-mail logado está na lista
     return emailsPermitidos.includes(String(emailUsuario).trim().toLowerCase());
   } catch (error) {
     console.error("Erro ao verificar permissões de gestor:", error);
-    return false; // Na dúvida, bloqueia.
+    return false; 
   }
 };

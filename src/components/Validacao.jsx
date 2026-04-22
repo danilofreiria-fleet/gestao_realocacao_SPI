@@ -4,16 +4,35 @@ import { getConsolidadoData, getBaseReferenceData } from '../api/googleSheets';
 import { AlertCircle, CheckCircle2, Search, Filter, ShieldCheck, AlertTriangle, ArrowRightCircle, CalendarDays, MapPin, Clock, Download, ChevronDown, X } from 'lucide-react';
 
 const MAPA_REGIONAL = {
-  "LM Hub_SP_Campinas_São Martinho": "SPI1", "LM Hub_SP_Leme": "SPI1", "LM Hub_SP_Limeira_Campo Belo": "SPI1",
-  "LM Hub_SP_Mogi Mirim": "SPI1", "LM Hub_SP_Piracicaba": "SPI1", "LM Hub_SP_Sumaré_Nova Veneza": "SPI1",
-  "LM Hub_SP_Campinas_PqCidade": "SPI1", "LM Hub_SP_Araraquara": "SPI2", "LM Hub_SP_Bauru_Centro": "SPI2",
-  "LM Hub_SP_Jaú": "SPI2", "LM Hub_SP_Ribeirão Preto_02": "SPI2", "LM Hub_SP_São Carlos": "SPI2",
-  "LM Hub_SP_RibeirãoPretoEstaça": "SPI2", "LM Hub_SP_Barretos": "SPI3", "LM Hub_SP_Franca_Distrito_Indust": "SPI3",
-  "LM Hub_SP_São José do Rio P": "SPI3", "LM Hub_SP_Votuporanga": "SPI3", "LM Hub_SP_Botucatu": "SPI4",
-  "LM Hub_SP_Atibaia_Ponte_Alta": "SPI4", "LM Hub_SP_Itapetininga": "SPI4", "LM Hub_SP_Itapeva": "SPI4",
-  "LM Hub_SP_Jundiaí": "SPI4", "LM Hub_SP_Sorocaba_Região Norte": "SPI4", "LM Hub_SP_Tatuí": "SPI4",
-  "LM Hub_SP_Várzea Paulista": "SPI4", "LM Hub_SP_Araçatuba": "SPI5", "LM Hub_SP_Assis": "SPI5",
-  "LM Hub_SP_Marília": "SPI5", "LM Hub_SP_Presidente Prudente": "SPI5"
+"LM Hub_SP_Campinas_São Martinho": "SPI1",  
+"LM Hub_SP_Leme": "SPI1",  
+"LM Hub_SP_Limeira_Campo Belo": "SPI1",  
+"LM Hub_SP_Mogi Mirim": "SPI1",  
+"LM Hub_SP_Piracicaba": "SPI1",  
+"LM Hub_SP_Sumaré_Nova Veneza": "SPI1",  
+"LM Hub_SP_Campinas_PqCidade": "SPI1",  
+"LM Hub_SP_Araraquara": "SPO1",  
+"LM Hub_SP_Bauru_Centro": "SPO3",  
+"LM Hub_SP_Jaú": "SPO1",  
+"LM Hub_SP_Ribeirão Preto_02": "SPO1",  
+"LM Hub_SP_São Carlos": "SPO1",  
+"LM Hub_SP_RibeirãoPretoEstaça": "SPO1",  
+"LM Hub_SP_Barretos": "SPO2",  
+"LM Hub_SP_Franca_Distrito_Indust": "SPO2",  
+"LM Hub_SP_São José do Rio P": "SPO2",  
+"LM Hub_SP_Votuporanga": "SPO2",  
+"LM Hub_SP_Botucatu": "SPI3",  
+"LM Hub_SP_Atibaia_Ponte_Alta": "SPI2",  
+"LM Hub_SP_Itapetininga": "SPI3",  
+"LM Hub_SP_Itapeva": "SPI3",  
+"LM Hub_SP_Jundiaí": "SPI2",  
+"LM Hub_SP_Sorocaba_Região Norte": "SPI3",  
+"LM Hub_SP_Tatuí": "SPI3",  
+"LM Hub_SP_Várzea Paulista": "SPI2",  
+"LM Hub_SP_Araçatuba": "SPO2",  
+"LM Hub_SP_Assis": "SPO3",  
+"LM Hub_SP_Marília": "SPO3",  
+"LM Hub_SP_Presidente Prudente": "SPO3"
 };
 
 const STATIONS_ESPERADAS = Object.keys(MAPA_REGIONAL).sort();
