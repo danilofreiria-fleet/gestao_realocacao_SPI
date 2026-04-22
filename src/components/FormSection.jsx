@@ -132,6 +132,7 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
   // Bloqueia se a regra do AT Piso for violada OU se faltar campo obrigatório
   const bloqueiaSalvamento = (volumeAtPiso > 0 && !atPisoConfirmado) || !camposObrigatoriosPreenchidos;
 
+  // (Este código substitui do seu 'return (' para baixo)
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-[#1f232d] w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -145,7 +146,7 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
           <button onClick={handleClose} className="text-slate-400 hover:text-red-500 transition-colors"><X size={24} /></button>
         </div>
 
-        {/* 🔥 NOVO: Checkbox de Sem Operação */}
+        {/* Checkbox de Sem Operação */}
         <div className="px-6 pt-4 pb-2">
           <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-[#15171e] dark:hover:bg-gray-800 p-3 rounded-lg border border-slate-200 dark:border-gray-700 w-max transition-colors">
             <input 
@@ -183,14 +184,12 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
               }
             }
 
-            // Descobre se o campo atual é um dos 3 obrigatórios
             const isObrigatorio = [3, 4, 5].includes(field.idx);
 
             return (
               <div key={field.idx} className={`flex flex-col relative ${field.span}`}>
                 <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1 flex items-center">
                   {field.label}
-                  {/* 🔥 NOVO: Mostra asterisco vermelho se for obrigatório */}
                   {isObrigatorio && <span className="text-red-500 ml-1 text-xs">*</span>}
                 </label>
                 
@@ -278,18 +277,33 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
             <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400">Cancelar</button>
             
             <div title={!camposObrigatoriosPreenchidos ? "Preencha Data, Station e Turno" : bloqueiaSalvamento ? "Confirme a regra das AT's no Piso para salvar" : ""}>
+              
+              {/* 🔥 AQUI FICA A NOSSA VALIDAÇÃO EXPRESSA: Ele só chama o 'onSave' se as regras estiverem ok */}
               <button 
-                onClick={onSave} 
-                disabled={isSaving || bloqueiaSalvamento} 
+                onClick={() => {
+                  if (!camposObrigatoriosPreenchidos) {
+                    alert("Atenção: Os campos Data, Station e Turno são obrigatórios.");
+                    return;
+                  }
+                  if (volumeAtPiso > 0 && !atPisoConfirmado) {
+                    alert("Atenção: Confirme a regra de AT's no Piso marcando a caixinha vermelha.");
+                    return;
+                  }
+                  onSave(); // Se passar, manda pro Pai salvar
+                }} 
+                disabled={isSaving} 
                 className={`text-white px-6 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all ${
-                  bloqueiaSalvamento 
-                    ? 'bg-slate-400 cursor-not-allowed opacity-70' 
-                    : 'bg-blue-600 hover:bg-blue-700'
+                  isSaving 
+                    ? 'bg-slate-400 cursor-wait opacity-70' 
+                    : bloqueiaSalvamento 
+                      ? 'bg-blue-300 cursor-not-allowed opacity-70' 
+                      : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
                 <Save size={18}/> 
                 {isSaving ? "Salvando..." : "Salvar Dados Unificados"}
               </button>
+
             </div>
           </div>
         </div>

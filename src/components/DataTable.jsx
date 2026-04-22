@@ -62,7 +62,7 @@ const DataTable = () => {
   
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [duplicateAlert, setDuplicateAlert] = useState(null); // ESTADO DO NOVO ALERTA BONITÃO
+  const [duplicateAlert, setDuplicateAlert] = useState(null); 
 
   const [draftFilters, setDraftFilters] = useState({ regional: '', ano: '', mes: '', semana: '', station: '', dataInicio: '', dataFim: '' });
   const [appliedFilters, setAppliedFilters] = useState({ regional: '', ano: '', mes: '', semana: '', station: '', dataInicio: '', dataFim: '' });
@@ -78,7 +78,6 @@ const DataTable = () => {
     init();
   }, []);
 
-  // RECEPTOR DO DEEP LINK DA VALIDAÇÃO (Corrigido para não reabrir o modal infinitamente)
   useEffect(() => {
     if (location.state && location.state.resolveAction && !loading && baseData.length > 0) {
       const action = location.state.resolveAction;
@@ -90,14 +89,12 @@ const DataTable = () => {
         setModalMode('new');
         const emptyRow = Array(headers.length).fill("");
         
-        // Posições originais
         emptyRow[3] = action.prefill.data;
         emptyRow[4] = action.prefill.station;
         emptyRow[5] = action.prefill.turno;
         emptyRow[1] = action.prefill.regional || MAPA_REGIONAL[action.prefill.station] || "";
-        emptyRow[2] = action.prefill.semana || ""; // Validando semana no botão "Resolver"
+        emptyRow[2] = action.prefill.semana || ""; 
 
-        // Busca do CAP e Setup na aba Base
         const ref = baseData.find(r => String(r[0]).trim() === String(action.prefill.station).trim() && String(r[1]).trim() === String(action.prefill.turno).trim());
         if (ref) {
           emptyRow[8] = ref[4];
@@ -110,29 +107,11 @@ const DataTable = () => {
         setIsModalOpen(true);
       }
 
-      // Limpa a URL através do React Router para garantir que não vai reabrir no F5 ou ao salvar
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, loading, baseData, headers, navigate]);
 
-  const carregarDados = async () => {
-    setLoading(true);
-    try {
-      const data = await getConsolidadoData();
-      if (data && data.length > 0) {
-        setHeaders(data[0]);
-        const processedRows = data.slice(1).map((row, idx) => {
-          const fullRow = Array(data[0].length).fill("");
-          row.forEach((cell, i) => { fullRow[i] = cell; });
-          fullRow._rowIndex = idx + 2; 
-          return fullRow;
-        });
-        setRows(processedRows);
-      }
-    } catch (error) { console.error("Erro ao carregar", error); } 
-    finally { setLoading(false); }
-  };
-
+  // Função movida para cima para poder ser usada na ordenação
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
     if (String(dateStr).includes('/')) {
@@ -140,6 +119,34 @@ const DataTable = () => {
       return new Date(`${ano}-${mes}-${dia}T12:00:00`);
     }
     return new Date(dateStr);
+  };
+
+  const carregarDados = async () => {
+    setLoading(true);
+    try {
+      const data = await getConsolidadoData();
+      if (data && data.length > 0) {
+        setHeaders(data[0]);
+        
+        // 1. Processa e marca o número da linha real (Para não dar erro ao editar)
+        let processedRows = data.slice(1).map((row, idx) => {
+          const fullRow = Array(data[0].length).fill("");
+          row.forEach((cell, i) => { fullRow[i] = cell; });
+          fullRow._rowIndex = idx + 2; 
+          return fullRow;
+        });
+
+        // 2. 🔥 ORDENAÇÃO INTELIGENTE: Do mais novo (topo) para o mais velho (fim)
+        processedRows.sort((a, b) => {
+          const dataA = parseDate(a[3]) || new Date(0);
+          const dataB = parseDate(b[3]) || new Date(0);
+          return dataB - dataA; // Decrescente
+        });
+
+        setRows(processedRows);
+      }
+    } catch (error) { console.error("Erro ao carregar", error); } 
+    finally { setLoading(false); }
   };
 
   const colIndex = useMemo(() => {
@@ -197,7 +204,6 @@ const DataTable = () => {
   const handleFilterChange = (e) => setDraftFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
   const handleSearch = () => { setAppliedFilters(draftFilters); setCurrentPage(1); };
   
-  // NOVA FUNÇÃO: LIMPAR FILTROS
   const limparFiltros = () => {
     const limpos = { regional: '', ano: '', mes: '', semana: '', station: '', dataInicio: '', dataFim: '' };
     setDraftFilters(limpos);
@@ -283,21 +289,15 @@ const DataTable = () => {
 
 const handleEditChange = (index, value) => {
     setEditFormData(prevData => {
-      // 1. Cria uma cópia do estado anterior (a fila segura do React)
       const newData = [...prevData];
-      
-      // 2. Garante que as propriedades virtuais (que não são índices numéricos) sejam mantidas
       newData.capHubVirtual = prevData.capHubVirtual;
       newData.capFleetVirtual = prevData.capFleetVirtual;
       
-      // 3. Atualiza o campo específico
       newData[index] = value;
       
-      // 4. Lógica das regras de negócio atreladas a esse campo
       if (index === 3) newData[2] = calcularSemana(value); 
       if (index === 4) newData[1] = MAPA_REGIONAL[value] || ""; 
 
-      // 5. Se mudou a Station (4) ou Turno (5), recalcula o CAP/Setup
       if (index === 4 || index === 5) {
         const stationAtual = index === 4 ? value : newData[4];
         const turnoAtual = index === 5 ? value : newData[5];
@@ -319,8 +319,6 @@ const handleEditChange = (index, value) => {
           newData.capFleetVirtual = "";
         }
       }
-
-      // 6. Retorna a cópia atualizada para a "fila"
       return newData;
     });
   };
@@ -336,9 +334,6 @@ const calcularCampos = (data) => {
     const getNum = (idx) => parseBrNumber(data[idx]);
     const formatPercent = (val) => String((val * 100).toFixed(2)).replace('.', ',') + "%";
 
-    // 🔥 NOVA LÓGICA DO STATUS (V e X)
-    // Verifica se os volumes principais não estão vazios. 
-    // Obs: Como o botão "Sem Operação" joga o número "0", ele conta como preenchido perfeitamente!
     const temVolumes = data[11] !== "" && data[12] !== "" && data[13] !== "" && data[14] !== "";
     
     if (temVolumes) {
@@ -347,7 +342,6 @@ const calcularCampos = (data) => {
       data[0] = "❌";
     }
 
-    // A partir daqui, seus cálculos normais continuam...
     data[10] = calcularHoras(data[6], data[7]);
 
     const atRot = getNum(11); 
@@ -355,7 +349,6 @@ const calcularCampos = (data) => {
     const volProc = getNum(13); 
     const volExp = getNum(14); 
 
-    // 🔥 NOVIDADE: Repetindo os volumes no final da planilha (AW, AX, AY)
     data[48] = volRot;
     data[49] = volProc;
     data[50] = volExp;
@@ -393,16 +386,14 @@ const calcularCampos = (data) => {
     data[39] = volRot > 0 ? formatPercent(pacRotMoto / volRot) : "0,00%";
     data[40] = volExp > 0 ? formatPercent(pacExpMoto / volExp) : "0,00%";
 
-    // 🔥 CORREÇÃO DA REALOCAÇÃO (Lendo dos novos índices)
-    const realocPre = getNum(51); // AZ
-    const realocDur = getNum(52); // BA
-    const naoCoube = getNum(54);  // BC
-    const naoOutros = getNum(55); // BD
+    const realocPre = getNum(51); 
+    const realocDur = getNum(52); 
+    const naoCoube = getNum(54);  
+    const naoOutros = getNum(55); 
 
     const totalRealoc = realocPre + realocDur;
-    data[53] = totalRealoc; // BB
+    data[53] = totalRealoc; 
 
-    // Taxas e Eficiência (BE, BF, BG, BH)
     data[56] = volProc > 0 ? formatPercent(totalRealoc / volProc) : "0,00%";
     data[57] = volProc > 0 ? formatPercent(naoCoube / volProc) : "0,00%";
     data[58] = volProc > 0 ? formatPercent(naoOutros / volProc) : "0,00%";
@@ -437,7 +428,6 @@ const calcularCampos = (data) => {
       payload.capFleetVirtual = editFormData.capFleetVirtual;
       payload[3] = formatDataForGoogle(payload[3]);
 
-      // ======== ANTI-DUPLICIDADE COM ALERTA CUSTOMIZADO ========
       if (modalMode === 'new') {
         const dataComparacao = payload[3];
         const stationComparacao = payload[4];
@@ -452,10 +442,9 @@ const calcularCampos = (data) => {
         if (jaExiste) {
           setDuplicateAlert({ station: stationComparacao, turno: turnoComparacao, data: dataComparacao });
           setIsSaving(false);
-          return; // Para o salvamento aqui
+          return; 
         }
       }
-      // ==========================================================
 
       try { payload = calcularCampos(payload); } catch (errCalc) { console.error("Erro interno nos cálculos:", errCalc); }
 
@@ -467,14 +456,17 @@ const calcularCampos = (data) => {
 
       if (modalMode === 'edit') {
         await updateRowData(editingRowIndex, payload, originalRowData); 
-        carregarDados();
       } else {
         await insertRowData(payload); 
         await salvarNasOrigens(payload);
-        setTimeout(() => { carregarDados(); }, 1500); 
       }
       
-      setIsModalOpen(false); // Fecha o modal após sucesso
+      // 🔥 1. FECHA O MODAL IMEDIATAMENTE (Sensação de rapidez)
+      setIsModalOpen(false); 
+      
+      // 🔥 2. F5 AUTOMÁTICO E EXPRESSO (Busca e já ordena com a linha nova no topo)
+      await carregarDados(); 
+      
     } catch (error) {
       console.error(error);
       alert("Falha na conexão. Verifique sua internet.");
@@ -488,7 +480,7 @@ const handleExcluir = async () => {
     try {
       await deleteRowData(editingRowIndex, originalRowData); 
       setIsModalOpen(false);
-      carregarDados();
+      await carregarDados(); // F5 Instantâneo aqui também!
     } catch (error) {
       console.error(error);
       alert("Falha ao excluir a linha.");
@@ -584,7 +576,6 @@ const handleExcluir = async () => {
             <thead className="bg-slate-100 dark:bg-[#15171e] text-slate-500 dark:text-gray-400 uppercase text-[10px] sticky top-0 z-20">
               <tr>
                 <th className="px-4 py-3 font-bold sticky left-0 bg-slate-100 dark:bg-[#15171e] z-30 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#1f2937]">Ações</th>
-                {/* 🔥 TRAVA APLICADA NO CABEÇALHO */}
                 {headers.map((col, i) => i === 0 ? null : (
                   <th key={i} className="px-4 py-3 font-bold border-b border-slate-200 dark:border-gray-800">{col}</th>
                 ))}
@@ -598,7 +589,6 @@ const handleExcluir = async () => {
                   </td>
                   
                   {headers.map((_, cellIndex) => {
-                    // 🔥 TRAVA APLICADA NA CÉLULA (Oculta a coluna 0)
                     if (cellIndex === 0) return null;
 
                     const isLongText = cellIndex === 41 || cellIndex === 42;
