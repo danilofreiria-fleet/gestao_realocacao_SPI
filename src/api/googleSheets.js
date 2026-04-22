@@ -51,33 +51,39 @@ const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
 // =================================================================
 // SISTEMA DE LOGS (Auditoria Silenciosa)
 // =================================================================
-export const registrarLog = async (acao, dataRef, station, turno, statusInfo) => {
+export const registrarLog = async (acao, dataRef, station, turno, statusInfo, arrayDeDados = []) => {
   try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) return;
-
-    // Tenta pegar o e-mail se houver, senão registra como Analista
     const userEmail = localStorage.getItem("userEmail") || "Analista"; 
     const dataHoraAtual = new Date().toLocaleString('pt-BR');
+
+    // 🔥 AQUI ESTÁ A MÁGICA DO BACKUP:
+    // Ele pega o arrayDeDados (ex: ["2026", "W10", "1182035", ...]) 
+    // e transforma num texto literal para caber na coluna H do Log
+    const backupSnapshot = arrayDeDados && arrayDeDados.length > 0 
+      ? JSON.stringify(arrayDeDados) 
+      : "[]";
 
     const logData = [
       dataHoraAtual,
       userEmail,
-      acao,             // Ex: "CRIAR", "EDITAR", "EXCLUIR"
-      dataRef || "",    // Data do formulário
-      station || "",    // Hub
-      turno || "",      // Turno
-      statusInfo || "Sucesso"
+      acao,             // "CRIAR", "EDITAR" ou "EXCLUIR"
+      dataRef || "",    
+      station || "",    
+      turno || "",      
+      statusInfo || "Sucesso",
+      backupSnapshot    // 🔥 COLUNA H: Vai ficar exatamente igual ao seu exemplo ["2026", "W10", ...]
     ];
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_LOGS}/values/LOGS!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-
-    // Fetch sem await para não travar a experiência do usuário ("Fire and Forget")
-    fetch(url, {
+    fetch(WEB_APP_URL, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [logData] })
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        action: "log", 
+        values: logData 
+      })
     }).catch(() => {});
+    
   } catch (e) {
     console.error("Falha ao gravar log (Silencioso):", e);
   }
@@ -498,11 +504,18 @@ export const verificarAcessoGestor = async (emailUsuario, token) => {
   try {
     if (!token) return false;
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ACESSOS_DASHBOARD!A:A`;
+    // 🔥 VACINA 1: Adiciona um timestamp na URL para o navegador nunca fazer cache
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ACESSOS_DASHBOARD!A:A?t=${new Date().getTime()}`;
     
     const response = await fetch(url, {
       method: "GET",
-      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+      headers: { 
+        "Authorization": `Bearer ${token}`, 
+        "Accept": "application/json",
+        // 🔥 VACINA 2: Força o navegador a buscar dados frescos
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+      }
     });
     
     if (!response.ok) return false;
@@ -510,7 +523,11 @@ export const verificarAcessoGestor = async (emailUsuario, token) => {
     const result = await response.json();
     if (!result.values) return false;
 
-    const emailsPermitidos = result.values.map(linha => String(linha[0]).trim().toLowerCase());
+    // 🔥 VACINA 3: Filtra linhas vazias antes de mapear
+    const emailsPermitidos = result.values
+      .filter(linha => linha && linha.length > 0 && linha[0]) // Só passa se a célula tiver algo
+      .map(linha => String(linha[0]).trim().toLowerCase());
+    
     return emailsPermitidos.includes(String(emailUsuario).trim().toLowerCase());
   } catch (error) {
     console.error("Erro ao verificar permissões de gestor:", error);
