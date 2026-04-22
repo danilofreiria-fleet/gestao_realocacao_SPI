@@ -48,8 +48,10 @@ const CAMPOS_AUDITADOS = [
   { idx: 26, nome: 'Cg. Pass.' }, { idx: 27, nome: 'Cg. Moto' },
   { idx: 28, nome: 'Cg. Van' }, { idx: 35, nome: 'Recusas' },
   { idx: 37, nome: 'Pac. Rot. Moto' }, { idx: 38, nome: 'Pac. Exp. Moto' },
-  { idx: 50, nome: 'Realoc. Pré' }, { idx: 51, nome: 'Realoc. Dur.' },
-  { idx: 53, nome: 'Não Coube' }, { idx: 54, nome: 'Não Exp. Outros' }
+  { idx: 51, nome: 'Realoc. Pré' }, 
+  { idx: 52, nome: 'Realoc. Dur.' },
+  { idx: 54, nome: 'Não Coube' }, 
+  { idx: 55, nome: 'Não Exp. Outros' }
 ];
 
 // Funções Helpers para calcular Semana ISO Atual
