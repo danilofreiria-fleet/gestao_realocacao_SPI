@@ -423,7 +423,10 @@ const calcularCampos = (data) => {
     return data;
   };
 
-    const salvarDados = async () => {
+const salvarDados = async () => {
+    // 🔥 TRAVA ANTI CLIQUE-DUPLO NINJA: Se já estiver salvando, ignora novos cliques!
+    if (isSaving) return; 
+    
     setIsSaving(true);
     try {
       let payload = [...editFormData];
@@ -431,23 +434,33 @@ const calcularCampos = (data) => {
       payload.capFleetVirtual = editFormData.capFleetVirtual;
       payload[3] = formatDataForGoogle(payload[3]);
 
+      // ======== ANTI-DUPLICIDADE BLINDADO (À Prova de Espaços e Datas) ========
       if (modalMode === 'new') {
-        const dataComparacao = payload[3];
-        const stationComparacao = payload[4];
-        const turnoComparacao = payload[5];
+        // Transforma a data num número absoluto de tempo para não ter erro de "/04/" vs "/4/"
+        const dataCompNum = parseDate(payload[3])?.getTime();
+        // Limpa espaços no começo/fim e joga tudo pra minúsculo
+        const stationCompStr = String(payload[4]).trim().toLowerCase();
+        const turnoCompStr = String(payload[5]).trim().toLowerCase();
 
-        const jaExiste = rows.some(r => 
-          formatDataForGoogle(r[3]) === dataComparacao && 
-          r[4] === stationComparacao && 
-          r[5] === turnoComparacao
-        );
+        const jaExiste = rows.some(r => {
+          const rDataNum = parseDate(r[3])?.getTime();
+          const rStationStr = String(r[4]).trim().toLowerCase();
+          const rTurnoStr = String(r[5]).trim().toLowerCase();
+
+          return (
+            rDataNum === dataCompNum && 
+            rStationStr === stationCompStr && 
+            rTurnoStr === turnoCompStr
+          );
+        });
 
         if (jaExiste) {
-          setDuplicateAlert({ station: stationComparacao, turno: turnoComparacao, data: dataComparacao });
+          setDuplicateAlert({ station: payload[4], turno: payload[5], data: payload[3] });
           setIsSaving(false);
-          return; 
+          return; // Para o salvamento aqui mesmo
         }
       }
+      // ========================================================================
 
       try { payload = calcularCampos(payload); } catch (errCalc) { console.error("Erro interno nos cálculos:", errCalc); }
 
@@ -460,28 +473,25 @@ const calcularCampos = (data) => {
       if (modalMode === 'edit') {
         await updateRowData(editingRowIndex, payload, originalRowData); 
       } else {
-        // 🔥 ACELERAÇÃO 1: Manda salvar em tudo ao mesmo tempo!
+        // Salva tudo ao mesmo tempo (Super Rápido)
         await Promise.all([
           insertRowData(payload),
           salvarNasOrigens(payload)
         ]);
 
-        // 🔥 ACELERAÇÃO 2: Injeção Otimista (Mostra na tela antes de ler do Google)
+        // Injeção visual imediata e ordenação no topo
         setRows(prevRows => {
           const linhaVisual = [...payload];
           linhaVisual._rowIndex = prevRows.length > 0 ? prevRows[0]._rowIndex + 1 : 9999;
           const novasLinhas = [linhaVisual, ...prevRows];
-          // Já ordena pra linha ficar no topo
           return novasLinhas.sort((a, b) => (parseDate(b[3]) || new Date(0)) - (parseDate(a[3]) || new Date(0)));
         });
       }
       
-      // Fecha o modal e desliga o Loading na mesma hora (Instantâneo para o usuário)
       setIsModalOpen(false); 
-      setIsSaving(false);
+      setIsSaving(false); // Libera o botão só no final de tudo
       
-      // Faz o F5 silencioso no fundo, sem travar a tela
-      carregarDados(); 
+      carregarDados(); // Atualiza silenciosamente no fundo
       
     } catch (error) {
       console.error(error);
