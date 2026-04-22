@@ -112,13 +112,16 @@ const DataTable = () => {
   }, [location.state, loading, baseData, headers, navigate]);
 
   // Função movida para cima para poder ser usada na ordenação
-  const parseDate = (dateStr) => {
-    if (!dateStr) return null;
-    if (String(dateStr).includes('/')) {
-      const [dia, mes, ano] = dateStr.split(' ')[0].split('/');
+const parseDate = (dateStr) => {
+    if (!dateStr) return new Date(0);
+    let str = String(dateStr).trim().split(' ')[0];
+    if (str.includes('/')) {
+      let [dia, mes, ano] = str.split('/');
+      // 🔥 CORREÇÃO: Se o Google mandar o ano como "26", o sistema converte para "2026"
+      if (ano && ano.length === 2) ano = `20${ano}`;
       return new Date(`${ano}-${mes}-${dia}T12:00:00`);
     }
-    return new Date(dateStr);
+    return new Date(str);
   };
 
   const carregarDados = async () => {
@@ -420,7 +423,7 @@ const calcularCampos = (data) => {
     return data;
   };
 
-  const salvarDados = async () => {
+    const salvarDados = async () => {
     setIsSaving(true);
     try {
       let payload = [...editFormData];
@@ -457,20 +460,32 @@ const calcularCampos = (data) => {
       if (modalMode === 'edit') {
         await updateRowData(editingRowIndex, payload, originalRowData); 
       } else {
-        await insertRowData(payload); 
-        await salvarNasOrigens(payload);
+        // 🔥 ACELERAÇÃO 1: Manda salvar em tudo ao mesmo tempo!
+        await Promise.all([
+          insertRowData(payload),
+          salvarNasOrigens(payload)
+        ]);
+
+        // 🔥 ACELERAÇÃO 2: Injeção Otimista (Mostra na tela antes de ler do Google)
+        setRows(prevRows => {
+          const linhaVisual = [...payload];
+          linhaVisual._rowIndex = prevRows.length > 0 ? prevRows[0]._rowIndex + 1 : 9999;
+          const novasLinhas = [linhaVisual, ...prevRows];
+          // Já ordena pra linha ficar no topo
+          return novasLinhas.sort((a, b) => (parseDate(b[3]) || new Date(0)) - (parseDate(a[3]) || new Date(0)));
+        });
       }
       
-      // 🔥 1. FECHA O MODAL IMEDIATAMENTE (Sensação de rapidez)
+      // Fecha o modal e desliga o Loading na mesma hora (Instantâneo para o usuário)
       setIsModalOpen(false); 
+      setIsSaving(false);
       
-      // 🔥 2. F5 AUTOMÁTICO E EXPRESSO (Busca e já ordena com a linha nova no topo)
-      await carregarDados(); 
+      // Faz o F5 silencioso no fundo, sem travar a tela
+      carregarDados(); 
       
     } catch (error) {
       console.error(error);
       alert("Falha na conexão. Verifique sua internet.");
-    } finally {
       setIsSaving(false);
     }
   };
@@ -480,11 +495,12 @@ const handleExcluir = async () => {
     try {
       await deleteRowData(editingRowIndex, originalRowData); 
       setIsModalOpen(false);
-      await carregarDados(); // F5 Instantâneo aqui também!
+      setIsDeleting(false); // Libera o usuário na mesma hora!
+      
+      carregarDados(); // Faz o F5 silencioso no fundo
     } catch (error) {
       console.error(error);
       alert("Falha ao excluir a linha.");
-    } finally {
       setIsDeleting(false);
     }
   };
