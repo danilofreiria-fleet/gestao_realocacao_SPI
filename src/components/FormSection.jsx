@@ -81,15 +81,10 @@ export const FORM_FIELDS = [
 
 const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDelete, onClose, isSaving, isDeleting, baseData }) => {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  
-  // ESTADOS
   const [focusedField, setFocusedField] = useState(null);
   const [atPisoConfirmado, setAtPisoConfirmado] = useState(false);
-  
-  // 🔥 NOVO ESTADO: Sem operação no turno
   const [semOperacao, setSemOperacao] = useState(false);
 
-  // Reseta as confirmações sempre que o modal for aberto
   useEffect(() => {
     if (isOpen) {
       setAtPisoConfirmado(false);
@@ -108,27 +103,16 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
   const handleSemOperacaoToggle = (e) => {
     const isChecked = e.target.checked;
     setSemOperacao(isChecked);
-
     if (isChecked) {
-      // Varre todos os campos configurados
       FORM_FIELDS.forEach(field => {
-        // Se for campo de número, joga 0
-        if (field.type === 'number') {
-          onChange(field.idx, 0);
-        }
+        if (field.type === 'number') onChange(field.idx, 0);
       });
-      // Preenche o Ponto de Atenção automaticamente
       onChange(41, "Sem Expedição no turno");
     }
   };
 
-  // 🔥 VALIDAÇÕES DE SALVAMENTO
   const volumeAtPiso = Number(formData[19]) || 0;
-  
-  // Verifica se os 3 campos vitais têm algum valor preenchido
   const camposObrigatoriosPreenchidos = Boolean(formData[3] && formData[4] && formData[5]);
-  
-  // Bloqueia se a regra do AT Piso for violada OU se faltar campo obrigatório
   const bloqueiaSalvamento = (volumeAtPiso > 0 && !atPisoConfirmado) || !camposObrigatoriosPreenchidos;
 
   return (
@@ -144,7 +128,6 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
           <button onClick={handleClose} className="text-slate-400 hover:text-red-500 transition-colors"><X size={24} /></button>
         </div>
 
-        {/* Checkbox de Sem Operação */}
         <div className="px-6 pt-4 pb-2">
           <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-[#15171e] dark:hover:bg-gray-800 p-3 rounded-lg border border-slate-200 dark:border-gray-700 w-max transition-colors">
             <input 
@@ -161,8 +144,6 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
 
         <div className="p-6 pt-2 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {FORM_FIELDS.map((field) => {
-            
-            // Lógica do Turno Dinâmico
             let fieldOptions = field.options;
             let isFieldDisabled = field.disabled;
 
@@ -173,9 +154,7 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                   .filter(r => String(r[0]).trim() === String(stationAtual).trim())
                   .map(r => String(r[1]).trim())
                   .filter(t => t); 
-                if (turnosDoHub.length > 0) {
-                  fieldOptions = [...new Set(turnosDoHub)];
-                }
+                if (turnosDoHub.length > 0) fieldOptions = [...new Set(turnosDoHub)];
               } else {
                 fieldOptions = [];
                 isFieldDisabled = true;
@@ -200,9 +179,7 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                     onBlur={() => setFocusedField(null)}
                     className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && !formData[field.idx] ? 'border-red-300 dark:border-red-800/50' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2 text-sm focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
-                    <option value="">
-                      {field.idx === 5 && !formData[4] ? "Selecione a Station..." : "Selecione..."}
-                    </option>
+                    <option value="">{field.idx === 5 && !formData[4] ? "Selecione a Station..." : "Selecione..."}</option>
                     {fieldOptions?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
                 ) : field.type === 'textarea' ? (
@@ -219,25 +196,22 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                   <input 
                     type={field.type} 
                     value={formData[field.idx] ?? ""} 
-                    onChange={(e) => {
-                      let val = e.target.value;
-                      
-                      // 🔥 TRAVA DO CAMPO 11 (Total AT Rot.) PARA 3 DÍGITOS (Máx 999)
-                      if (field.idx === 11 && val.length > 3) {
-                        val = val.slice(0, 3); // Corta tudo depois do 3º número
+                    // 🔥 LÓGICA DE TRAVA FÍSICA PARA O CAMPO 11 (Total AT Rot.)
+                    onInput={(e) => {
+                      if (field.idx === 11 && e.target.value.length > 3) {
+                        e.target.value = e.target.value.slice(0, 3);
                       }
-                      
-                      onChange(field.idx, val);
-                    }} 
+                    }}
+                    onChange={(e) => onChange(field.idx, e.target.value)} 
                     disabled={isFieldDisabled}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    max={field.idx === 11 ? 999 : undefined} // Reforço visual de limite
+                    min="0" // Evita números negativos no seletor
+                    max={field.idx === 11 ? "999" : undefined} // Opcional, para acessibilidade
                     className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && !formData[field.idx] ? 'border-red-300 dark:border-red-800/50' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
                   />
                 )}
 
-                {/* LÓGICA EXCLUSIVA DO AT PISO (Índice 19) */}
                 {field.idx === 19 && (
                   <div className="w-full mt-1">
                     {focusedField === 19 && (
@@ -246,7 +220,6 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                         <span className="leading-tight">AT's NO PISO SÃO *APENAS* AS ROTAS QUE NÃO FORAM EXPEDIDAS NO D-0 E SERÃO EXPEDIDAS NO D+1</span>
                       </div>
                     )}
-
                     {volumeAtPiso > 0 && (
                       <div className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 rounded-md flex items-start gap-2 animate-in fade-in">
                         <input
@@ -283,34 +256,20 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
           </div>
           <div className="flex gap-2 items-center">
             <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400">Cancelar</button>
-            
             <div title={!camposObrigatoriosPreenchidos ? "Preencha Data, Station e Turno" : bloqueiaSalvamento ? "Confirme a regra das AT's no Piso para salvar" : ""}>
-              
               <button 
                 onClick={() => {
-                  if (!camposObrigatoriosPreenchidos) {
-                    alert("Atenção: Os campos Data, Station e Turno são obrigatórios.");
-                    return;
-                  }
-                  if (volumeAtPiso > 0 && !atPisoConfirmado) {
-                    alert("Atenção: Confirme a regra de AT's no Piso marcando a caixinha vermelha.");
-                    return;
-                  }
+                  if (!camposObrigatoriosPreenchidos) { alert("Atenção: Os campos Data, Station e Turno são obrigatórios."); return; }
+                  if (volumeAtPiso > 0 && !atPisoConfirmado) { alert("Atenção: Confirme a regra de AT's no Piso marcando a caixinha vermelha."); return; }
                   onSave();
                 }} 
                 disabled={isSaving} 
                 className={`text-white px-6 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all ${
-                  isSaving 
-                    ? 'bg-slate-400 cursor-wait opacity-70' 
-                    : bloqueiaSalvamento 
-                      ? 'bg-blue-300 cursor-not-allowed opacity-70' 
-                      : 'bg-blue-600 hover:bg-blue-700'
+                  isSaving ? 'bg-slate-400 cursor-wait opacity-70' : bloqueiaSalvamento ? 'bg-blue-300 cursor-not-allowed opacity-70' : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
-                <Save size={18}/> 
-                {isSaving ? "Salvando..." : "Salvar Dados Unificados"}
+                <Save size={18}/> {isSaving ? "Salvando..." : "Salvar Dados Unificados"}
               </button>
-
             </div>
           </div>
         </div>
