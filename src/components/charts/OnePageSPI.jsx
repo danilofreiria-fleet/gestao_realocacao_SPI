@@ -16,7 +16,8 @@ const MAPA_REGIONAL = {
 
 const REGIONAIS_ATIVAS = Array.from(new Set(Object.values(MAPA_REGIONAL))).sort();
 
-export default function OnePageSPI({ rawData, baseData }) {
+// 🔥 RECEBEMOS O firstTripsData AQUI
+export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
   const [expandedReg, setExpandedReg] = useState({});
 
   const normalizar = (t) => String(t || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/lmhub_sp_|hub_sp_|_1/g, "").replace(/\s+/g, '');
@@ -35,7 +36,6 @@ export default function OnePageSPI({ rawData, baseData }) {
     return match ? parseInt(match[0], 10) : -1;
   };
 
-  // 🎯 Lê apenas da Coluna C (índice 2) para não ter erro de misturar com o nome da Station
   const currentWeekNum = useMemo(() => {
     let maxW = 0;
     if (rawData) {
@@ -67,7 +67,6 @@ export default function OnePageSPI({ rawData, baseData }) {
           aggs[regional].hubs[station] = { driversOferta: 0, rotasAtsRot: 0, noShowAtsPiso: 0, rhAtivos: 0, rhDormentes: 0, rhChurn: 0, mediaDisp: 0, firstTrips: 0 };
         }
 
-        // 🔥 VALOR ABSOLUTO AQUI
         const noShowVal = Math.abs(parseNum(row[19])); 
         aggs[regional].driversOferta += parseNum(row[24]);
         aggs[regional].rotasAtsRot += parseNum(row[11]);
@@ -100,33 +99,53 @@ export default function OnePageSPI({ rawData, baseData }) {
           aggs[regional].rhAtivos += ativos;
           aggs[regional].rhChurn += parseNum(row[10]);
           aggs[regional].rhDormentes += parseNum(row[11]);
-          aggs[regional].firstTrips += parseNum(row[13]);
           aggs[regional].hubs[hubKey].rhAtivos = ativos;
           aggs[regional].hubs[hubKey].rhChurn = parseNum(row[10]);
           aggs[regional].hubs[hubKey].rhDormentes = parseNum(row[11]);
-          aggs[regional].hubs[hubKey].firstTrips = parseNum(row[13]);
         }
       });
+    }
+
+    // 🔥 NOVA LÓGICA DE FIRST TRIPS (Busca EXATAMENTE a semana que o OnePage está mostrando)
+    if (firstTripsData && firstTripsData.length > 1) {
+      const headers = firstTripsData[0];
+      // Ex: Formata currentWeekNum (17) para "W-17" para achar a coluna correta
+      const targetWeekStr = `W-${String(currentWeekNum).padStart(2, '0')}`;
+      const targetColIndex = headers.findIndex(h => h === targetWeekStr);
+
+      if (targetColIndex !== -1) {
+        firstTripsData.slice(1).forEach(row => {
+          const station = String(row[0] || "").trim();
+          const regional = MAPA_REGIONAL[station];
+          if (!regional || !aggs[regional]) return;
+
+          const hubKey = Object.keys(aggs[regional].hubs).find(h => normalizar(h) === normalizar(station)) || station;
+          if (!aggs[regional].hubs[hubKey]) return; // Só soma em hubs que tiveram operação na semana
+
+          const qtdFirstTripsSemana = parseNum(row[targetColIndex]);
+          
+          aggs[regional].firstTrips += qtdFirstTripsSemana;
+          aggs[regional].hubs[hubKey].firstTrips += qtdFirstTripsSemana;
+        });
+      }
     }
 
     return REGIONAIS_ATIVAS.map(reg => {
       const r = aggs[reg];
       const hubsArr = Object.keys(r.hubs).sort().map(hName => {
         const h = r.hubs[hName];
-        // 🔥 CORRIGIDO r.rotas para r.rotasAtsRot
         return { name: hName, driversOferta: h.driversOferta, mediaDisp: h.mediaDisp, rotasDisp: h.rotasAtsRot, noShowPct: h.rotasAtsRot > 0 ? (h.noShowAtsPiso / h.rotasAtsRot) * 100 : 0, ativos: h.rhAtivos, dormentes: h.rhDormentes, churn: h.rhChurn, firstTrips: h.firstTrips };
       });
-      // 🔥 CORRIGIDO r.rotas para r.rotasAtsRot
       return { id: reg, ofertaAtual: r.driversOferta, mediaDisp: r.mediaDisp, rotas: r.rotasAtsRot, noShowPct: r.rotasAtsRot > 0 ? (r.noShowAtsPiso / r.rotasAtsRot) * 100 : 0, ativos: r.rhAtivos, dormentes: r.rhDormentes, churn: r.rhChurn, firstTrips: r.firstTrips, hubs: hubsArr };
     });
-  }, [rawData, baseData, currentWeekNum]);
+  }, [rawData, baseData, firstTripsData, currentWeekNum]);
 
   const toggleExpandReg = (id) => setExpandedReg(prev => ({ ...prev, [id]: !prev[id] }));
 
   return (
     <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden">
       <div className="bg-[#113366] text-white text-center py-4 text-xl md:text-2xl font-black tracking-wider flex items-center justify-center gap-2">
-        <Zap className="text-[#EE4D2D]" size={28}/> ONE PAGE OPERATION [W-{currentWeekNum}]
+        <Zap className="text-[#EE4D2D]" size={28}/> ONE PAGE SEMANAL [W-{currentWeekNum}]
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-center text-sm whitespace-nowrap">
@@ -140,7 +159,8 @@ export default function OnePageSPI({ rawData, baseData }) {
               <th className="px-4 py-3 border-l border-white/20">ATIVOS</th>
               <th className="px-4 py-3 text-orange-200">DORMENTES</th>
               <th className="px-4 py-3 text-red-200">CHURN</th>
-              <th className="px-4 py-3 bg-white/10 border-l border-white/20">TOTAL 1ST TRIPS</th>
+              {/* Título adaptado para deixar claro que é só da semana da tabela */}
+              <th className="px-4 py-3 bg-white/10 border-l border-white/20">1ST TRIPS (W)</th>
             </tr>
           </thead>
           <tbody className="font-bold divide-y divide-slate-100 dark:divide-gray-800">
@@ -157,7 +177,7 @@ export default function OnePageSPI({ rawData, baseData }) {
                   <td className="px-4 py-4 border-l">{formatMil(row.ativos)}</td>
                   <td className="px-4 py-4 text-orange-600">{formatMil(row.dormentes)}</td>
                   <td className="px-4 py-4 text-[#D0011B]">{formatMil(row.churn)}</td>
-                  <td className="px-4 py-4 border-l bg-slate-50/50">{formatInt(row.firstTrips)}</td>
+                  <td className="px-4 py-4 border-l bg-slate-50/50 text-[#113366] text-base">{formatInt(row.firstTrips)}</td>
                 </tr>
                 {expandedReg[row.id] && row.hubs.map(hub => (
                   <tr key={hub.name} className="bg-slate-50/50 text-xs text-slate-500">
@@ -169,7 +189,7 @@ export default function OnePageSPI({ rawData, baseData }) {
                     <td className="px-4 py-2 border-l">{formatInt(hub.ativos)}</td>
                     <td className="px-4 py-2">{formatInt(hub.dormentes)}</td>
                     <td className="px-4 py-2">{formatInt(hub.churn)}</td>
-                    <td className="px-4 py-2 font-bold border-l bg-white/5">{formatInt(hub.firstTrips)}</td>
+                    <td className="px-4 py-2 font-bold border-l bg-white/5 text-[#113366]">{formatInt(hub.firstTrips)}</td>
                   </tr>
                 ))}
               </React.Fragment>

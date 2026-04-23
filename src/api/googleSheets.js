@@ -556,3 +556,19 @@ export const verificarAcessoGestor = async (emailUsuario, token) => {
     return false; 
   }
 };
+
+
+export const getFirstTripsData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/FIRST_TRIPS!A:Z`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    const data = await resp.json();
+    return data.values || [];
+  } catch (error) {
+    console.error("Erro ao buscar First Trips:", error);
+    return [];
+  }
+};

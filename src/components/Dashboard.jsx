@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-// 🔥 IMPORTANTE: Certifique-se de que TODAS as funções de puxar dados estejam aqui!
-import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso } from '../api/googleSheets';
+import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso, getFirstTripsData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
 import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown } from 'lucide-react';
 
@@ -30,6 +29,7 @@ export default function Dashboard() {
   const [dashData, setDashData] = useState([]);
   const [baseData, setBaseData] = useState([]);
   const [atPisoData, setAtPisoData] = useState([]);
+  const [firstTripsData, setFirstTripsData] = useState([]);
   
   const [filtros, setFiltros] = useState({
     regional: '', station: '', turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
@@ -49,20 +49,22 @@ export default function Dashboard() {
   }, []);
 
   // 🔥 CARREGAMENTO CENTRALIZADO ULTRA RÁPIDO
+// 🔥 CARREGAMENTO CENTRALIZADO ULTRA RÁPIDO
   useEffect(() => {
     const carregarDados = async () => {
       setLoading(true);
       try {
-        const [dataConsol, dataRH, dataBase, dataPiso] = await Promise.all([
+        // 🔥 A CORREÇÃO ESTÁ AQUI: Colocamos o dataFirstTrips dentro das chaves [ ]
+        const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips] = await Promise.all([
           getConsolidadoData(),
           getDadosRHDashboard(),
           getBaseReferenceData(),
-          getDadosAtPiso()
+          getDadosAtPiso(),
+          getFirstTripsData() // Nova busca simultânea
         ]);
         
         if (dataConsol && dataConsol.length > 1) setRawData(dataConsol.slice(1));
         
-        // Formatação do dashData (RH) que estava no Visualizations antes
         if (dataRH) {
           const getTime = (dateStr) => {
             if (!dateStr) return 0;
@@ -84,12 +86,16 @@ export default function Dashboard() {
         if (dataBase) setBaseData(dataBase);
         if (dataPiso) setAtPisoData(dataPiso);
         
+        // 🔥 Salvando o dado de First Trips no estado!
+        if (dataFirstTrips) setFirstTripsData(dataFirstTrips);
+        
       } catch (error) { 
         console.error("Erro ao carregar Dashboard", error); 
       } finally { 
         setLoading(false); 
       }
     };
+    
     carregarDados();
   }, []);
 
@@ -266,7 +272,9 @@ export default function Dashboard() {
           rawData={rawData} 
           dashData={dashData} 
           atPisoData={atPisoData} 
-          baseData={baseData} 
+          baseData={baseData}
+          firstTripsData={firstTripsData} 
+          filtrosGlobais={filtros}
         />
       </div>
 

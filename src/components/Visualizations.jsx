@@ -1,26 +1,27 @@
 import React from 'react';
 import OnePageSPI from './charts/OnePageSPI';
-import OnePageMensal from './charts/OnePageMensal'; // 🚀 Novo Import
+import OnePageMensal from './charts/OnePageMensal'; 
 import AtPisoDiarioTable from './charts/AtPisoDiarioTable';
 import FleetGapCharts from './charts/FleetGapCharts';
 import CapFleetCharts from './charts/CapFleetCharts';
 import VolumeDispatchCharts from './charts/VolumeDispatchCharts';
 import AtPisoCharts from './charts/AtPisoCharts';
+import FirstTripsChart from './charts/FirstTripsChart';
 
-const Visualizations = ({ data, rawData, dashData, atPisoData, baseData }) => {
+// Recebemos o firstTripsData aqui
+const Visualizations = ({ data, rawData, dashData, atPisoData, baseData, firstTripsData, filtrosGlobais }) => {
   return (
     <div className="space-y-10 pb-10">
       
-      {/* Visão Semanal (W-17) */}
-      <OnePageSPI rawData={rawData} baseData={baseData} />
-
-      {/* 🚀 Visão Mensal Acumulada (Abril / 2026) */}
+      <OnePageSPI rawData={rawData} baseData={baseData} firstTripsData={firstTripsData} />
       <OnePageMensal rawData={rawData} baseData={baseData} />
-      
       <AtPisoDiarioTable data={data} rawData={rawData} atPisoData={atPisoData} />
       
-      {/* Fleet Gap consumindo a aba BASE */}
-      <FleetGapCharts baseData={baseData} />
+      {/* Fleet Gap e First Trips coladinhos */}
+      <div className="flex flex-col space-y-6">
+        <FleetGapCharts baseData={baseData} filtrosGlobais={filtrosGlobais} />
+        <FirstTripsChart firstTripsData={firstTripsData} filtrosGlobais={filtrosGlobais} />
+      </div>
 
       {data && data.length > 0 ? (
         <>
@@ -33,7 +34,6 @@ const Visualizations = ({ data, rawData, dashData, atPisoData, baseData }) => {
           Nenhum registro operacional para os filtros selecionados.
         </div>
       )}
-
     </div>
   );
 };
