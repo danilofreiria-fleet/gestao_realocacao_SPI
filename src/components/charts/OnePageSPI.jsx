@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Zap, ChevronDown, ChevronRight } from 'lucide-react';
+import { Zap, ChevronDown, ChevronRight, CalendarDays, Calendar, Filter } from 'lucide-react';
 
 const MAPA_REGIONAL = {
   "LM Hub_SP_Campinas_São Martinho": "SPI1", "LM Hub_SP_Leme": "SPI1", "LM Hub_SP_Limeira_Campo Belo": "SPI1",
@@ -16,8 +16,8 @@ const MAPA_REGIONAL = {
 
 const REGIONAIS_ATIVAS = Array.from(new Set(Object.values(MAPA_REGIONAL))).sort();
 
-// 🔥 RECEBEMOS O firstTripsData AQUI
-export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
+export default function OnePageSPI({ rawData, data, baseData, firstTripsData, filtrosGlobais = {} }) {
+  const [viewMode, setViewMode] = useState('semana'); // 'semana' | 'mes' | 'manual'
   const [expandedReg, setExpandedReg] = useState({});
 
   const normalizar = (t) => String(t || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/lmhub_sp_|hub_sp_|_1/g, "").replace(/\s+/g, '');
@@ -36,6 +36,21 @@ export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
     return match ? parseInt(match[0], 10) : -1;
   };
 
+  const extrairMesAno = (val) => {
+    if (!val) return "";
+    let s = String(val).trim().split('T')[0].split(' ')[0];
+    if (s.includes('/')) {
+      const parts = s.split('/');
+      return `${parts[1]}/${parts[2]}`;
+    }
+    if (s.includes('-')) {
+      const parts = s.split('-');
+      return `${parts[1]}/${parts[0]}`; 
+    }
+    return "";
+  };
+
+  // 🔥 DETECTA A SEMANA E O MÊS ATUAL BASEADO NOS DADOS
   const currentWeekNum = useMemo(() => {
     let maxW = 0;
     if (rawData) {
@@ -47,6 +62,14 @@ export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
     return maxW || 17;
   }, [rawData]);
 
+  const mesAnoAlvo = useMemo(() => {
+    const agora = new Date();
+    const m = String(agora.getMonth() + 1).padStart(2, '0');
+    const a = agora.getFullYear();
+    return { label: `${m}/${a}`, monthNum: m };
+  }, []);
+
+  // 🔥 MOTOR DE PROCESSAMENTO UNIFICADO
   const onePageData = useMemo(() => {
     const aggs = {};
     
@@ -54,11 +77,19 @@ export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
       aggs[r] = { driversOferta: 0, rotasAtsRot: 0, noShowAtsPiso: 0, rhAtivos: 0, rhDormentes: 0, rhChurn: 0, mediaDisp: 0, firstTrips: 0, hubs: {} };
     });
 
-    if (rawData) {
-      rawData.forEach(row => {
-        const w = extractWeekNumber(row[2]);
-        if (w !== currentWeekNum) return;
+    // 1. SELECIONA O DATASET BASEADO NO MODO
+    let datasetToProcess = [];
+    if (viewMode === 'semana') {
+      datasetToProcess = rawData.filter(row => extractWeekNumber(row[2]) === currentWeekNum);
+    } else if (viewMode === 'mes') {
+      datasetToProcess = rawData.filter(row => extrairMesAno(row[3]) === mesAnoAlvo.label);
+    } else if (viewMode === 'manual') {
+      datasetToProcess = data; // Usa os dados já filtrados do Dashboard
+    }
 
+    // 2. AGREGAÇÃO OPERACIONAL
+    if (datasetToProcess && datasetToProcess.length > 0) {
+      datasetToProcess.forEach(row => {
         const station = String(row[4] || "").trim();
         const regional = MAPA_REGIONAL[station];
         if (!regional) return;
@@ -78,6 +109,7 @@ export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
       });
     }
 
+    // 3. AGREGAÇÃO DE RH (Mantém a Base Constante)
     if (baseData) {
       const rhVistos = new Set();
       baseData.forEach(row => {
@@ -106,12 +138,19 @@ export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
       });
     }
 
-    // 🔥 NOVA LÓGICA DE FIRST TRIPS (Busca EXATAMENTE a semana que o OnePage está mostrando)
+    // 4. AGREGAÇÃO DE FIRST TRIPS (Busca Exata da Matriz)
     if (firstTripsData && firstTripsData.length > 1) {
       const headers = firstTripsData[0];
-      // Ex: Formata currentWeekNum (17) para "W-17" para achar a coluna correta
-      const targetWeekStr = `W-${String(currentWeekNum).padStart(2, '0')}`;
-      const targetColIndex = headers.findIndex(h => h === targetWeekStr);
+      let targetColIndex = -1;
+
+      if (viewMode === 'semana') {
+        targetColIndex = headers.findIndex(h => h === `W-${String(currentWeekNum).padStart(2, '0')}`);
+      } else if (viewMode === 'mes') {
+        targetColIndex = headers.findIndex(h => h === `M-${mesAnoAlvo.monthNum}`);
+      } else if (viewMode === 'manual') {
+        if (filtrosGlobais.semana) targetColIndex = headers.findIndex(h => h === filtrosGlobais.semana);
+        else if (filtrosGlobais.mes) targetColIndex = headers.findIndex(h => h === `M-${filtrosGlobais.mes}`);
+      }
 
       if (targetColIndex !== -1) {
         firstTripsData.slice(1).forEach(row => {
@@ -120,16 +159,16 @@ export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
           if (!regional || !aggs[regional]) return;
 
           const hubKey = Object.keys(aggs[regional].hubs).find(h => normalizar(h) === normalizar(station)) || station;
-          if (!aggs[regional].hubs[hubKey]) return; // Só soma em hubs que tiveram operação na semana
+          if (!aggs[regional].hubs[hubKey]) return;
 
-          const qtdFirstTripsSemana = parseNum(row[targetColIndex]);
-          
-          aggs[regional].firstTrips += qtdFirstTripsSemana;
-          aggs[regional].hubs[hubKey].firstTrips += qtdFirstTripsSemana;
+          const qtdFirstTrips = parseNum(row[targetColIndex]);
+          aggs[regional].firstTrips += qtdFirstTrips;
+          aggs[regional].hubs[hubKey].firstTrips += qtdFirstTrips;
         });
       }
     }
 
+    // FORMATAÇÃO DO ARRAY FINAL
     return REGIONAIS_ATIVAS.map(reg => {
       const r = aggs[reg];
       const hubsArr = Object.keys(r.hubs).sort().map(hName => {
@@ -138,29 +177,69 @@ export default function OnePageSPI({ rawData, baseData, firstTripsData }) {
       });
       return { id: reg, ofertaAtual: r.driversOferta, mediaDisp: r.mediaDisp, rotas: r.rotasAtsRot, noShowPct: r.rotasAtsRot > 0 ? (r.noShowAtsPiso / r.rotasAtsRot) * 100 : 0, ativos: r.rhAtivos, dormentes: r.rhDormentes, churn: r.rhChurn, firstTrips: r.firstTrips, hubs: hubsArr };
     });
-  }, [rawData, baseData, firstTripsData, currentWeekNum]);
+  }, [rawData, data, baseData, firstTripsData, viewMode, currentWeekNum, mesAnoAlvo, filtrosGlobais]);
 
   const toggleExpandReg = (id) => setExpandedReg(prev => ({ ...prev, [id]: !prev[id] }));
 
+  // 🔥 VARIÁVEIS DINÂMICAS DE TÍTULO
+  let bannerTitle = "";
+  let colSuffix = "";
+  if (viewMode === 'semana') {
+    bannerTitle = `ONE PAGE SEMANAL [W-${currentWeekNum}]`;
+    colSuffix = "(W)";
+  } else if (viewMode === 'mes') {
+    bannerTitle = `ONE PAGE MENSAL [${mesAnoAlvo.label}]`;
+    colSuffix = "(M)";
+  } else {
+    bannerTitle = `ONE PAGE [VISÃO CUSTOMIZADA]`;
+    colSuffix = "(F)";
+  }
+
   return (
     <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden">
-      <div className="bg-[#113366] text-white text-center py-4 text-xl md:text-2xl font-black tracking-wider flex items-center justify-center gap-2">
-        <Zap className="text-[#EE4D2D]" size={28}/> ONE PAGE SEMANAL [W-{currentWeekNum}]
+      
+      {/* HEADER COM TOGGLE */}
+      <div className="bg-[#113366] py-4 px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="text-white text-xl md:text-2xl font-black tracking-wider flex items-center gap-2 uppercase">
+          <Zap className="text-[#EE4D2D]" size={28}/> {bannerTitle}
+        </div>
+        
+        <div className="flex bg-white/10 p-1 rounded-lg">
+          <button 
+            onClick={() => setViewMode('semana')} 
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'semana' ? 'bg-white text-[#113366] shadow' : 'text-white/70 hover:text-white'}`}
+          >
+            <CalendarDays size={14}/> Semana
+          </button>
+          <button 
+            onClick={() => setViewMode('mes')} 
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'mes' ? 'bg-white text-[#113366] shadow' : 'text-white/70 hover:text-white'}`}
+          >
+            <Calendar size={14}/> Mês
+          </button>
+          <button 
+            onClick={() => setViewMode('manual')} 
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'manual' ? 'bg-white text-[#113366] shadow' : 'text-white/70 hover:text-white'}`}
+          >
+            <Filter size={14}/> Manual (Filtros)
+          </button>
+        </div>
       </div>
+
+      {/* TABELA */}
       <div className="overflow-x-auto">
         <table className="w-full text-center text-sm whitespace-nowrap">
           <thead className="bg-[#EE4D2D] text-white text-[10px] uppercase font-bold tracking-widest">
             <tr>
               <th className="px-4 py-3 text-left">SUBREGIONAL</th>
-              <th className="px-4 py-3">OFERTA (W)</th>
+              <th className="px-4 py-3">OFERTA {colSuffix}</th>
               <th className="px-4 py-3 bg-white/10">MÉDIA DISP.</th>
-              <th className="px-4 py-3">ROTAS (W)</th>
+              <th className="px-4 py-3">ROTAS {colSuffix}</th>
               <th className="px-4 py-3">NO SHOW</th>
               <th className="px-4 py-3 border-l border-white/20">ATIVOS</th>
               <th className="px-4 py-3 text-orange-200">DORMENTES</th>
               <th className="px-4 py-3 text-red-200">CHURN</th>
-              {/* Título adaptado para deixar claro que é só da semana da tabela */}
-              <th className="px-4 py-3 bg-white/10 border-l border-white/20">1ST TRIPS (W)</th>
+              <th className="px-4 py-3 bg-white/10 border-l border-white/20">1ST TRIPS {colSuffix}</th>
             </tr>
           </thead>
           <tbody className="font-bold divide-y divide-slate-100 dark:divide-gray-800">

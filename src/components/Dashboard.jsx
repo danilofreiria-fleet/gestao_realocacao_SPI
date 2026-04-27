@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso, getFirstTripsData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
-import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown } from 'lucide-react';
+import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, MessageSquareWarning } from 'lucide-react';
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [isTurnoMenuOpen, setIsTurnoMenuOpen] = useState(false);
   const turnoMenuRef = useRef(null);
 
+const [activeCategory, setActiveCategory] = useState('resumo');
   useEffect(() => {
     function handleClickOutside(event) {
       if (turnoMenuRef.current && !turnoMenuRef.current.contains(event.target)) {
@@ -48,13 +49,12 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 🔥 CARREGAMENTO CENTRALIZADO ULTRA RÁPIDO
-// 🔥 CARREGAMENTO CENTRALIZADO ULTRA RÁPIDO
+
   useEffect(() => {
     const carregarDados = async () => {
       setLoading(true);
       try {
-        // 🔥 A CORREÇÃO ESTÁ AQUI: Colocamos o dataFirstTrips dentro das chaves [ ]
+        //dataFirstTrips dentro das chaves [ ]
         const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips] = await Promise.all([
           getConsolidadoData(),
           getDadosRHDashboard(),
@@ -108,6 +108,16 @@ export default function Dashboard() {
     return new Date(dateStr);
   };
 
+const CATEGORIAS = [
+    { id: 'resumo', label: 'Resumo (Overview)', icon: <LayoutDashboard size={16}/> },
+    { id: 'onePage', label: 'One Page', icon: <Zap size={16}/> },
+    { id: 'frota', label: 'Gestão de Frota', icon: <Users size={16}/> },
+    { id: 'volumes', label: 'Volumes & SPR', icon: <BarChart3 size={16}/> },
+    { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
+    { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },
+    { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> }, // 🔥 ABA NOVA
+  ];
+  
   const opcoes = useMemo(() => {
     const regionais = new Set(), stations = new Set(), semanas = new Set(), turnos = new Set();
     rawData.forEach(row => {
@@ -194,6 +204,7 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col h-full space-y-6 print:space-y-0 print:block">
       
+      {/* 1. CARD DE FILTROS GLOBAIS */}
       <div className="relative bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 shrink-0 print:hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
@@ -265,15 +276,34 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* 2. MENU DE NAVEGAÇÃO DO DASHBOARD */}
+      <div className="flex bg-white dark:bg-[#1f232d] p-1.5 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 overflow-x-auto custom-scrollbar shrink-0 print:hidden">
+        {CATEGORIAS.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black uppercase transition-all whitespace-nowrap ${
+              activeCategory === cat.id 
+                ? 'bg-[#113366] text-white shadow-md' 
+                : 'text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 hover:text-[#EE4D2D]'
+            }`}
+          >
+            {cat.icon}
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 3. RENDERIZAÇÃO CONDICIONAL DOS GRÁFICOS */}
       <div className="flex-1 overflow-y-auto print:overflow-visible">
-        {/* Passando todos os dados limpos para a renderização */}
         <Visualizations 
+          activeCategory={activeCategory}
           data={dadosFiltrados} 
           rawData={rawData} 
           dashData={dashData} 
           atPisoData={atPisoData} 
-          baseData={baseData}
-          firstTripsData={firstTripsData} 
+          baseData={baseData} 
+          firstTripsData={firstTripsData}
           filtrosGlobais={filtros}
         />
       </div>

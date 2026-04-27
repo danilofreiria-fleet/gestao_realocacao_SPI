@@ -1,39 +1,107 @@
 import React from 'react';
+import OverviewTable from './charts/OverviewTable';
 import OnePageSPI from './charts/OnePageSPI';
-import OnePageMensal from './charts/OnePageMensal'; 
 import AtPisoDiarioTable from './charts/AtPisoDiarioTable';
 import FleetGapCharts from './charts/FleetGapCharts';
-import CapFleetCharts from './charts/CapFleetCharts';
-import VolumeDispatchCharts from './charts/VolumeDispatchCharts';
-import AtPisoCharts from './charts/AtPisoCharts';
 import FirstTripsChart from './charts/FirstTripsChart';
+import VolumeDispatchCharts from './charts/VolumeDispatchCharts';
+import CapFleetCharts from './charts/CapFleetCharts';
+import AtPisoCharts from './charts/AtPisoCharts';
+import AttentionPointsFeed from './charts/AttentionPointsFeed';
+import { PackageOpen } from 'lucide-react'; 
 
-// Recebemos o firstTripsData aqui
-const Visualizations = ({ data, rawData, dashData, atPisoData, baseData, firstTripsData, filtrosGlobais }) => {
+const Visualizations = ({ 
+  activeCategory, 
+  data, 
+  rawData, 
+  dashData, 
+  atPisoData, 
+  baseData, 
+  firstTripsData, 
+  filtrosGlobais 
+}) => {
+
   return (
-    <div className="space-y-10 pb-10">
+    <div className="space-y-6">
       
-      <OnePageSPI rawData={rawData} baseData={baseData} firstTripsData={firstTripsData} />
-      <OnePageMensal rawData={rawData} baseData={baseData} />
-      <AtPisoDiarioTable data={data} rawData={rawData} atPisoData={atPisoData} />
-      
-      {/* Fleet Gap e First Trips coladinhos */}
-      <div className="flex flex-col space-y-6">
-        <FleetGapCharts baseData={baseData} filtrosGlobais={filtrosGlobais} />
-        <FirstTripsChart firstTripsData={firstTripsData} filtrosGlobais={filtrosGlobais} />
-      </div>
-
-      {data && data.length > 0 ? (
-        <>
-          <CapFleetCharts data={data} />
-          <VolumeDispatchCharts data={data} />
-          <AtPisoCharts data={data} />
-        </>
-      ) : (
-        <div className="p-8 text-center font-bold text-slate-400 bg-white dark:bg-[#1f232d] rounded-2xl border border-slate-200 dark:border-gray-800">
-          Nenhum registro operacional para os filtros selecionados.
+      {/* 1. RESUMO (Apenas o Overview) */}
+      {activeCategory === 'resumo' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <OverviewTable 
+            data={data} 
+            rawData={rawData} 
+            baseData={baseData} 
+            firstTripsData={firstTripsData} 
+            filtrosGlobais={filtrosGlobais} 
+          />
         </div>
       )}
+
+      {/* 2. ONE PAGE (OnePage Unificado + Tabela de Piso) */}
+      {activeCategory === 'onePage' && (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <OnePageSPI 
+            data={data} 
+            rawData={rawData} 
+            baseData={baseData} 
+            firstTripsData={firstTripsData} 
+            filtrosGlobais={filtrosGlobais} 
+          />
+          <AtPisoDiarioTable 
+            data={data} 
+            rawData={rawData} 
+            atPisoData={atPisoData} 
+            filtrosGlobais={filtrosGlobais} 
+          />
+        </div>
+      )}
+
+      {/* 3. GESTÃO DE FROTA */}
+      {activeCategory === 'frota' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <FleetGapCharts baseData={baseData} filtrosGlobais={filtrosGlobais} />
+          <FirstTripsChart firstTripsData={firstTripsData} filtrosGlobais={filtrosGlobais} />
+        </div>
+      )}
+
+      {/* 4. VOLUMES & SPR */}
+      {activeCategory === 'volumes' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <VolumeDispatchCharts data={data} />
+        </div>
+      )}
+
+      {/* 5. GARGALOS & CAP */}
+      {activeCategory === 'gargalos' && (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <CapFleetCharts data={data} />
+           <AtPisoCharts data={data} />
+        </div>
+      )}
+
+      {/* 6. PACOTES E REALOCAÇÃO */}
+      {activeCategory === 'pacotes' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center justify-center py-20 bg-white dark:bg-[#1f232d] rounded-2xl border border-dashed border-slate-300 dark:border-gray-700">
+           <PackageOpen size={64} className="text-slate-300 dark:text-gray-600 mb-4" />
+           <h3 className="text-xl font-black text-[#113366] dark:text-white uppercase tracking-wider">Módulo em Construção</h3>
+           <p className="text-slate-500 font-bold mt-2">Os novos gráficos de Pacotes e Realocação SOP serão implementados aqui.</p>
+        </div>
+      )}
+
+      {/* 7. LOGBOOK DE OCORRÊNCIAS (Aba Exclusiva) */}
+      {activeCategory === 'ocorrencias' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <AttentionPointsFeed rawData={rawData} filtrosGlobais={filtrosGlobais} />
+        </div>
+      )}
+
+      {/* MENSAGEM SE NÃO HOUVER DADOS */}
+      {(!data || data.length === 0) && !['resumo', 'onePage', 'frota', 'pacotes'].includes(activeCategory) && (
+        <div className="p-12 text-center font-bold text-slate-400 bg-white dark:bg-[#1f232d] rounded-2xl border border-dashed border-slate-300 dark:border-gray-700">
+          Nenhum registro operacional encontrado para os filtros selecionados nesta categoria.
+        </div>
+      )}
+
     </div>
   );
 };

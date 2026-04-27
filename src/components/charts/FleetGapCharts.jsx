@@ -136,7 +136,10 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
 
   const renderChartCard = (id, title, subtitle, data, content) => {
     const isFullscreen = fullscreenChart === id;
-    const dynamicHeight = Math.max(300, data.length * 35);
+    
+    // 🔥 MAGIA DO ESPAÇAMENTO: Aumentamos o multiplicador de 35 para 60!
+    // Isso cria espaço vertical suficiente no container para as barras respirarem.
+    const dynamicHeight = Math.max(300, data.length * 60);
 
     const cardContent = (
       <div className={`bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative transition-all ${isFullscreen ? 'w-full h-full p-8' : 'h-[500px] p-6'}`}>

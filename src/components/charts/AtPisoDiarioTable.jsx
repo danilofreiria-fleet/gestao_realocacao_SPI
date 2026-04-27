@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronRight, Calendar, Filter } from 'lucide-react';
 
-export default function AtPisoDiarioTable({ data, rawData, atPisoData }) {
+export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGlobais = {} }) {
+  const [viewMode, setViewMode] = useState('semana'); // 'semana' | 'mes' | 'manual'
   const [expandedReg, setExpandedReg] = useState({});
 
   const parseNum = (val) => {
@@ -12,31 +13,101 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData }) {
 
   const formatInt = (val) => new Intl.NumberFormat('pt-BR').format(Math.round(val || 0));
 
+  // 🔥 EXTRATOR MATEMÁTICO BLINDADO
   const extractWeekNumber = (str) => {
     const match = String(str || "").trim().match(/^W[- ]?0*(\d+)$/i);
     return match ? parseInt(match[1], 10) : -1;
   };
 
-  const targetWeekNum = useMemo(() => {
-    const weeksInData = new Set();
-    data.forEach(r => {
-      const w = extractWeekNumber(r[2]);
-      if (w > 0) weeksInData.add(w);
-    });
+  const extrairMesAno = (val) => {
+    if (!val) return "";
+    let s = String(val).trim().split('T')[0].split(' ')[0];
+    if (s.includes('/')) {
+      const parts = s.split('/');
+      return `${parts[1]}/${parts[2]}`;
+    }
+    if (s.includes('-')) {
+      const parts = s.split('-');
+      return `${parts[1]}/${parts[0]}`; 
+    }
+    return "";
+  };
 
-    if (weeksInData.size === 1) return Array.from(weeksInData)[0];
-
-    let maxWeek = 0;
-    rawData.forEach(r => {
+  const currentWeekNum = useMemo(() => {
+    let maxW = 0;
+    const rawSeguro = rawData || [];
+    rawSeguro.forEach(r => {
       const w = extractWeekNumber(r[2]);
-      if (w > maxWeek) maxWeek = w;
+      if (w > maxW) maxW = w;
     });
-    return maxWeek > 0 ? maxWeek : 13;
-  }, [data, rawData]);
+    return maxW || 17;
+  }, [rawData]);
+
+  const mesAnoAlvo = useMemo(() => {
+    const agora = new Date();
+    const m = String(agora.getMonth() + 1).padStart(2, '0');
+    const a = agora.getFullYear();
+    return { label: `${m}/${a}`, monthNum: m };
+  }, []);
+
+  // 🔥 MAPEAMENTO: Quais semanas pertencem a cada mês
+  const monthToWeeksMap = useMemo(() => {
+    const mapStr = {}; 
+    const mapNum = {}; 
+    const rawSeguro = rawData || [];
+    
+    rawSeguro.forEach(r => {
+      const mesAno = extrairMesAno(r[3]);
+      const w = extractWeekNumber(r[2]);
+      if (mesAno && w > 0) {
+        if (!mapStr[mesAno]) mapStr[mesAno] = new Set();
+        mapStr[mesAno].add(w);
+
+        const mesNum = mesAno.split('/')[0];
+        if (!mapNum[mesNum]) mapNum[mesNum] = new Set();
+        mapNum[mesNum].add(w);
+      }
+    });
+    return { str: mapStr, num: mapNum };
+  }, [rawData]);
 
   const tableData = useMemo(() => {
     if (!atPisoData || atPisoData.length === 0) return [];
 
+    let datasetToProcess = [];
+    const rawSeguro = rawData || []; 
+    const dataSeguro = data || [];
+
+    // 1. LÓGICA DE DETETIVE PARA ACHAR AS SEMANAS ALVO
+    let targetWeeks = [];
+
+    if (viewMode === 'semana') {
+      datasetToProcess = rawSeguro.filter(row => extractWeekNumber(row[2]) === currentWeekNum);
+      targetWeeks = [currentWeekNum];
+    } else if (viewMode === 'mes') {
+      datasetToProcess = rawSeguro.filter(row => extrairMesAno(row[3]) === mesAnoAlvo.label);
+      targetWeeks = Array.from(monthToWeeksMap.str[mesAnoAlvo.label] || []);
+    } else if (viewMode === 'manual') {
+      datasetToProcess = dataSeguro;
+      
+      const weeksInData = new Set();
+      dataSeguro.forEach(r => {
+        const w = extractWeekNumber(r[2]);
+        if (w > 0) weeksInData.add(w);
+      });
+
+      if (filtrosGlobais?.semana) {
+        targetWeeks = [extractWeekNumber(filtrosGlobais.semana)];
+      } else if (filtrosGlobais?.mes) {
+        targetWeeks = Array.from(monthToWeeksMap.num[filtrosGlobais.mes] || []);
+      } else if (weeksInData.size === 1) {
+        targetWeeks = [Array.from(weeksInData)[0]]; // Usa a inteligência do seu código antigo!
+      } else {
+        targetWeeks = [currentWeekNum]; 
+      }
+    }
+
+    // 2. ENCONTRA A LINHA DE CABEÇALHO COM PRECISÃO
     let headerRowIdx = -1;
     for (let i = 0; i < Math.min(20, atPisoData.length); i++) {
       if (atPisoData[i] && String(atPisoData[i][4]).trim() === "Abbreviation") {
@@ -45,26 +116,45 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData }) {
       }
     }
     if (headerRowIdx === -1) return [];
-
+    
     const headerRow = atPisoData[headerRowIdx];
 
-    let weekColIdx = -1;
-    for (let j = 0; j < headerRow.length; j++) {
-      if (extractWeekNumber(headerRow[j]) === targetWeekNum) {
-        weekColIdx = j;
-        break;
+    // 3. COLETA TODAS AS SEMANAS DISPONÍVEIS NA PLANILHA
+    const availableWeeks = [];
+    headerRow.forEach((h, idx) => {
+      const w = extractWeekNumber(h);
+      if (w > 0) availableWeeks.push({ week: w, colIdx: idx });
+    });
+
+    if (availableWeeks.length === 0) return [];
+    const maxAvailableWeek = Math.max(...availableWeeks.map(x => x.week));
+
+    // 4. CRUZAMENTO (O que eu quero vs O que a planilha tem)
+    const weekColIndices = [];
+    targetWeeks.forEach(tw => {
+      const match = availableWeeks.find(aw => aw.week === tw);
+      if (match) weekColIndices.push(match.colIdx);
+    });
+
+    // 🛡️ MODO ANTI-FALHA: Se a planilha estiver atrasada e não tiver a semana atual, puxa a última disponível!
+    if (weekColIndices.length === 0) {
+      const fallbackCol = availableWeeks.find(aw => aw.week === maxAvailableWeek);
+      if (fallbackCol) {
+        weekColIndices.push(fallbackCol.colIdx);
+        targetWeeks = [fallbackCol.week]; // Atualiza para o título não mentir
       }
     }
-    if (weekColIdx === -1) return [];
 
+    // 5. PROCESSAMENTO DE HUBS ATIVOS
     const validHubs = new Set();
-    data.forEach(r => {
+    datasetToProcess.forEach(r => {
       const hub = String(r[4] || "").trim();
       if (hub) validHubs.add(hub);
     });
 
     const aggs = {};
 
+    // 6. AGREGAÇÃO E SOMA DE DIAS (Se for Mês, ele soma tudo!)
     for (let i = headerRowIdx + 1; i < atPisoData.length; i++) {
       const row = atPisoData[i];
       const rawHubName = String(row[4] || "").trim();
@@ -72,17 +162,20 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData }) {
 
       if (validHubs.size > 0 && !validHubs.has(rawHubName)) continue;
 
-      // 🔥 CORREÇÃO AQUI: Agora pega o índice 3 (Coluna D) que contém SPI1, SPI2, etc.
       const subregional = String(row[3] || "Sem Subregional").trim();
       
-      const total = parseNum(row[weekColIdx]);
-      const seg = parseNum(row[weekColIdx + 1]);
-      const ter = parseNum(row[weekColIdx + 2]);
-      const qua = parseNum(row[weekColIdx + 3]);
-      const qui = parseNum(row[weekColIdx + 4]);
-      const sex = parseNum(row[weekColIdx + 5]);
-      const sab = parseNum(row[weekColIdx + 6]);
-      const dom = parseNum(row[weekColIdx + 7]);
+      let total = 0, seg = 0, ter = 0, qua = 0, qui = 0, sex = 0, sab = 0, dom = 0;
+
+      weekColIndices.forEach(colIdx => {
+        total += parseNum(row[colIdx]);
+        seg += parseNum(row[colIdx + 1]);
+        ter += parseNum(row[colIdx + 2]);
+        qua += parseNum(row[colIdx + 3]);
+        qui += parseNum(row[colIdx + 4]);
+        sex += parseNum(row[colIdx + 5]);
+        sab += parseNum(row[colIdx + 6]);
+        dom += parseNum(row[colIdx + 7]);
+      });
 
       if (!aggs[subregional]) {
         aggs[subregional] = { regional: subregional, total: 0, seg: 0, ter: 0, qua: 0, qui: 0, sex: 0, sab: 0, dom: 0, hubs: [] };
@@ -99,70 +192,110 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData }) {
     }
 
     return Object.values(aggs).sort((a, b) => a.regional.localeCompare(b.regional));
-  }, [atPisoData, targetWeekNum, data]);
+  }, [atPisoData, data, rawData, viewMode, currentWeekNum, mesAnoAlvo, filtrosGlobais, monthToWeeksMap]);
 
   const toggleExpandReg = (id) => setExpandedReg(prev => ({ ...prev, [id]: !prev[id] }));
 
-  if (tableData.length === 0) return null;
-
-  const displayWeek = `W-${String(targetWeekNum).padStart(2, '0')}`;
+  let bannerTitle = "";
+  let colSuffix = "";
+  if (viewMode === 'semana') {
+    bannerTitle = `AT NO PISO DIÁRIO [W-${currentWeekNum}]`;
+    colSuffix = "(W)";
+  } else if (viewMode === 'mes') {
+    bannerTitle = `AT NO PISO DIÁRIO [${mesAnoAlvo.label}]`;
+    colSuffix = "(Mês Acum.)";
+  } else {
+    bannerTitle = `AT NO PISO DIÁRIO [CUSTOMIZADO]`;
+    colSuffix = "(Filtros)";
+  }
 
   return (
-    <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#EE4D2D] overflow-hidden pt-2">
-      <div className="bg-[#113366] text-white text-center py-4 text-xl md:text-2xl font-black tracking-wider flex items-center justify-center gap-2">
-        <CalendarDays className="text-[#EE4D2D]" size={28}/> AT NO PISO DIÁRIO - DATASUITE [{displayWeek}]
+    <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden mt-6">
+      
+      {/* HEADER COM TOGGLE */}
+      <div className="bg-[#113366] py-4 px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="text-white text-xl md:text-2xl font-black tracking-wider flex items-center gap-2 uppercase">
+          <CalendarDays className="text-[#EE4D2D]" size={28}/> {bannerTitle}
+        </div>
+        
+        <div className="flex bg-white/10 p-1 rounded-lg">
+          <button 
+            onClick={() => setViewMode('semana')} 
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'semana' ? 'bg-white text-[#113366] shadow' : 'text-white/70 hover:text-white'}`}
+          >
+            <CalendarDays size={14}/> Semana
+          </button>
+          <button 
+            onClick={() => setViewMode('mes')} 
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'mes' ? 'bg-white text-[#113366] shadow' : 'text-white/70 hover:text-white'}`}
+          >
+            <Calendar size={14}/> Mês
+          </button>
+          <button 
+            onClick={() => setViewMode('manual')} 
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'manual' ? 'bg-white text-[#113366] shadow' : 'text-white/70 hover:text-white'}`}
+          >
+            <Filter size={14}/> Manual (Filtros)
+          </button>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-center text-sm whitespace-nowrap">
-          <thead className="bg-[#EE4D2D] text-white text-[10px] uppercase font-bold tracking-widest">
-            <tr>
-              <th className="px-4 py-3 text-left">SUBREGIONAL / HUB</th>
-              <th className="px-4 py-3">TOTAL SEMANA</th>
-              <th className="px-4 py-3 text-slate-100">SEG</th>
-              <th className="px-4 py-3 text-slate-100">TER</th>
-              <th className="px-4 py-3 text-slate-100">QUA</th>
-              <th className="px-4 py-3 text-slate-100">QUI</th>
-              <th className="px-4 py-3 text-slate-100">SEX</th>
-              <th className="px-4 py-3 text-slate-100">SÁB</th>
-              <th className="px-4 py-3 text-slate-100">DOM</th>
-            </tr>
-          </thead>
+      {tableData.length === 0 ? (
+        <div className="p-12 text-center font-bold text-slate-400 bg-slate-50 dark:bg-[#15171e]">
+          Nenhum dado de AT Piso encontrado para a {viewMode === 'manual' ? 'seleção atual' : viewMode} no DataSuite. Verifique se as semanas estão preenchidas na aba "AT_PISO".
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-center text-sm whitespace-nowrap">
+            <thead className="bg-[#EE4D2D] text-white text-[10px] uppercase font-bold tracking-widest">
+              <tr>
+                <th className="px-4 py-3 text-left">SUBREGIONAL / HUB</th>
+                <th className="px-4 py-3">TOTAL {colSuffix}</th>
+                <th className="px-4 py-3 text-slate-100">SEG</th>
+                <th className="px-4 py-3 text-slate-100">TER</th>
+                <th className="px-4 py-3 text-slate-100">QUA</th>
+                <th className="px-4 py-3 text-slate-100">QUI</th>
+                <th className="px-4 py-3 text-slate-100">SEX</th>
+                <th className="px-4 py-3 text-slate-100">SÁB</th>
+                <th className="px-4 py-3 text-slate-100">DOM</th>
+              </tr>
+            </thead>
 
-          <tbody className="font-bold divide-y divide-slate-100 dark:divide-gray-800">
-            {tableData.map(row => (
-              <React.Fragment key={row.regional}>
-                <tr onClick={() => toggleExpandReg(row.regional)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-800/30 transition-colors">
-                  <td className="px-4 py-4 text-left flex items-center gap-2 text-[#113366] dark:text-blue-400 text-lg">
-                    {expandedReg[row.regional] ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {row.regional}
-                  </td>
-                  <td className="px-4 py-4 text-[#EE4D2D] text-lg">{formatInt(row.total)}</td>
-                  <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.seg)}</td>
-                  <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.ter)}</td>
-                  <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.qua)}</td>
-                  <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.qui)}</td>
-                  <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.sex)}</td>
-                  <td className="px-4 py-4 text-slate-800 dark:text-gray-100">{formatInt(row.sab)}</td>
-                  <td className="px-4 py-4 text-slate-800 dark:text-gray-100">{formatInt(row.dom)}</td>
-                </tr>
-                {expandedReg[row.regional] && row.hubs.map(hub => (
-                  <tr key={hub.name} className="bg-slate-50/50 dark:bg-[#15171e] text-xs text-slate-500 dark:text-gray-400">
-                    <td className="px-4 py-2 text-left pl-10 font-medium">↳ {hub.name}</td>
-                    <td className="px-4 py-2 text-[#EE4D2D] font-bold">{formatInt(hub.total)}</td>
-                    <td className="px-4 py-2">{formatInt(hub.seg)}</td>
-                    <td className="px-4 py-2">{formatInt(hub.ter)}</td>
-                    <td className="px-4 py-2">{formatInt(hub.qua)}</td>
-                    <td className="px-4 py-2">{formatInt(hub.qui)}</td>
-                    <td className="px-4 py-2">{formatInt(hub.sex)}</td>
-                    <td className="px-4 py-2 font-bold">{formatInt(hub.sab)}</td>
-                    <td className="px-4 py-2 font-bold">{formatInt(hub.dom)}</td>
+            <tbody className="font-bold divide-y divide-slate-100 dark:divide-gray-800">
+              {tableData.map(row => (
+                <React.Fragment key={row.regional}>
+                  <tr onClick={() => toggleExpandReg(row.regional)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-800/30 transition-colors">
+                    <td className="px-4 py-4 text-left flex items-center gap-2 text-[#113366] dark:text-blue-400 text-lg">
+                      {expandedReg[row.regional] ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {row.regional}
+                    </td>
+                    <td className="px-4 py-4 text-[#EE4D2D] text-lg">{formatInt(row.total)}</td>
+                    <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.seg)}</td>
+                    <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.ter)}</td>
+                    <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.qua)}</td>
+                    <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.qui)}</td>
+                    <td className="px-4 py-4 text-slate-600 dark:text-gray-300">{formatInt(row.sex)}</td>
+                    <td className="px-4 py-4 text-slate-800 dark:text-gray-100">{formatInt(row.sab)}</td>
+                    <td className="px-4 py-4 text-slate-800 dark:text-gray-100">{formatInt(row.dom)}</td>
                   </tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  {expandedReg[row.regional] && row.hubs.map(hub => (
+                    <tr key={hub.name} className="bg-slate-50/50 dark:bg-[#15171e] text-xs text-slate-500 dark:text-gray-400">
+                      <td className="px-4 py-2 text-left pl-10 font-medium">↳ {hub.name}</td>
+                      <td className="px-4 py-2 text-[#EE4D2D] font-bold">{formatInt(hub.total)}</td>
+                      <td className="px-4 py-2">{formatInt(hub.seg)}</td>
+                      <td className="px-4 py-2">{formatInt(hub.ter)}</td>
+                      <td className="px-4 py-2">{formatInt(hub.qua)}</td>
+                      <td className="px-4 py-2">{formatInt(hub.qui)}</td>
+                      <td className="px-4 py-2">{formatInt(hub.sex)}</td>
+                      <td className="px-4 py-2 font-bold">{formatInt(hub.sab)}</td>
+                      <td className="px-4 py-2 font-bold">{formatInt(hub.dom)}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
