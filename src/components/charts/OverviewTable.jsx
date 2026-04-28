@@ -5,7 +5,7 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
   const [viewMode, setViewMode] = useState('semana'); 
   const hojeStr = new Date().toLocaleDateString('en-CA'); 
   
-  // 🔥 NOVO: Controle de Data Inicial e Final
+
   const [customStartDate, setCustomStartDate] = useState(hojeStr);
   const [customEndDate, setCustomEndDate] = useState(hojeStr);
   
@@ -95,7 +95,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
     } else if (viewMode === 'mes') {
       opSet = (rawData || []).filter(r => extrairMesAno(r[3]) === actualMonthData.label);
     } else if (viewMode === 'customizado') {
-      // 🔥 NOVO: Filtro por Range de Datas
       opSet = (rawData || []).filter(r => {
         const rowDateStr = extrairDataLocal(r[3]);
         return rowDateStr >= customStartDate && rowDateStr <= customEndDate;

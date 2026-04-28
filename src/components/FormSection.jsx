@@ -82,12 +82,17 @@ export const FORM_FIELDS = [
 const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDelete, onClose, isSaving, isDeleting, baseData }) => {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+  
   const [atPisoConfirmado, setAtPisoConfirmado] = useState(false);
+  // 🔥 NOVO ESTADO: Confirmação de Vol Exp > Vol Proc
+  const [volExpMaiorConfirmado, setVolExpMaiorConfirmado] = useState(false);
+  
   const [semOperacao, setSemOperacao] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setAtPisoConfirmado(false);
+      setVolExpMaiorConfirmado(false); // Reseta a validação ao abrir
       setSemOperacao(false);
     }
   }, [isOpen]);
@@ -111,9 +116,20 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
     }
   };
 
+  // 🔥 VALIDAÇÕES DERIVADAS
   const volumeAtPiso = Number(formData[19]) || 0;
+  
+  const volProc = Number(formData[13]) || 0;
+  const volExp = Number(formData[14]) || 0;
+  const isVolExpMaior = volExp > volProc;
+
   const camposObrigatoriosPreenchidos = Boolean(formData[3] && formData[4] && formData[5]);
-  const bloqueiaSalvamento = (volumeAtPiso > 0 && !atPisoConfirmado) || !camposObrigatoriosPreenchidos;
+  
+  // Atualizado para bloquear também se o Exp > Proc não for confirmado
+  const bloqueiaSalvamento = 
+    (volumeAtPiso > 0 && !atPisoConfirmado) || 
+    (isVolExpMaior && !volExpMaiorConfirmado) || 
+    !camposObrigatoriosPreenchidos;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -196,7 +212,6 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                   <input 
                     type={field.type} 
                     value={formData[field.idx] ?? ""} 
-                    // 🔥 LÓGICA DE TRAVA FÍSICA PARA O CAMPO 11 (Total AT Rot.)
                     onInput={(e) => {
                       if (field.idx === 11 && e.target.value.length > 3) {
                         e.target.value = e.target.value.slice(0, 3);
@@ -206,12 +221,39 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                     disabled={isFieldDisabled}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    min="0" // Evita números negativos no seletor
-                    max={field.idx === 11 ? "999" : undefined} // Opcional, para acessibilidade
+                    min="0" 
+                    max={field.idx === 11 ? "999" : undefined} 
                     className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && !formData[field.idx] ? 'border-red-300 dark:border-red-800/50' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
                   />
                 )}
 
+                {/* 🔥 VALIDAÇÃO: VOLUME EXPEDIDO > VOLUME PROCESSADO (idx 14) */}
+                {field.idx === 14 && (
+                  <div className="w-full mt-1">
+                    {focusedField === 14 && isVolExpMaior && (
+                      <div className="absolute z-10 w-[250px] bg-orange-600 text-white text-[10px] font-black p-2.5 rounded shadow-xl flex gap-2 items-start animate-in fade-in zoom-in top-full mt-1 left-0 border border-orange-700">
+                        <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                        <span className="leading-tight">Atenção: Normalmente o Vol. Expedido não deve ultrapassar o Vol. Processado. Verifique os dados inseridos!</span>
+                      </div>
+                    )}
+                    {isVolExpMaior && (
+                      <div className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 p-2 rounded-md flex items-start gap-2 animate-in fade-in">
+                        <input
+                          type="checkbox"
+                          id="confirm-volexp-maior"
+                          checked={volExpMaiorConfirmado}
+                          onChange={(e) => setVolExpMaiorConfirmado(e.target.checked)}
+                          className="mt-0.5 shrink-0 w-4 h-4 text-orange-600 rounded cursor-pointer"
+                        />
+                        <label htmlFor="confirm-volexp-maior" className="text-[9px] font-bold text-orange-700 dark:text-orange-400 leading-tight cursor-pointer uppercase">
+                          Confirmo que o Volume Expedido é superior ao Volume Processado.
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* VALIDAÇÃO: AT PISO (idx 19) */}
                 {field.idx === 19 && (
                   <div className="w-full mt-1">
                     {focusedField === 19 && (
@@ -256,11 +298,16 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
           </div>
           <div className="flex gap-2 items-center">
             <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400">Cancelar</button>
-            <div title={!camposObrigatoriosPreenchidos ? "Preencha Data, Station e Turno" : bloqueiaSalvamento ? "Confirme a regra das AT's no Piso para salvar" : ""}>
+            <div title={
+              !camposObrigatoriosPreenchidos ? "Preencha Data, Station e Turno" : 
+              (isVolExpMaior && !volExpMaiorConfirmado) ? "Confirme a divergência de Volume Expedido para salvar" :
+              (volumeAtPiso > 0 && !atPisoConfirmado) ? "Confirme a regra das AT's no Piso para salvar" : ""
+            }>
               <button 
                 onClick={() => {
                   if (!camposObrigatoriosPreenchidos) { alert("Atenção: Os campos Data, Station e Turno são obrigatórios."); return; }
                   if (volumeAtPiso > 0 && !atPisoConfirmado) { alert("Atenção: Confirme a regra de AT's no Piso marcando a caixinha vermelha."); return; }
+                  if (isVolExpMaior && !volExpMaiorConfirmado) { alert("Atenção: Confirme a divergência de Volume Expedido marcando a caixinha laranja."); return; }
                   onSave();
                 }} 
                 disabled={isSaving} 
