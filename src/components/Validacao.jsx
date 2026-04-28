@@ -397,7 +397,7 @@ const relatorioValidacao = useMemo(() => {
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label>
             <select value={filtroRegional} onChange={(e) => {setFiltroRegional(e.target.value); setHubsSelecionados([]);}} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm h-[42px] cursor-pointer">
               <option value="">Todas</option>
-              {['SPI1','SPI2','SPI3','SPI4','SPI5'].map(r => <option key={r} value={r}>{r}</option>)}
+              {['SPI1','SPI2','SPI3','SPO1','SPO2','SPO3'].map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
 

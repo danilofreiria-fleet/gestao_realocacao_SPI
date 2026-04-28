@@ -14,13 +14,11 @@ export default function AttentionPointsFeed({ rawData, filtrosGlobais = {} }) {
 
   // 🔥 SUPER FILTRO DE RUÍDO: Inteligência para ignorar as preguiças de preenchimento
   const isRuido = (textoOriginal) => {
-    // 1. Remove acentos, transforma em minúscula e tira pontuações (pontos, barras, traços)
     let t = String(textoOriginal || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    t = t.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim(); // "s/ pontos." vira "s pontos"
+    t = t.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim(); 
 
     if (t.length < 3 && t !== "ok" && t !== "na") return true; 
 
-    // 2. Lista de correspondências exatas após a limpeza
     const ignorar = [
       "ok", "na", "nda", "nada", "zerado", "tudo certo", "tudo ok", "normal", "padrao",
       "sem pontos de atencao", "sem ponto de atencao", "s pontos de atencao", "s ponto de atencao", 
@@ -32,44 +30,43 @@ export default function AttentionPointsFeed({ rawData, filtrosGlobais = {} }) {
     ];
 
     if (ignorar.includes(t)) return true;
-
-    // 3. Captura frases que começam com "sem pontos..." mesmo se tiver algo a mais esquecido
     if (t.startsWith("sem pontos de") || t.startsWith("sem ocorrencia")) return true;
 
-    return false; // Se sobreviveu a tudo isso, é um relato real!
+    return false; 
   };
 
   const feedData = useMemo(() => {
     if (!rawData || rawData.length === 0) return [];
 
+    // 🔥 Puxamos os filtros e garantimos que os múltiplos sejam Arrays (mesmo padrão do Dashboard)
+    const { regional = [], station = [], turno = [], semana = "", mes = "", dataInicio, dataFim } = filtrosGlobais;
+
     let filtrados = rawData.filter(row => {
-      // Ajuste o índice 41 se a coluna AP não for a 41 (A=0, B=1... AP=41)
-      const texto = row[41]; 
+      const texto = row[41]; // Coluna AP
       
-      // Passa pela guilhotina do filtro de ruído
       if (isRuido(texto)) return false;
 
-      // APLICA OS FILTROS GLOBAIS DE DATA/STATION/TURNO
-      const dObj = parseDate(row[3]);
-      let pass = true;
-      if (filtrosGlobais.regional && row[1] !== filtrosGlobais.regional) pass = false;
-      if (filtrosGlobais.station && row[4] !== filtrosGlobais.station) pass = false;
-      if (filtrosGlobais.semana && row[2] !== filtrosGlobais.semana) pass = false;
-      if (filtrosGlobais.turno && filtrosGlobais.turno.length > 0 && !filtrosGlobais.turno.includes(row[5])) pass = false;
+      // 🔥 CORREÇÃO: Aplica os Filtros Múltiplos (Arrays)
+      if (regional.length > 0 && !regional.includes(row[1])) return false;
+      if (station.length > 0 && !station.includes(row[4])) return false;
+      if (turno.length > 0 && !turno.includes(row[5])) return false;
       
+      if (semana && row[2] !== semana) return false;
+      
+      const dObj = parseDate(row[3]);
       if (dObj && !isNaN(dObj)) {
-        if (filtrosGlobais.mes && String(dObj.getMonth() + 1).padStart(2, '0') !== filtrosGlobais.mes) pass = false;
-        if (filtrosGlobais.dataInicio || filtrosGlobais.dataFim) {
-          const start = filtrosGlobais.dataInicio ? new Date(filtrosGlobais.dataInicio + 'T00:00:00') : null;
-          const end = filtrosGlobais.dataFim ? new Date(filtrosGlobais.dataFim + 'T23:59:59') : null;
-          if (start && dObj < start) pass = false;
-          if (end && dObj > end) pass = false;
+        if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) return false;
+        
+        if (dataInicio || dataFim) {
+          const start = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
+          const end = dataFim ? new Date(dataFim + 'T23:59:59') : null;
+          if (start && dObj < start) return false;
+          if (end && dObj > end) return false;
         }
       }
-      return pass;
+      return true;
     });
 
-    // FORMATA O OBJETO E ORDENA DA DATA MAIS RECENTE PARA A MAIS ANTIGA
     return filtrados.map((row, idx) => ({
       id: idx,
       regional: row[1],
@@ -78,7 +75,7 @@ export default function AttentionPointsFeed({ rawData, filtrosGlobais = {} }) {
       dataObj: parseDate(row[3]) || new Date(0),
       station: String(row[4]).replace('LM Hub_SP_', ''),
       turno: row[5],
-      texto: String(row[41] || "").trim() // Mantém o texto original para exibição
+      texto: String(row[41] || "").trim() 
     })).sort((a, b) => b.dataObj - a.dataObj);
 
   }, [rawData, filtrosGlobais]);
@@ -95,7 +92,6 @@ export default function AttentionPointsFeed({ rawData, filtrosGlobais = {} }) {
   return (
     <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden mt-6 flex flex-col max-h-[800px] min-h-[500px]">
       
-      {/* HEADER DO FEED */}
       <div className="bg-[#113366] py-4 px-6 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-3">
            <MessageSquareWarning className="text-[#EE4D2D]" size={28} />
@@ -109,7 +105,6 @@ export default function AttentionPointsFeed({ rawData, filtrosGlobais = {} }) {
         </span>
       </div>
 
-      {/* CORPO DO FEED */}
       <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/50 dark:bg-[#15171e]">
         {feedData.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400 opacity-70 mt-10">
@@ -124,7 +119,6 @@ export default function AttentionPointsFeed({ rawData, filtrosGlobais = {} }) {
             {feedData.map(item => (
               <div key={item.id} className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
                 
-                {/* Barra lateral vermelha de destaque */}
                 <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#EE4D2D] opacity-60 group-hover:opacity-100 transition-opacity"></div>
 
                 <div className="flex justify-between items-start mb-4">
@@ -142,7 +136,6 @@ export default function AttentionPointsFeed({ rawData, filtrosGlobais = {} }) {
                   <span className="flex items-center gap-1.5"><Clock size={14} /> Região: {item.regional}</span>
                 </div>
 
-                {/* Texto da Ocorrência preservando quebras de linha e emojis */}
                 <div className="text-sm text-slate-700 dark:text-gray-300 font-medium leading-relaxed whitespace-pre-wrap pl-2">
                   {item.texto}
                 </div>

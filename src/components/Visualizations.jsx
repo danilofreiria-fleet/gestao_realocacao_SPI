@@ -8,6 +8,8 @@ import VolumeDispatchCharts from './charts/VolumeDispatchCharts';
 import CapFleetCharts from './charts/CapFleetCharts';
 import AtPisoCharts from './charts/AtPisoCharts';
 import AttentionPointsFeed from './charts/AttentionPointsFeed';
+import StatusEvolutionChart from './charts/StatusEvolutionChart';
+import FleetHealthCharts from './charts/FleetHealthCharts';
 import { PackageOpen } from 'lucide-react'; 
 
 const Visualizations = ({ 
@@ -18,6 +20,8 @@ const Visualizations = ({
   atPisoData, 
   baseData, 
   firstTripsData, 
+  historicoFrotaData,
+  ofertasModalData,
   filtrosGlobais 
 }) => {
 
@@ -61,6 +65,19 @@ const Visualizations = ({
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <FleetGapCharts baseData={baseData} filtrosGlobais={filtrosGlobais} />
           <FirstTripsChart firstTripsData={firstTripsData} filtrosGlobais={filtrosGlobais} />
+          <StatusEvolutionChart historicoFrotaData={historicoFrotaData} filtrosGlobais={filtrosGlobais} />
+        </div>
+      )}
+
+      {/* 3.1. SAÚDE DE FROTA */}
+      {activeCategory === 'saude' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <FleetHealthCharts 
+              rawData={rawData} 
+              baseData={baseData} 
+              ofertasModalData={ofertasModalData} 
+              filtrosGlobais={filtrosGlobais} 
+           />
         </div>
       )}
 

@@ -4,9 +4,12 @@ import { LayoutDashboard, CalendarDays, Calendar, Filter, Clock, ArrowUpDown, Se
 export default function OverviewTable({ data, rawData, baseData, firstTripsData, filtrosGlobais = {} }) {
   const [viewMode, setViewMode] = useState('semana'); 
   const hojeStr = new Date().toLocaleDateString('en-CA'); 
-  const [customDate, setCustomDate] = useState(hojeStr);
+  
+  // 🔥 NOVO: Controle de Data Inicial e Final
+  const [customStartDate, setCustomStartDate] = useState(hojeStr);
+  const [customEndDate, setCustomEndDate] = useState(hojeStr);
+  
   const [localTurno, setLocalTurno] = useState('ALL');
-
   const [stationFilter, setStationFilter] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'station', direction: 'asc' });
 
@@ -87,13 +90,30 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
     const aggs = {};
     
     let opSet = [];
-    if (viewMode === 'semana') opSet = (rawData || []).filter(r => extractWeekNumber(r[2]) === actualWeekNum);
-    else if (viewMode === 'mes') opSet = (rawData || []).filter(r => extrairMesAno(r[3]) === actualMonthData.label);
-    else if (viewMode === 'customizado') opSet = (rawData || []).filter(r => extrairDataLocal(r[3]) === customDate);
+    if (viewMode === 'semana') {
+      opSet = (rawData || []).filter(r => extractWeekNumber(r[2]) === actualWeekNum);
+    } else if (viewMode === 'mes') {
+      opSet = (rawData || []).filter(r => extrairMesAno(r[3]) === actualMonthData.label);
+    } else if (viewMode === 'customizado') {
+      // 🔥 NOVO: Filtro por Range de Datas
+      opSet = (rawData || []).filter(r => {
+        const rowDateStr = extrairDataLocal(r[3]);
+        return rowDateStr >= customStartDate && rowDateStr <= customEndDate;
+      });
+    }
 
-    if (filtrosGlobais?.regional) opSet = opSet.filter(r => r[1] === filtrosGlobais.regional);
-    if (filtrosGlobais?.station) opSet = opSet.filter(r => r[4] === filtrosGlobais.station);
-    if (localTurno !== 'ALL') opSet = opSet.filter(r => String(r[5] || "").trim().toUpperCase() === localTurno);
+    if (filtrosGlobais?.regional && filtrosGlobais.regional.length > 0) {
+      opSet = opSet.filter(r => filtrosGlobais.regional.includes(r[1]));
+    }
+    if (filtrosGlobais?.station && filtrosGlobais.station.length > 0) {
+      opSet = opSet.filter(r => filtrosGlobais.station.includes(r[4]));
+    }
+    if (filtrosGlobais?.turno && filtrosGlobais.turno.length > 0) {
+      opSet = opSet.filter(r => filtrosGlobais.turno.includes(String(r[5] || "").trim().toUpperCase()));
+    }
+    if (localTurno !== 'ALL') {
+      opSet = opSet.filter(r => String(r[5] || "").trim().toUpperCase() === localTurno);
+    }
 
     opSet.forEach(row => {
       const station = String(row[4] || "").trim();
@@ -110,7 +130,7 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       aggs[station].noShowAbs += Math.abs(parseNum(row[19])); 
       aggs[station].ofertaTotal += parseNum(row[24]); 
       aggs[station].capFleetUtil += parseNum(row[45]); 
-      aggs[station].count++;
+      aggs[station].count++; 
     });
 
     const firstTripsMap = {};
@@ -146,13 +166,17 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
         atRot: d.atRot, atCarr: d.atCarr,
         noShowAbs: d.noShowAbs,
         noShowPct: d.atRot > 0 ? (d.noShowAbs / d.atRot) * 100 : 0,
-        // 🔥 SPR transformado em Inteiro Arredondado
+        
         sprRot: d.atRot > 0 ? Math.round(d.volRot / d.atRot) : 0,
         sprExp: d.atCarr > 0 ? Math.round(d.volExp / d.atCarr) : 0,
-        ofertas: d.ofertaTotal,
+        
+        ofertas: d.count > 0 ? Math.round(d.ofertaTotal / d.count) : 0,
+        
         firstTrips: viewMode === 'customizado' ? 0 : (firstTripsMap[fullName] || 0),
         dorm: b.dorm, risco: b.risco, churn: b.churn, novos: b.novos, capHub: b.capHub,
-        util: d.count > 0 ? d.capFleetUtil / d.count : 0
+        
+        // 🔥 CORREÇÃO: Fleet Util agora tira a média simples dos turnos na Station
+        util: d.count > 0 ? (d.capFleetUtil / d.count) : 0
       };
     }).filter(row => row.station.toLowerCase().includes(stationFilter.toLowerCase()));
 
@@ -168,7 +192,7 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
     }
 
     return finalArray;
-  }, [rawData, data, baseData, firstTripsData, viewMode, actualWeekNum, actualMonthData, customDate, localTurno, filtrosGlobais, stationFilter, sortConfig]);
+  }, [rawData, data, baseData, firstTripsData, viewMode, actualWeekNum, actualMonthData, customStartDate, customEndDate, localTurno, filtrosGlobais, stationFilter, sortConfig]);
 
   const totals = useMemo(() => {
     return overviewData.reduce((acc, row) => {
@@ -177,15 +201,22 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       acc.ofertas += row.ofertas; if (typeof row.firstTrips === 'number') acc.firstTrips += row.firstTrips;
       acc.dorm += row.dorm; acc.risco += row.risco; acc.churn += row.churn;
       acc.novos += row.novos; acc.capHub += row.capHub;
+      
+      acc.utilTotal += (row.util || 0);
+      acc.rowCount += 1;
+      
       return acc;
-    }, { volRot: 0, volProc: 0, volExp: 0, atRot: 0, atCarr: 0, noShowAbs: 0, ofertas: 0, firstTrips: 0, dorm: 0, risco: 0, churn: 0, novos: 0, capHub: 0 });
+    }, { volRot: 0, volProc: 0, volExp: 0, atRot: 0, atCarr: 0, noShowAbs: 0, ofertas: 0, firstTrips: 0, dorm: 0, risco: 0, churn: 0, novos: 0, capHub: 0, utilTotal: 0, rowCount: 0 });
   }, [overviewData]);
 
   const showTotals = viewMode === 'semana' || viewMode === 'mes';
 
+  // 🔥 CORREÇÃO: Cor sólida (Vermelho Escuro) no hover/active, removendo a transparência "black/10"
   const SortHeader = ({ label, sortKey, className = "" }) => (
-    <th className={`px-3 py-3 cursor-pointer hover:bg-white/10 transition-colors group ${className}`} onClick={() => handleSort(sortKey)}>
-      <div className="flex items-center justify-center gap-1">{label} <ArrowUpDown size={12} className={`opacity-30 group-hover:opacity-100 ${sortConfig.key === sortKey ? 'text-yellow-300 opacity-100' : ''}`} /></div>
+    <th className={`px-3 py-3 cursor-pointer select-none bg-[#EE4D2D] hover:bg-[#D0011B] active:bg-[#a81c12] transition-colors group ${className}`} onClick={() => handleSort(sortKey)}>
+      <div className="flex items-center justify-center gap-1 text-white">
+        {label} <ArrowUpDown size={12} className={`opacity-30 group-hover:opacity-100 ${sortConfig.key === sortKey ? 'text-yellow-300 opacity-100' : ''}`} />
+      </div>
     </th>
   );
 
@@ -205,22 +236,28 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
             <button onClick={() => setViewMode('mes')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'mes' ? 'bg-white text-[#113366]' : 'text-white/70 hover:text-white'}`}><Calendar size={14}/> Mês</button>
             <button onClick={() => setViewMode('customizado')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'customizado' ? 'bg-white text-[#113366]' : 'text-white/70 hover:text-white'}`}><Filter size={14}/> Manual (Filtros)</button>
           </div>
+          
+          {/* 🔥 NOVO: Inputs de Data Inicial e Final lado a lado */}
           {viewMode === 'customizado' && (
-            <input type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} className="bg-white text-[#113366] border-none rounded-lg p-1.5 text-xs font-bold shadow-sm outline-none cursor-pointer" />
+            <div className="flex items-center gap-2 bg-white/10 p-1 rounded-lg">
+              <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="bg-white text-[#113366] border-none rounded p-1 text-xs font-bold shadow-sm outline-none cursor-pointer" />
+              <span className="text-white text-xs font-bold">até</span>
+              <input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="bg-white text-[#113366] border-none rounded p-1 text-xs font-bold shadow-sm outline-none cursor-pointer" />
+            </div>
           )}
         </div>
       </div>
 
       <div className="overflow-x-auto overflow-y-auto max-h-[700px] custom-scrollbar">
         <table className="w-full text-center text-[10px] xl:text-[11px] font-bold whitespace-nowrap">
-          <thead className="bg-[#EE4D2D] text-white uppercase tracking-widest sticky top-0 z-50 shadow-md">
+          <thead className="text-white uppercase tracking-widest sticky top-0 z-50 shadow-md">
             <tr>
-              <th className="px-3 py-3 text-left sticky left-0 z-[60] bg-[#EE4D2D] min-w-[220px]">
+              <th className="px-3 py-3 text-left sticky left-0 z-[60] bg-[#EE4D2D] hover:bg-[#D0011B] active:bg-[#a81c12] transition-colors min-w-[220px] select-none">
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between cursor-pointer" onClick={() => handleSort('station')}>Station <ArrowUpDown size={12} className={sortConfig.key === 'station' ? 'text-yellow-300' : 'opacity-30'} /></div>
                   <div className="relative mt-1">
                     <Search size={10} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#EE4D2D]" />
-                    <input type="text" placeholder="Filtrar Station..." value={stationFilter} onChange={(e) => setStationFilter(e.target.value)} className="w-full bg-white/90 text-[#113366] text-[9px] py-1 pl-6 pr-2 rounded border-none outline-none" />
+                    <input type="text" placeholder="Filtrar Station..." value={stationFilter} onChange={(e) => setStationFilter(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full bg-white/90 text-[#113366] text-[9px] py-1 pl-6 pr-2 rounded border-none outline-none" />
                   </div>
                 </div>
               </th>
@@ -257,7 +294,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
                 <td className="px-3 py-3 text-[#D0011B]">{formatPct(row.noShowPct)}</td>
                 <td className="px-3 py-3 text-green-600 border-l border-slate-100 dark:border-gray-800">{row.firstTrips === 0 && viewMode === 'customizado' ? '-' : row.firstTrips}</td>
                 
-                {/* 🔥 SPR Exibido como Inteiro */}
                 <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.sprRot)}</td>
                 <td className="px-3 py-3">{formatInt(row.sprExp)}</td>
                 
@@ -285,7 +321,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
                 <td className="px-3 py-4 text-red-300">{totals.atRot > 0 ? formatPct((totals.noShowAbs / totals.atRot) * 100) : '0,00%'}</td>
                 <td className="px-3 py-4 text-green-300 border-l border-white/20">{totals.firstTrips}</td>
                 
-                {/* Médias de SPR no Rodapé também em Inteiro */}
                 <td className="px-3 py-4 border-l border-white/20">{totals.atRot > 0 ? formatInt(totals.volRot / totals.atRot) : '-'}</td>
                 <td className="px-3 py-4">{totals.atCarr > 0 ? formatInt(totals.volExp / totals.atCarr) : '-'}</td>
                 
@@ -295,7 +330,8 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
                 <td className="px-3 py-4 text-red-300">{totals.churn}</td>
                 <td className="px-3 py-4 text-blue-300">{totals.novos}</td>
                 <td className="px-3 py-4 border-l border-white/20">{formatInt(totals.capHub)}</td>
-                <td className="px-3 py-4">-</td>
+                
+                <td className="px-3 py-4">{totals.rowCount > 0 ? formatPct(totals.utilTotal / totals.rowCount) : '-'}</td>
               </tr>
             </tfoot>
           )}

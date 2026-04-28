@@ -38,7 +38,8 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
   const [fullscreenChart, setFullscreenChart] = useState(null);
   const [localTurno, setLocalTurno] = useState('ALL'); 
 
-  const { regional = "", station = "", turno = [] } = filtrosGlobais;
+  // 🔥 CORREÇÃO 1: Os filtros agora nascem como Arrays vazios
+  const { regional = [], station = [], turno = [] } = filtrosGlobais;
 
   const parseNum = (val) => {
     let s = String(val || '0').trim();
@@ -55,7 +56,7 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
       const turnoLinha = String(row[1] || "").trim().toUpperCase(); 
       
       if (stationFullName && turnoLinha) {
-        const cap = parseNum(row[2]);           
+        const cap = parseNum(row[2]);          
         const sprRef = parseNum(row[6]);        
         const ativos = parseNum(row[9]);        
         const disponiveis = parseNum(row[12]);  
@@ -92,18 +93,22 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
   const filteredChartData = useMemo(() => {
     return chartData.filter(item => {
       const regDoItem = MAPA_REGIONAL[item.fullName] || "";
+      
       let matchTurno = true;
       if (localTurno !== 'ALL') {
         matchTurno = item.turno === localTurno;
       } else if (turno && turno.length > 0) {
         matchTurno = turno.includes(item.turno);
       }
-      const matchRegional = !regional || regional === 'ALL' || regDoItem === regional;
-      const matchStation = !station || station === 'ALL' || item.fullName === station; 
+
+      // 🔥 CORREÇÃO 2: Lendo os Arrays de Filtro Múltiplo
+      const matchRegional = regional.length === 0 || regional.includes(regDoItem);
+      const matchStation = station.length === 0 || station.includes(item.fullName); 
+      
       return matchTurno && matchRegional && matchStation;
     }).map(item => ({
       ...item,
-      displayName: station ? item.turno : item.name
+      displayName: station.length > 0 ? item.turno : item.name // Mostra o turno se filtrou station específica
     }));
   }, [chartData, regional, station, turno, localTurno]);
 
@@ -137,8 +142,7 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
   const renderChartCard = (id, title, subtitle, data, content) => {
     const isFullscreen = fullscreenChart === id;
     
-    // 🔥 MAGIA DO ESPAÇAMENTO: Aumentamos o multiplicador de 35 para 60!
-    // Isso cria espaço vertical suficiente no container para as barras respirarem.
+    // Altura dinâmica para acomodar as barras
     const dynamicHeight = Math.max(300, data.length * 60);
 
     const cardContent = (

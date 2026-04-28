@@ -572,3 +572,32 @@ export const getFirstTripsData = async () => {
     return [];
   }
 };
+
+
+// =================================================================
+// GET HISTORICO DE FROTA
+// =================================================================
+export const getHistoricoFrotaData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+    
+    // Busca os dados da nova aba HISTORICO_FROTA (A até I)
+    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/HISTORICO_FROTA!A:i`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    
+    if (!resp.ok) {
+        console.warn("Aba HISTORICO_FROTA ausente ou vazia.");
+        return [];
+    }
+
+    const data = await resp.json();
+    return data.values || [];
+  } catch (error) {
+    console.error("Erro ao buscar Histórico de Frota:", error);
+    return [];
+  }
+};
+
+

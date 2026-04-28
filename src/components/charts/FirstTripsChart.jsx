@@ -34,14 +34,23 @@ const MAPA_REGIONAL = {
   "LM Hub_SP_Presidente Prudente": "SPO3"
 };
 
+// 🔥 DICIONÁRIO DE TRADUÇÃO DOS MESES
+const TRADUZ_MES = {
+  'M-01': 'JAN', 'M-02': 'FEV', 'M-03': 'MAR', 'M-04': 'ABR',
+  'M-05': 'MAI', 'M-06': 'JUN', 'M-07': 'JUL', 'M-08': 'AGO',
+  'M-09': 'SET', 'M-10': 'OUT', 'M-11': 'NOV', 'M-12': 'DEZ'
+};
+
 export default function FirstTripsChart({ firstTripsData, filtrosGlobais = {} }) {
   const [periodo, setPeriodo] = useState('semana');
-  const { regional = "", station = "", semana = "", mes = "" } = filtrosGlobais;
+  
+  const { regional = [], station = [], semana = "", mes = "" } = filtrosGlobais;
 
   const chartData = useMemo(() => {
     if (!firstTripsData || firstTripsData.length === 0) return [];
     const headers = firstTripsData[0];
     
+    // 1. Filtra as colunas e ordena por "M-01", "M-02" para garantir ordem cronológica
     const colunasPeriodo = headers.map((h, i) => ({ nome: String(h), idx: i }))
       .filter(h => {
         if (periodo === 'semana') {
@@ -59,12 +68,13 @@ export default function FirstTripsChart({ firstTripsData, filtrosGlobais = {} })
     const acumulado = {};
     colunasPeriodo.forEach(col => acumulado[col.nome] = 0);
 
+    // 2. Acumula os dados
     firstTripsData.slice(1).forEach(row => {
       const hub = String(row[0] || "");
       const regDoHub = MAPA_REGIONAL[hub] || "";
 
-      if (regional && regional !== "ALL" && regDoHub !== regional) return;
-      if (station && station !== "ALL" && hub !== station) return;
+      if (regional.length > 0 && !regional.includes(regDoHub)) return;
+      if (station.length > 0 && !station.includes(hub)) return;
 
       colunasPeriodo.forEach(col => {
         acumulado[col.nome] += Number(row[col.idx]) || 0;
@@ -74,6 +84,7 @@ export default function FirstTripsChart({ firstTripsData, filtrosGlobais = {} })
     const dadosFinais = [];
     let valorAnterior = null;
 
+    // 3. Monta o objeto final para o gráfico
     colunasPeriodo.forEach((col) => {
       const qtdAtual = acumulado[col.nome];
       let variacao = 0;
@@ -85,7 +96,8 @@ export default function FirstTripsChart({ firstTripsData, filtrosGlobais = {} })
       }
 
       dadosFinais.push({
-        name: col.nome,
+        // 🔥 A MÁGICA: Se for mês, traduz o nome usando o dicionário. Se for semana, deixa "W-XX"
+        name: periodo === 'mes' ? (TRADUZ_MES[col.nome] || col.nome) : col.nome,
         quantidade: qtdAtual,
         variacao: Number(variacao.toFixed(1)),
       });

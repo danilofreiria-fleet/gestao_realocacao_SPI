@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso, getFirstTripsData } from '../api/googleSheets';
-import Visualizations from './Visualizations';
-import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, MessageSquareWarning } from 'lucide-react';
+import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData } from '../api/googleSheets';import Visualizations from './Visualizations';
+import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning } from 'lucide-react';
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -30,37 +29,50 @@ export default function Dashboard() {
   const [baseData, setBaseData] = useState([]);
   const [atPisoData, setAtPisoData] = useState([]);
   const [firstTripsData, setFirstTripsData] = useState([]);
+  const [historicoFrotaData, setHistoricoFrotaData] = useState([]);
+  const [ofertasModalData, setOfertasModalData] = useState([]); // 🔥 NOVO ESTADO;
   
+  // 🔥 ESTADOS DE FILTROS GLOBAIS (Regional e Station agora são Arrays!)
   const [filtros, setFiltros] = useState({
-    regional: '', station: '', turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
+    regional: [], station: [], turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
   });
 
+  // ESTADOS DE MENU ABERTO (Para os Dropdowns customizados)
   const [isTurnoMenuOpen, setIsTurnoMenuOpen] = useState(false);
-  const turnoMenuRef = useRef(null);
+  const [isStationMenuOpen, setIsStationMenuOpen] = useState(false);
+  const [isRegionalMenuOpen, setIsRegionalMenuOpen] = useState(false);
+  
+  // Busca interna dentro do dropdown de stations
+  const [stationSearchText, setStationSearchText] = useState('');
 
-const [activeCategory, setActiveCategory] = useState('resumo');
+  const turnoMenuRef = useRef(null);
+  const stationMenuRef = useRef(null);
+  const regionalMenuRef = useRef(null);
+
+  const [activeCategory, setActiveCategory] = useState('resumo');
+
   useEffect(() => {
     function handleClickOutside(event) {
-      if (turnoMenuRef.current && !turnoMenuRef.current.contains(event.target)) {
-        setIsTurnoMenuOpen(false);
-      }
+      if (turnoMenuRef.current && !turnoMenuRef.current.contains(event.target)) setIsTurnoMenuOpen(false);
+      if (stationMenuRef.current && !stationMenuRef.current.contains(event.target)) setIsStationMenuOpen(false);
+      if (regionalMenuRef.current && !regionalMenuRef.current.contains(event.target)) setIsRegionalMenuOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-
   useEffect(() => {
     const carregarDados = async () => {
       setLoading(true);
       try {
-        //dataFirstTrips dentro das chaves [ ]
-        const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips] = await Promise.all([
+const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataOfertasModal] = await Promise.all([
           getConsolidadoData(),
           getDadosRHDashboard(),
           getBaseReferenceData(),
           getDadosAtPiso(),
-          getFirstTripsData() // Nova busca simultânea
+          getFirstTripsData(),
+          getHistoricoFrotaData(),
+          
         ]);
         
         if (dataConsol && dataConsol.length > 1) setRawData(dataConsol.slice(1));
@@ -85,9 +97,9 @@ const [activeCategory, setActiveCategory] = useState('resumo');
 
         if (dataBase) setBaseData(dataBase);
         if (dataPiso) setAtPisoData(dataPiso);
-        
-        // 🔥 Salvando o dado de First Trips no estado!
         if (dataFirstTrips) setFirstTripsData(dataFirstTrips);
+        if (dataHistoricoFrota) setHistoricoFrotaData(dataHistoricoFrota);
+        if (dataOfertasModal) setOfertasModalData(dataOfertasModal); // 🔥 SALVA NO ESTADO;
         
       } catch (error) { 
         console.error("Erro ao carregar Dashboard", error); 
@@ -108,16 +120,18 @@ const [activeCategory, setActiveCategory] = useState('resumo');
     return new Date(dateStr);
   };
 
-const CATEGORIAS = [
+  const CATEGORIAS = [
     { id: 'resumo', label: 'Resumo (Overview)', icon: <LayoutDashboard size={16}/> },
     { id: 'onePage', label: 'One Page', icon: <Zap size={16}/> },
     { id: 'frota', label: 'Gestão de Frota', icon: <Users size={16}/> },
+    { id: 'saude', label: 'Saúde de Frota', icon: <Activity size={16}/> }, // 🔥 NOVA ABA AQUI!
     { id: 'volumes', label: 'Volumes & SPR', icon: <BarChart3 size={16}/> },
     { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
     { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },
-    { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> }, // 🔥 ABA NOVA
+    { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> },
   ];
-  
+
+
   const opcoes = useMemo(() => {
     const regionais = new Set(), stations = new Set(), semanas = new Set(), turnos = new Set();
     rawData.forEach(row => {
@@ -136,18 +150,19 @@ const CATEGORIAS = [
 
   const handleChange = (e) => setFiltros(prev => ({ ...prev, [e.target.name]: e.target.value }));
   
-  const toggleTurno = (turnoSelecionado) => {
+  // 🔥 LÓGICA DE MÚLTIPLA ESCOLHA GENÉRICA PARA ARRAY
+  const toggleArrayFilter = (filtroNome, valor) => {
     setFiltros(prev => {
-      const turnosAtuais = prev.turno;
-      if (turnosAtuais.includes(turnoSelecionado)) {
-        return { ...prev, turno: turnosAtuais.filter(t => t !== turnoSelecionado) };
+      const itensAtuais = prev[filtroNome];
+      if (itensAtuais.includes(valor)) {
+        return { ...prev, [filtroNome]: itensAtuais.filter(item => item !== valor) };
       } else {
-        return { ...prev, turno: [...turnosAtuais, turnoSelecionado] };
+        return { ...prev, [filtroNome]: [...itensAtuais, valor] };
       }
     });
   };
 
-  const limparFiltros = () => setFiltros({ regional: '', station: '', turno: [], dataInicio: '', dataFim: '', semana: '', mes: '' });
+  const limparFiltros = () => setFiltros({ regional: [], station: [], turno: [], dataInicio: '', dataFim: '', semana: '', mes: '' });
 
   const dadosFiltrados = useMemo(() => {
     return rawData.filter(row => {
@@ -155,10 +170,11 @@ const CATEGORIAS = [
       const dObj = parseDate(dataRow);
       let pass = true;
       
-      if (filtros.regional && row[1] !== filtros.regional) pass = false;
-      if (filtros.semana && row[2] !== filtros.semana) pass = false;
-      if (filtros.station && row[4] !== filtros.station) pass = false;
+      // 🔥 Ajuste na Filtragem: Verifica se o array tem algo, se sim, a linha TEM QUE estar no array
+      if (filtros.regional.length > 0 && !filtros.regional.includes(row[1])) pass = false;
+      if (filtros.station.length > 0 && !filtros.station.includes(row[4])) pass = false;
       if (filtros.turno.length > 0 && !filtros.turno.includes(row[5])) pass = false;
+      if (filtros.semana && row[2] !== filtros.semana) pass = false;
       
       if (dObj && !isNaN(dObj)) {
         if (filtros.mes && String(dObj.getMonth() + 1).padStart(2, '0') !== filtros.mes) pass = false;
@@ -201,6 +217,13 @@ const CATEGORIAS = [
     );
   }
 
+  // Label Dinâmico para os Dropdowns
+const getDropdownLabel = (arr, emptyLabel) => {
+    if (arr.length === 0) return emptyLabel;
+    if (arr.length === 1) return arr[0]; 
+    return `${arr.length} selecionados`;
+  };
+
   return (
     <div className="flex flex-col h-full space-y-6 print:space-y-0 print:block">
       
@@ -228,51 +251,98 @@ const CATEGORIAS = [
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-slate-50 dark:bg-[#15171e] p-4 rounded-xl border border-slate-100 dark:border-gray-800">
-          <div className="flex flex-col lg:col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label><select name="regional" value={filtros.regional} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Todas</option>{opcoes.regionais.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-          <div className="flex flex-col lg:col-span-2"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Search size={12}/> Station</label><select name="station" value={filtros.station} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Todas</option>{opcoes.stations.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
           
-          <div className="flex flex-col lg:col-span-1 relative" ref={turnoMenuRef}>
-            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
-              <Clock size={12}/> Turnos
-            </label>
+          {/* 🔥 NOVO: MULTI-SELECT REGIONAL */}
+          <div className="flex flex-col lg:col-span-1 relative" ref={regionalMenuRef}>
+            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label>
             <div 
               className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm cursor-pointer flex justify-between items-center shadow-sm"
-              onClick={() => setIsTurnoMenuOpen(!isTurnoMenuOpen)}
+              onClick={() => setIsRegionalMenuOpen(!isRegionalMenuOpen)}
             >
-              <span className="truncate mr-2 font-medium">
-                {filtros.turno.length === 0 ? 'Todos' : filtros.turno.join(', ')}
-              </span>
-              <ChevronDown size={14} className={`transition-transform text-slate-400 ${isTurnoMenuOpen ? 'rotate-180' : ''}`} />
+              <span className="truncate mr-2 font-medium text-xs">{getDropdownLabel(filtros.regional, 'Todas')}</span>
+              <ChevronDown size={14} className={`transition-transform text-slate-400 ${isRegionalMenuOpen ? 'rotate-180' : ''}`} />
             </div>
-
-            {isTurnoMenuOpen && (
+            {isRegionalMenuOpen && (
               <div className="absolute top-[100%] left-0 w-full mt-1 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto py-1">
-                {opcoes.turnos.map(t => (
-                  <label key={t} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-sm font-medium text-slate-700 dark:text-gray-200 transition-colors">
+                {opcoes.regionais.map(r => (
+                  <label key={r} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-medium text-slate-700 dark:text-gray-200 transition-colors">
                     <input 
-                      type="checkbox" 
-                      checked={filtros.turno.includes(t)}
-                      onChange={() => toggleTurno(t)}
-                      className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-4 h-4 cursor-pointer"
-                    />
-                    {t}
+                      type="checkbox" checked={filtros.regional.includes(r)} onChange={() => toggleArrayFilter('regional', r)}
+                      className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-3 h-3 cursor-pointer"
+                    /> {r}
                   </label>
                 ))}
-                {opcoes.turnos.length === 0 && <div className="p-3 text-xs text-slate-400 text-center">Nenhum turno</div>}
+              </div>
+            )}
+          </div>
+
+          {/* 🔥 NOVO: MULTI-SELECT STATION COM BUSCA */}
+          <div className="flex flex-col lg:col-span-2 relative" ref={stationMenuRef}>
+            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Search size={12}/> Station</label>
+            <div 
+              className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm cursor-pointer flex justify-between items-center shadow-sm"
+              onClick={() => setIsStationMenuOpen(!isStationMenuOpen)}
+            >
+              <span className="truncate mr-2 font-medium text-xs">{getDropdownLabel(filtros.station, 'Todas as Stations')}</span>
+              <ChevronDown size={14} className={`transition-transform text-slate-400 ${isStationMenuOpen ? 'rotate-180' : ''}`} />
+            </div>
+            {isStationMenuOpen && (
+              <div className="absolute top-[100%] left-0 w-full mt-1 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden flex flex-col">
+                <div className="p-2 border-b border-slate-100 dark:border-gray-800">
+                  <input 
+                    type="text" placeholder="Buscar Station..." value={stationSearchText} onChange={(e) => setStationSearchText(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-gray-800 dark:text-white text-xs py-1.5 px-2 rounded border border-slate-200 dark:border-gray-700 outline-none"
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {opcoes.stations.filter(s => s.toLowerCase().includes(stationSearchText.toLowerCase())).map(s => (
+                  <label key={s} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-medium text-slate-700 dark:text-gray-200 transition-colors">
+                    <input 
+                      type="checkbox" checked={filtros.station.includes(s)} onChange={() => toggleArrayFilter('station', s)}
+                      className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-3 h-3 cursor-pointer"
+                  /> {s} 
+                  </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>
           
+          {/* MULTI-SELECT TURNOS */}
+          <div className="flex flex-col lg:col-span-1 relative" ref={turnoMenuRef}>
+            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Clock size={12}/> Turnos</label>
+            <div 
+              className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm cursor-pointer flex justify-between items-center shadow-sm"
+              onClick={() => setIsTurnoMenuOpen(!isTurnoMenuOpen)}
+            >
+              <span className="truncate mr-2 font-medium text-xs">{getDropdownLabel(filtros.turno, 'Todos')}</span>
+              <ChevronDown size={14} className={`transition-transform text-slate-400 ${isTurnoMenuOpen ? 'rotate-180' : ''}`} />
+            </div>
+            {isTurnoMenuOpen && (
+              <div className="absolute top-[100%] left-0 w-full mt-1 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto py-1">
+                {opcoes.turnos.map(t => (
+                  <label key={t} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-medium text-slate-700 dark:text-gray-200 transition-colors">
+                    <input 
+                      type="checkbox" checked={filtros.turno.includes(t)} onChange={() => toggleArrayFilter('turno', t)}
+                      className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-3 h-3 cursor-pointer"
+                    /> {t}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* SEMANA, MÊS, DATAS (Estáticos) */}
           <div className="flex flex-col lg:col-span-2">
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Hash size={12}/> Semana / Mês</label>
             <div className="flex gap-2">
-              <select name="semana" value={filtros.semana} onChange={handleChange} className="w-1/2 bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Semana</option>{opcoes.semanas.map(o => <option key={o} value={o}>{o}</option>)}</select>
-              <select name="mes" value={filtros.mes} onChange={handleChange} className="w-1/2 bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Mês</option>{MESES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+              <select name="semana" value={filtros.semana} onChange={handleChange} className="w-1/2 bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-xs font-medium"><option value="">Semana</option>{opcoes.semanas.map(o => <option key={o} value={o}>{o}</option>)}</select>
+              <select name="mes" value={filtros.mes} onChange={handleChange} className="w-1/2 bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-xs font-medium"><option value="">Mês</option>{MESES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
             </div>
           </div>
 
-          <div className="flex flex-col lg:col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><CalendarDays size={12}/> Início</label><input type="date" name="dataInicio" value={filtros.dataInicio} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm" /></div>
-          <div className="flex flex-col lg:col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><CalendarDays size={12}/> Fim</label><input type="date" name="dataFim" value={filtros.dataFim} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm" /></div>
+          <div className="flex flex-col lg:col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><CalendarDays size={12}/> Início</label><input type="date" name="dataInicio" value={filtros.dataInicio} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-1.5 text-xs font-medium" /></div>
+          <div className="flex flex-col lg:col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><CalendarDays size={12}/> Fim</label><input type="date" name="dataFim" value={filtros.dataFim} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-1.5 text-xs font-medium" /></div>
         </div>
       </div>
 
@@ -304,6 +374,8 @@ const CATEGORIAS = [
           atPisoData={atPisoData} 
           baseData={baseData} 
           firstTripsData={firstTripsData}
+          historicoFrotaData={historicoFrotaData} 
+          ofertasModalData={ofertasModalData} 
           filtrosGlobais={filtros}
         />
       </div>
