@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Cell } from 'recharts';
 import { Calendar, TrendingUp, CalendarDays, Filter, ChevronDown } from 'lucide-react';
 
 const MAPA_REGIONAL = {
@@ -15,37 +15,26 @@ const MAPA_REGIONAL = {
   "LM Hub_SP_Marília": "SPO3", "LM Hub_SP_Presidente Prudente": "SPO3"
 };
 
-// 🔥 ORDEM DE EMPILHAMENTO (De baixo para cima)
 const STATUS_OPTIONS = ['Ativos', 'Novos', 'Dormentes', 'Risco', 'Churn'];
 
 export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobais = {} }) {
-  const [periodo, setPeriodo] = useState('semana'); // 'dia' | 'semana' | 'mes'
+  const [periodo, setPeriodo] = useState('semana');
   const { regional = [], station = [], semana = "", mes = "" } = filtrosGlobais;
 
-  // 🔥 NOVOS ESTADOS PARA O FILTRO DE STATUS
   const [selectedStatuses, setSelectedStatuses] = useState(STATUS_OPTIONS);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const statusMenuRef = useRef(null);
 
-  // Fecha o menu de status ao clicar fora
   useEffect(() => {
     function handleClickOutside(event) {
-      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target)) {
-        setIsStatusMenuOpen(false);
-      }
+      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target)) setIsStatusMenuOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const toggleStatus = (status) => {
-    setSelectedStatuses(prev => {
-      if (prev.includes(status)) {
-        return prev.filter(s => s !== status);
-      } else {
-        return [...prev, status];
-      }
-    });
+    setSelectedStatuses(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]);
   };
 
   const chartData = useMemo(() => {
@@ -53,7 +42,8 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
 
     const TRADUZ_MES = { '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI', '06':'JUN', '07':'JUL', '08':'AGO', '09':'SET', '10':'OUT', '11':'NOV', '12':'DEZ' };
 
-    const aggs = {};
+    // 1. Agrupamento pegando SEMPRE o valor mais recente (Snapshot)
+    const snapshotMap = {};
 
     historicoFrotaData.slice(1).forEach(row => {
       const semRow = String(row[0] || "");
@@ -73,74 +63,60 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
       }
 
       if (!chavePeriodo) return;
-
       if (periodo === 'semana' && semana && semRow !== semana) return;
       if (periodo === 'mes' && mes && mesRow !== TRADUZ_MES[mes]) return;
 
-      const chaveUnica = `${chavePeriodo}_${dataStr}`;
-
-      if (!aggs[chaveUnica]) {
-        aggs[chaveUnica] = {
+      // Lógica de Snapshot: Se for uma nova data para o mesmo período/hub, sobrescreve. 
+      // Como o forEach percorre a planilha, se o dia 29 vier depois do 28, o dado do dia 29 prevalece.
+      const idUnico = `${chavePeriodo}_${hubRow}`;
+      
+      if (!snapshotMap[idUnico] || dataStr >= snapshotMap[idUnico].dataRef) {
+        snapshotMap[idUnico] = {
           periodo: chavePeriodo,
-          dataStrOriginal: dataStr, 
-          ativos: 0, dormentes: 0, risco: 0, churn: 0, novos: 0
+          dataRef: dataStr,
+          ativos: Number(row[4]) || 0,
+          dormentes: Number(row[5]) || 0,
+          risco: Number(row[6]) || 0,
+          churn: Number(row[7]) || 0,
+          novos: Number(row[8]) || 0
         };
       }
-
-      aggs[chaveUnica].ativos += Number(row[4]) || 0;
-      aggs[chaveUnica].dormentes += Number(row[5]) || 0;
-      aggs[chaveUnica].risco += Number(row[6]) || 0;
-      aggs[chaveUnica].churn += Number(row[7]) || 0;
-      aggs[chaveUnica].novos += Number(row[8]) || 0;
     });
 
+    // 2. Consolidar as Stations por Período
     const finalAggs = {};
-    Object.values(aggs).forEach(dia => {
-      const p = dia.periodo;
+    Object.values(snapshotMap).forEach(item => {
+      const p = item.periodo;
       if (!finalAggs[p]) {
-        finalAggs[p] = { 
-          name: p, 
-          rawDate: dia.dataStrOriginal, 
-          ativos: 0, dormentes: 0, risco: 0, churn: 0, novos: 0, diasContados: 0 
-        };
+        finalAggs[p] = { name: p, rawDate: item.dataRef, Ativos: 0, Dormentes: 0, Risco: 0, Churn: 0, Novos: 0 };
       }
-      finalAggs[p].ativos += dia.ativos;
-      finalAggs[p].dormentes += dia.dormentes;
-      finalAggs[p].risco += dia.risco;
-      finalAggs[p].churn += dia.churn;
-      finalAggs[p].novos += dia.novos;
-      finalAggs[p].diasContados++;
+      finalAggs[p].Ativos += item.ativos;
+      finalAggs[p].Dormentes += item.dormentes;
+      finalAggs[p].Risco += item.risco;
+      finalAggs[p].Churn += item.churn;
+      finalAggs[p].Novos += item.novos;
     });
 
-    return Object.values(finalAggs)
-      .map(d => ({
-        name: d.name,
-        rawDate: d.rawDate,
-        Ativos: Math.round(d.ativos / d.diasContados),
-        Novos: Math.round(d.novos / d.diasContados),
-        Dormentes: Math.round(d.dormentes / d.diasContados),
-        Risco: Math.round(d.risco / d.diasContados),
-        Churn: Math.round(d.churn / d.diasContados),
-      }))
-      .sort((a, b) => {
-        if (periodo === 'dia') return a.rawDate.localeCompare(b.rawDate);
-        return a.name.localeCompare(b.name);
-      });
+    // 3. Ordenar e Calcular Variação %
+    const dadosOrdenados = Object.values(finalAggs).sort((a, b) => {
+      if (periodo === 'dia') return a.rawDate.localeCompare(b.rawDate);
+      return a.name.localeCompare(b.name);
+    });
+
+    let baseAnterior = null;
+    return dadosOrdenados.map(d => {
+      const baseAtual = d.Ativos + d.Novos;
+      let variacao = 0;
+      if (baseAnterior !== null && baseAnterior !== 0) {
+        variacao = ((baseAtual - baseAnterior) / baseAnterior) * 100;
+      }
+      baseAnterior = baseAtual;
+      return { ...d, variacao: Number(variacao.toFixed(1)) };
+    });
 
   }, [historicoFrotaData, periodo, station, regional, semana, mes]);
 
-  if (chartData.length === 0) return null;
-
-  let subtitleLabel = 'Visão Diária';
-  if (periodo === 'semana') subtitleLabel = 'Média por Semana (W)';
-  else if (periodo === 'mes') subtitleLabel = 'Média por Mês (M)';
-
-  const formatLabel = (val) => {
-    if (!val || val === 0) return '';
-    return new Intl.NumberFormat('pt-BR').format(val);
-  };
-
-  // 🔥 IDENTIFICA QUAL É A BARRA DO TOPO PARA ARREDONDAR OS CANTOS
+  const formatLabel = (val) => (val > 0 ? new Intl.NumberFormat('pt-BR').format(val) : '');
   const topVisibleStatus = [...STATUS_OPTIONS].reverse().find(s => selectedStatuses.includes(s));
 
   return (
@@ -151,16 +127,14 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
             Evolução de Status da Frota
           </h3>
           <p className="text-xs text-slate-400 font-bold uppercase mt-1 flex items-center gap-1">
-            <TrendingUp size={12}/> {subtitleLabel}
+            <TrendingUp size={12}/> {periodo === 'dia' ? 'Visão Diária' : periodo === 'semana' ? 'Snapshot da Semana (W)' : 'Snapshot do Mês (M)'}
           </p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
-          
-          {/* 🔥 NOVO: DROPDOWN DE MÚLTIPLA ESCOLHA DE STATUS */}
           <div className="relative" ref={statusMenuRef}>
             <div 
-              className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 rounded-lg px-4 py-1.5 text-xs font-bold cursor-pointer flex justify-between items-center shadow-sm hover:bg-slate-50 transition-colors"
+              className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 rounded-lg px-4 py-1.5 text-xs font-bold cursor-pointer flex justify-between items-center shadow-sm hover:bg-slate-50"
               onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
             >
               <span className="flex items-center gap-1.5 mr-2">
@@ -173,13 +147,8 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
             {isStatusMenuOpen && (
               <div className="absolute top-[100%] right-0 mt-1 w-48 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 py-1">
                 {STATUS_OPTIONS.map(status => (
-                  <label key={status} className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200 transition-colors">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedStatuses.includes(status)} 
-                      onChange={() => toggleStatus(status)}
-                      className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-3 h-3 cursor-pointer"
-                    /> 
+                  <label key={status} className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200">
+                    <input type="checkbox" checked={selectedStatuses.includes(status)} onChange={() => toggleStatus(status)} className="rounded border-slate-300 text-[#0055A5] w-3 h-3" /> 
                     {status}
                   </label>
                 ))}
@@ -188,66 +157,65 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
           </div>
 
           <div className="flex bg-slate-100 dark:bg-[#15171e] p-1 rounded-lg">
-            <button onClick={() => setPeriodo('dia')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-bold transition-all ${periodo === 'dia' ? 'bg-[#113366] shadow text-white' : 'text-slate-500 hover:text-slate-700'}`}>
-              <CalendarDays size={14} /> Dia
-            </button>
-            <button onClick={() => setPeriodo('semana')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-bold transition-all ${periodo === 'semana' ? 'bg-[#113366] shadow text-white' : 'text-slate-500 hover:text-slate-700'}`}>
-              <Calendar size={14} /> Sem
-            </button>
-            <button onClick={() => setPeriodo('mes')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-bold transition-all ${periodo === 'mes' ? 'bg-[#113366] shadow text-white' : 'text-slate-500 hover:text-slate-700'}`}>
-              <Calendar size={14} /> Mês
-            </button>
+            {['dia', 'semana', 'mes'].map((p) => (
+              <button key={p} onClick={() => setPeriodo(p)} className={`px-4 py-1.5 rounded text-xs font-bold transition-all ${periodo === p ? 'bg-[#113366] text-white' : 'text-slate-500'}`}>
+                {p === 'dia' ? 'Dia' : p === 'semana' ? 'Sem' : 'Mês'}
+              </button>
+            ))}
           </div>
-
         </div>
       </div>
 
       <div className="w-full h-[400px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+          <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
-            <YAxis tick={{ fontSize: 11 }} />
+            <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#D0011B' }} tickFormatter={(val) => `${val}%`} />
             
             <Tooltip 
               cursor={{ fill: 'rgba(0,0,0,0.04)' }}
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-              labelStyle={{ fontWeight: 'black', color: '#113366', marginBottom: '8px' }}
             />
             <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '12px', fontWeight: 'bold' }} />
 
-            {/* 🔥 RENDERIZAÇÃO CONDICIONAL DAS BARRAS COM RAIO DINÂMICO */}
             {selectedStatuses.includes('Ativos') && (
-              <Bar dataKey="Ativos" stackId="a" fill="#10b981" maxBarSize={60} radius={topVisibleStatus === 'Ativos' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+              <Bar yAxisId="left" dataKey="Ativos" stackId="a" fill="#10b981" maxBarSize={60} radius={topVisibleStatus === 'Ativos' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
                 <LabelList dataKey="Ativos" position="center" fill="#ffffff" fontSize={11} fontWeight="bold" formatter={formatLabel} />
               </Bar>
             )}
-            
             {selectedStatuses.includes('Novos') && (
-              <Bar dataKey="Novos" stackId="a" fill="#3b82f6" maxBarSize={60} radius={topVisibleStatus === 'Novos' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+              <Bar yAxisId="left" dataKey="Novos" stackId="a" fill="#3b82f6" maxBarSize={60} radius={topVisibleStatus === 'Novos' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
                 <LabelList dataKey="Novos" position="center" fill="#ffffff" fontSize={11} fontWeight="bold" formatter={formatLabel} />
               </Bar>
             )}
-            
             {selectedStatuses.includes('Dormentes') && (
-              <Bar dataKey="Dormentes" stackId="a" fill="#fbbf24" maxBarSize={60} radius={topVisibleStatus === 'Dormentes' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+              <Bar yAxisId="left" dataKey="Dormentes" stackId="a" fill="#fbbf24" maxBarSize={60} radius={topVisibleStatus === 'Dormentes' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
                 <LabelList dataKey="Dormentes" position="center" fill="#78350f" fontSize={11} fontWeight="bold" formatter={formatLabel} />
               </Bar>
             )}
-            
             {selectedStatuses.includes('Risco') && (
-              <Bar dataKey="Risco" stackId="a" fill="#f97316" maxBarSize={60} radius={topVisibleStatus === 'Risco' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+              <Bar yAxisId="left" dataKey="Risco" stackId="a" fill="#f97316" maxBarSize={60} radius={topVisibleStatus === 'Risco' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
                 <LabelList dataKey="Risco" position="center" fill="#ffffff" fontSize={11} fontWeight="bold" formatter={formatLabel} />
               </Bar>
             )}
-            
             {selectedStatuses.includes('Churn') && (
-              <Bar dataKey="Churn" stackId="a" fill="#ef4444" maxBarSize={60} radius={topVisibleStatus === 'Churn' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+              <Bar yAxisId="left" dataKey="Churn" stackId="a" fill="#ef4444" maxBarSize={60} radius={topVisibleStatus === 'Churn' ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
                 <LabelList dataKey="Churn" position="center" fill="#ffffff" fontSize={11} fontWeight="bold" formatter={formatLabel} />
               </Bar>
             )}
-            
-          </BarChart>
+
+            <Line 
+              yAxisId="right"
+              type="monotone" 
+              dataKey="variacao" 
+              name="Variação % Base Ativa" 
+              stroke="#D0011B" 
+              strokeWidth={3} 
+              dot={{ r: 4, fill: "#fff", stroke: "#D0011B", strokeWidth: 2 }}
+            />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
