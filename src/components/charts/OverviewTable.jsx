@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { LayoutDashboard, CalendarDays, Calendar, Filter, Clock, ArrowUpDown, Search } from 'lucide-react';
 
-export default function OverviewTable({ data, rawData, baseData, firstTripsData, filtrosGlobais = {} }) {
+export default function OverviewTable({ data, rawData, baseData, firstTripsData, historicoFrotaData, filtrosGlobais = {} }) {
   const [viewMode, setViewMode] = useState('semana'); 
   const hojeStr = new Date().toLocaleDateString('en-CA'); 
   
-
   const [customStartDate, setCustomStartDate] = useState(hojeStr);
   const [customEndDate, setCustomEndDate] = useState(hojeStr);
   
@@ -89,6 +88,7 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
   const overviewData = useMemo(() => {
     const aggs = {};
     
+    // 1. FILTRAGEM DO CONSOLIDADO PRINCIPAL (Operacional)
     let opSet = [];
     if (viewMode === 'semana') {
       opSet = (rawData || []).filter(r => extractWeekNumber(r[2]) === actualWeekNum);
@@ -132,6 +132,37 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       aggs[station].count++; 
     });
 
+    // 2. FILTRAGEM DO HISTÓRICO DE FROTA (Snapshot Mais Recente) 🔥
+    const historicoMap = {};
+    let histFiltrado = (historicoFrotaData || []).slice(1).filter(r => {
+      if (viewMode === 'semana') return extractWeekNumber(r[0]) === actualWeekNum;
+      if (viewMode === 'mes') return extrairMesAno(r[2]) === actualMonthData.label;
+      if (viewMode === 'customizado') {
+        const rowDateStr = extrairDataLocal(r[2]);
+        return rowDateStr >= customStartDate && rowDateStr <= customEndDate;
+      }
+      return true;
+    });
+
+    histFiltrado.forEach(r => {
+      const stFull = String(r[3] || "").trim();
+      if (!stFull) return;
+      
+      const rowDateStr = extrairDataLocal(r[2]);
+      
+      // Se não existir essa station ainda ou se a data atual for mais recente que a salva, atualiza os dados
+      if (!historicoMap[stFull] || rowDateStr > historicoMap[stFull].lastDate) {
+        historicoMap[stFull] = {
+          lastDate: rowDateStr,
+          dorm: parseNum(r[5]),
+          risco: parseNum(r[6]),
+          churn: parseNum(r[7]),
+          novos: parseNum(r[8])
+        };
+      }
+    });
+
+    // 3. FIRST TRIPS
     const firstTripsMap = {};
     if (firstTripsData && firstTripsData.length > 1 && viewMode !== 'customizado') {
       const headers = firstTripsData[0];
@@ -142,23 +173,24 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       }
     }
 
+    // 4. CAP DA BASE
     const baseMap = {};
-    const rhVistos = new Set();
     (baseData || []).slice(1).forEach(r => {
       const stFull = String(r[0]).trim();
       const turnoLinha = String(r[1] || "").trim().toUpperCase();
-      if (!baseMap[stFull]) baseMap[stFull] = { capHub: 0, churn: 0, dorm: 0, risco: 0, novos: 0 };
-      if (localTurno === 'ALL' || localTurno === turnoLinha) baseMap[stFull].capHub += parseNum(r[2]);   
-      if (!rhVistos.has(stFull)) {
-        rhVistos.add(stFull);
-        baseMap[stFull].churn = parseNum(r[10]); baseMap[stFull].dorm = parseNum(r[11]);    
-        baseMap[stFull].risco = parseNum(r[14]); baseMap[stFull].novos = parseNum(r[15]);   
+      if (!baseMap[stFull]) baseMap[stFull] = { capHub: 0 };
+      
+      if (localTurno === 'ALL' || localTurno === turnoLinha) {
+        baseMap[stFull].capHub += parseNum(r[2]);   
       }
     });
 
+    // 5. CONSOLIDANDO TUDO
     let finalArray = Object.keys(aggs).map(fullName => {
       const d = aggs[fullName];
-      const b = baseMap[fullName] || { capHub: 0, churn: 0, dorm: 0, risco: 0, novos: 0 };
+      const b = baseMap[fullName] || { capHub: 0 };
+      const h = historicoMap[fullName] || { dorm: 0, risco: 0, churn: 0, novos: 0 };
+      
       return {
         station: fullName,
         volRot: d.volRot, volProc: d.volProc, volExp: d.volExp,
@@ -172,9 +204,14 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
         ofertas: d.count > 0 ? Math.round(d.ofertaTotal / d.count) : 0,
         
         firstTrips: viewMode === 'customizado' ? 0 : (firstTripsMap[fullName] || 0),
-        dorm: b.dorm, risco: b.risco, churn: b.churn, novos: b.novos, capHub: b.capHub,
         
-        // 🔥 CORREÇÃO: Fleet Util agora tira a média simples dos turnos na Station
+        // Dados puxados da última data disponível no período
+        dorm: h.dorm, 
+        risco: h.risco, 
+        churn: h.churn, 
+        novos: h.novos, 
+        capHub: b.capHub,
+        
         util: d.count > 0 ? (d.capFleetUtil / d.count) : 0
       };
     }).filter(row => row.station.toLowerCase().includes(stationFilter.toLowerCase()));
@@ -191,13 +228,15 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
     }
 
     return finalArray;
-  }, [rawData, data, baseData, firstTripsData, viewMode, actualWeekNum, actualMonthData, customStartDate, customEndDate, localTurno, filtrosGlobais, stationFilter, sortConfig]);
+  }, [rawData, data, baseData, firstTripsData, historicoFrotaData, viewMode, actualWeekNum, actualMonthData, customStartDate, customEndDate, localTurno, filtrosGlobais, stationFilter, sortConfig]);
 
   const totals = useMemo(() => {
     return overviewData.reduce((acc, row) => {
       acc.volRot += row.volRot; acc.volProc += row.volProc; acc.volExp += row.volExp;
       acc.atRot += row.atRot; acc.atCarr += row.atCarr; acc.noShowAbs += row.noShowAbs; 
       acc.ofertas += row.ofertas; if (typeof row.firstTrips === 'number') acc.firstTrips += row.firstTrips;
+      
+      // Na soma da Regional, esses dados fazem sentido (é a soma do retrato atual de todas as stations)
       acc.dorm += row.dorm; acc.risco += row.risco; acc.churn += row.churn;
       acc.novos += row.novos; acc.capHub += row.capHub;
       
@@ -210,7 +249,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
 
   const showTotals = viewMode === 'semana' || viewMode === 'mes';
 
-  // 🔥 CORREÇÃO: Cor sólida (Vermelho Escuro) no hover/active, removendo a transparência "black/10"
   const SortHeader = ({ label, sortKey, className = "" }) => (
     <th className={`px-3 py-3 cursor-pointer select-none bg-[#EE4D2D] hover:bg-[#D0011B] active:bg-[#a81c12] transition-colors group ${className}`} onClick={() => handleSort(sortKey)}>
       <div className="flex items-center justify-center gap-1 text-white">
@@ -236,7 +274,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
             <button onClick={() => setViewMode('customizado')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'customizado' ? 'bg-white text-[#113366]' : 'text-white/70 hover:text-white'}`}><Filter size={14}/> Manual (Filtros)</button>
           </div>
           
-          {/* 🔥 NOVO: Inputs de Data Inicial e Final lado a lado */}
           {viewMode === 'customizado' && (
             <div className="flex items-center gap-2 bg-white/10 p-1 rounded-lg">
               <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="bg-white text-[#113366] border-none rounded p-1 text-xs font-bold shadow-sm outline-none cursor-pointer" />
