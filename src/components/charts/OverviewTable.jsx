@@ -32,7 +32,7 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
     return match ? parseInt(match[1], 10) : -1;
   };
 
-  // 🔥 VACINA DE DATA: Garante que 2026-4-29 vire 2026-04-29 para a comparação funcionar
+  // 🔥 VACINA DE DATA: Padroniza para YYYY-MM-DD
   const extrairDataLocal = (val) => {
     if (!val) return "";
     let s = String(val).trim().split('T')[0].split(' ')[0];
@@ -42,7 +42,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       dataFinal = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`; 
     } else if (s.includes('-')) {
       const parts = s.split('-');
-      // Caso a data venha como 2026-4-9
       if (parts[0].length === 4) {
         dataFinal = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
       }
@@ -92,30 +91,21 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
   const overviewData = useMemo(() => {
     const aggs = {};
     
+    // 1. FILTRAGEM DO CONSOLIDADO PRINCIPAL
     let opSet = [];
-    if (viewMode === 'semana') {
-      opSet = (rawData || []).filter(r => extractWeekNumber(r[2]) === actualWeekNum);
-    } else if (viewMode === 'mes') {
-      opSet = (rawData || []).filter(r => extrairMesAno(r[3]) === actualMonthData.label);
-    } else if (viewMode === 'customizado') {
+    if (viewMode === 'semana') opSet = (rawData || []).filter(r => extractWeekNumber(r[2]) === actualWeekNum);
+    else if (viewMode === 'mes') opSet = (rawData || []).filter(r => extrairMesAno(r[3]) === actualMonthData.label);
+    else if (viewMode === 'customizado') {
       opSet = (rawData || []).filter(r => {
         const rowDateStr = extrairDataLocal(r[3]);
         return rowDateStr >= customStartDate && rowDateStr <= customEndDate;
       });
     }
 
-    if (filtrosGlobais?.regional && filtrosGlobais.regional.length > 0) {
-      opSet = opSet.filter(r => filtrosGlobais.regional.includes(r[1]));
-    }
-    if (filtrosGlobais?.station && filtrosGlobais.station.length > 0) {
-      opSet = opSet.filter(r => filtrosGlobais.station.includes(r[4]));
-    }
-    if (filtrosGlobais?.turno && filtrosGlobais.turno.length > 0) {
-      opSet = opSet.filter(r => filtrosGlobais.turno.includes(String(r[5] || "").trim().toUpperCase()));
-    }
-    if (localTurno !== 'ALL') {
-      opSet = opSet.filter(r => String(r[5] || "").trim().toUpperCase() === localTurno);
-    }
+    if (filtrosGlobais?.regional?.length > 0) opSet = opSet.filter(r => filtrosGlobais.regional.includes(r[1]));
+    if (filtrosGlobais?.station?.length > 0) opSet = opSet.filter(r => filtrosGlobais.station.includes(r[4]));
+    if (filtrosGlobais?.turno?.length > 0) opSet = opSet.filter(r => filtrosGlobais.turno.includes(String(r[5] || "").trim().toUpperCase()));
+    if (localTurno !== 'ALL') opSet = opSet.filter(r => String(r[5] || "").trim().toUpperCase() === localTurno);
 
     opSet.forEach(row => {
       const station = String(row[4] || "").trim();
@@ -134,11 +124,9 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       aggs[station].count++; 
     });
 
-    // 2. FILTRAGEM DO HISTÓRICO DE FROTA (Snapshot)
+    // 2. FILTRAGEM DO HISTÓRICO DE FROTA (Snapshot Mais Recente)
     const historicoMap = {};
-    const histBase = (historicoFrotaData || []).slice(1);
-    
-    histBase.forEach(r => {
+    (historicoFrotaData || []).slice(1).forEach(r => {
       const stFull = String(r[3] || "").trim();
       if (!stFull) return;
       
@@ -146,25 +134,19 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       const rowWeek = extractWeekNumber(r[0]);
       const rowMonth = extrairMesAno(r[2]);
 
-      // Valida se a linha do histórico pertence ao período do cabeçalho
-      let belongsToPeriod = false;
-      if (viewMode === 'semana' && rowWeek === actualWeekNum) belongsToPeriod = true;
-      if (viewMode === 'mes' && rowMonth === actualMonthData.label) belongsToPeriod = true;
-      if (viewMode === 'customizado' && rowDateStr >= customStartDate && rowDateStr <= customEndDate) belongsToPeriod = true;
+      let isPeriod = false;
+      if (viewMode === 'semana' && rowWeek === actualWeekNum) isPeriod = true;
+      if (viewMode === 'mes' && rowMonth === actualMonthData.label) isPeriod = true;
+      if (viewMode === 'customizado' && rowDateStr >= customStartDate && rowDateStr <= customEndDate) isPeriod = true;
 
-      if (belongsToPeriod) {
+      if (isPeriod) {
         if (!historicoMap[stFull] || rowDateStr >= historicoMap[stFull].lastDate) {
-          historicoMap[stFull] = {
-            lastDate: rowDateStr,
-            dorm: parseNum(r[5]),
-            risco: parseNum(r[6]),
-            churn: parseNum(r[7]),
-            novos: parseNum(r[8])
-          };
+          historicoMap[stFull] = { lastDate: rowDateStr, dorm: parseNum(r[5]), risco: parseNum(r[6]), churn: parseNum(r[7]), novos: parseNum(r[8]) };
         }
       }
     });
 
+    // 3. FIRST TRIPS E CAP DA BASE
     const firstTripsMap = {};
     if (firstTripsData && firstTripsData.length > 1 && viewMode !== 'customizado') {
       const headers = firstTripsData[0];
@@ -183,6 +165,7 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       if (localTurno === 'ALL' || localTurno === turnoLinha) baseMap[stFull].capHub += parseNum(r[2]);   
     });
 
+    // 4. MONTAGEM FINAL DO ARRAY
     let finalArray = Object.keys(aggs).map(fullName => {
       const d = aggs[fullName];
       const b = baseMap[fullName] || { capHub: 0 };
@@ -297,22 +280,22 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
             {overviewData.map((row, idx) => (
               <tr key={idx} className="even:bg-slate-50 odd:bg-white dark:even:bg-gray-800/40 dark:odd:bg-[#15171e] hover:bg-orange-50 transition-colors">
                 <td className="px-3 py-3 text-left font-black text-[#113366] dark:text-blue-400 sticky left-0 z-10 bg-inherit border-r border-slate-100 dark:border-gray-800">{row.station}</td>
-                <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.volRot)}</td>
+                <td className="px-3 py-3 border-l border-slate-100">{formatInt(row.volRot)}</td>
                 <td className="px-3 py-3">{formatInt(row.volProc)}</td>
                 <td className="px-3 py-3 text-[#113366] dark:text-white">{formatInt(row.volExp)}</td>
-                <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.atRot)}</td>
+                <td className="px-3 py-3 border-l border-slate-100">{formatInt(row.atRot)}</td>
                 <td className="px-3 py-3 text-[#113366] dark:text-white">{formatInt(row.atCarr)}</td>
-                <td className="px-3 py-3 text-[#D0011B] border-l border-slate-100 dark:border-gray-800">{formatInt(row.noShowAbs)}</td>
+                <td className="px-3 py-3 text-[#D0011B] border-l border-slate-100">{formatInt(row.noShowAbs)}</td>
                 <td className="px-3 py-3 text-[#D0011B]">{formatPct(row.noShowPct)}</td>
-                <td className="px-3 py-3 text-green-600 border-l border-slate-100 dark:border-gray-800">{row.firstTrips === 0 && viewMode === 'customizado' ? '-' : row.firstTrips}</td>
-                <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.sprRot)}</td>
+                <td className="px-3 py-3 text-green-600 border-l border-slate-100">{row.firstTrips === 0 && viewMode === 'customizado' ? '-' : row.firstTrips}</td>
+                <td className="px-3 py-3 border-l border-slate-100">{formatInt(row.sprRot)}</td>
                 <td className="px-3 py-3">{formatInt(row.sprExp)}</td>
-                <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.ofertas)}</td>
-                <td className="px-3 py-3 text-orange-400 border-l border-slate-100 dark:border-gray-800">{row.dorm}</td>
+                <td className="px-3 py-3 border-l border-slate-100">{formatInt(row.ofertas)}</td>
+                <td className="px-3 py-3 text-orange-400 border-l border-slate-100">{row.dorm}</td>
                 <td className="px-3 py-3 text-orange-600">{row.risco}</td>
                 <td className="px-3 py-3 text-[#D0011B]">{row.churn}</td>
                 <td className="px-3 py-3 text-blue-500">{row.novos}</td>
-                <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.capHub)}</td>
+                <td className="px-3 py-3 border-l border-slate-100">{formatInt(row.capHub)}</td>
                 <td className={`px-3 py-3 font-black ${row.util > 90 ? 'text-[#D0011B]' : 'text-slate-700 dark:text-gray-300'}`}>{formatPct(row.util)}</td>
               </tr>
             ))}
