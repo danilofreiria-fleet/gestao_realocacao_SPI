@@ -189,20 +189,43 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
     });
   }, [rawData, filtros]);
 
-  const exportarCSV = () => {
+const exportarCSV = () => {
     if (dadosFiltrados.length === 0) return alert("Não há dados para exportar.");
-    const headersCSV = ["Regional", "Semana", "Data", "Station", "Turno", "AT Piso", "Vol Roteirizado", "Vol Processado", "Vol Expedido"];
-    const linhasCSV = dadosFiltrados.map(row => [
-      row[1] || "", row[2] || "", row[3] || "", row[4] || "", row[5] || "", 
-      row[19] || 0, row[11] || 0, row[13] || 0, row[14] || 0
-    ].join(","));
+    
+    // 1. Cabeçalhos atualizados com os novos KPIs
+    const headersCSV = [
+      "Regional", "Semana", "Data", "Station", "Turno", 
+      "AT Piso", "Vol Roteirizado", "Vol Processado", "Vol Expedido",
+      "Realocacao Pre", "Realocacao Durante", "Nao Coube", "Outros Motivos",
+      "Taxa Correcao (%)", "Desvio Fleet", "Desvio Hub", "Eficiencia (%)", "Justificativa de Desvio"
+    ];
+
+    // 2. Mapeamento das colunas garantindo que textos com vírgula não quebrem o CSV
+    const linhasCSV = dadosFiltrados.map(row => {
+      // Limpa quebras de linha e envolve em aspas para proteger as vírgulas digitadas pelo usuário
+      let justificativa = String(row[42] || "").replace(/"/g, '""').replace(/\n/g, ' ');
+
+      return [
+        row[1] || "", row[2] || "", row[3] || "", row[4] || "", row[5] || "", 
+        row[19] || 0, row[11] || 0, row[13] || 0, row[14] || 0,
+        row[51] || 0, // Realoc Pre
+        row[52] || 0, // Realoc Durante
+        row[54] || 0, // Não Coube
+        row[55] || 0, // Outros Motivos
+        row[56] || 0, // Taxa Correcao
+        row[57] || 0, // Desvio Fleet
+        row[58] || 0, // Desvio Hub
+        row[59] || 0, // Eficiencia
+        `"${justificativa}"` // Protegido com aspas duplas!
+      ].join(",");
+    });
     
     const csvContent = "\uFEFF" + [headersCSV.join(","), ...linhasCSV].join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `Dados_Dashboard_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `Dados_NexusFleet_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 

@@ -10,7 +10,7 @@ import AtPisoCharts from './charts/AtPisoCharts';
 import AttentionPointsFeed from './charts/AttentionPointsFeed';
 import StatusEvolutionChart from './charts/StatusEvolutionChart';
 import FleetHealthCharts from './charts/FleetHealthCharts';
-import { PackageOpen } from 'lucide-react'; 
+import PackagesAndReallocation from './charts/PackagesAndReallocation'; // 🔥 IMPORTAÇÃO DO COMPONENTE NOVO AQUI!
 
 const Visualizations = ({ 
   activeCategory, 
@@ -96,12 +96,13 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 6. PACOTES E REALOCAÇÃO */}
+      {/* 6. PACOTES E REALOCAÇÃO (🔥 AGORA RENDEREZIANDO O COMPONENTE DE VERDADE) */}
       {activeCategory === 'pacotes' && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center justify-center py-20 bg-white dark:bg-[#1f232d] rounded-2xl border border-dashed border-slate-300 dark:border-gray-700">
-           <PackageOpen size={64} className="text-slate-300 dark:text-gray-600 mb-4" />
-           <h3 className="text-xl font-black text-[#113366] dark:text-white uppercase tracking-wider">Módulo em Construção</h3>
-           <p className="text-slate-500 font-bold mt-2">Os novos gráficos de Pacotes e Realocação SOP serão implementados aqui.</p>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <PackagesAndReallocation 
+              rawData={rawData} 
+              filtrosGlobais={filtrosGlobais} 
+           />
         </div>
       )}
 
@@ -113,7 +114,7 @@ const Visualizations = ({
       )}
 
       {/* MENSAGEM SE NÃO HOUVER DADOS */}
-      {(!data || data.length === 0) && !['resumo', 'onePage', 'frota', 'pacotes'].includes(activeCategory) && (
+      {(!data || data.length === 0) && !['resumo', 'onePage', 'frota', 'saude', 'pacotes', 'ocorrencias'].includes(activeCategory) && (
         <div className="p-12 text-center font-bold text-slate-400 bg-white dark:bg-[#1f232d] rounded-2xl border border-dashed border-slate-300 dark:border-gray-700">
           Nenhum registro operacional encontrado para os filtros selecionados nesta categoria.
         </div>
