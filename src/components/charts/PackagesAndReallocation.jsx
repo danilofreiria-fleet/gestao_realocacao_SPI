@@ -297,7 +297,7 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
           </ResponsiveContainer>
         ))}
 
-        {renderChartCard('desvios', 'Qualidade Operacional', 'Taxa de Correção vs Desvios de Piso', <Percent />, (
+{renderChartCard('desvios', 'Qualidade Operacional', 'Taxa de Correção vs Desvios de Piso', <Percent />, (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -307,10 +307,16 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
               
-              <Bar yAxisId="right" dataKey="desvioFleet" name="Desvio Piso Fleet" fill="#113366" barSize={25} radius={[2, 2, 0, 0]} />
-              <Bar yAxisId="right" dataKey="desvioHub" name="Desvio Piso HUB" fill="#EE4D2D" barSize={25} radius={[2, 2, 0, 0]} />
+              <Bar yAxisId="right" dataKey="desvioFleet" name="Desvio Piso Fleet" fill="#113366" barSize={25} radius={[2, 2, 0, 0]}>
+                <LabelList dataKey="desvioFleet" position="top" fill="#113366" fontSize={10} fontWeight="bold" formatter={fPct} />
+              </Bar>
+              <Bar yAxisId="right" dataKey="desvioHub" name="Desvio Piso HUB" fill="#EE4D2D" barSize={25} radius={[2, 2, 0, 0]}>
+                <LabelList dataKey="desvioHub" position="top" fill="#EE4D2D" fontSize={10} fontWeight="bold" formatter={fPct} />
+              </Bar>
               
-              <Line yAxisId="left" type="monotone" dataKey="taxaCorrecao" name="Taxa Correção Fleet" stroke="#D0011B" strokeWidth={4} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} />
+              <Line yAxisId="left" type="monotone" dataKey="taxaCorrecao" name="Taxa Correção Fleet" stroke="#D0011B" strokeWidth={4} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }}>
+                <LabelList dataKey="taxaCorrecao" position="top" fill="#D0011B" fontSize={10} fontWeight="bold" formatter={fPct} />
+              </Line>
             </ComposedChart>
           </ResponsiveContainer>
         ))}
