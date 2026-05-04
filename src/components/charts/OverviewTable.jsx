@@ -5,7 +5,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
   const [viewMode, setViewMode] = useState('semana'); 
   const hojeStr = new Date().toLocaleDateString('en-CA'); 
   
-
   const [customStartDate, setCustomStartDate] = useState(hojeStr);
   const [customEndDate, setCustomEndDate] = useState(hojeStr);
   
@@ -14,7 +13,8 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
   const [sortConfig, setSortConfig] = useState({ key: 'station', direction: 'asc' });
 
   const parseNum = (val) => {
-    let s = String(val || '0').trim().replace(/%/g, ''); 
+    if (val === undefined || val === null || val === '') return 0;
+    let s = String(val).trim().replace(/%/g, ''); 
     if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.'));
     return Number(s) || 0;
   };
@@ -132,13 +132,31 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       aggs[station].count++; 
     });
 
+    // 🔥 BLINDAGEM DA BUSCA DE FIRST TRIPS (Agora funciona no Manual!)
     const firstTripsMap = {};
-    if (firstTripsData && firstTripsData.length > 1 && viewMode !== 'customizado') {
+    if (firstTripsData && firstTripsData.length > 1) {
       const headers = firstTripsData[0];
-      let targetStr = viewMode === 'semana' ? `W-${String(actualWeekNum).padStart(2, '0')}` : `M-${actualMonthData.monthNum}`;
-      const targetCol = headers.findIndex(h => h === targetStr);
+      
+      let targetStr = '';
+      if (viewMode === 'semana') {
+        targetStr = filtrosGlobais?.semana ? String(filtrosGlobais.semana).trim() : `W-${String(actualWeekNum).padStart(2, '0')}`;
+      } else if (viewMode === 'mes') {
+        const m = filtrosGlobais?.mes ? filtrosGlobais.mes : actualMonthData.monthNum;
+        targetStr = `M-${String(m).padStart(2, '0')}`;
+      } else if (viewMode === 'customizado') {
+        // Se estiver no manual, pega de forma inteligente o mês da "Data Final"
+        const customM = customEndDate ? customEndDate.split('-')[1] : actualMonthData.monthNum;
+        targetStr = `M-${String(customM).padStart(2, '0')}`;
+      }
+
+      // Procura a coluna garantindo que os espaços extras ou diferença de caixa não quebrem a leitura
+      const targetCol = headers.findIndex(h => String(h).trim().toUpperCase() === targetStr.toUpperCase());
+      
       if (targetCol !== -1) {
-        firstTripsData.slice(1).forEach(r => { firstTripsMap[String(r[0]).trim()] = parseNum(r[targetCol]); });
+        firstTripsData.slice(1).forEach(r => { 
+          const hubName = String(r[0] || "").trim();
+          firstTripsMap[hubName] = parseNum(r[targetCol]); 
+        });
       }
     }
 
@@ -171,10 +189,10 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
         
         ofertas: d.count > 0 ? Math.round(d.ofertaTotal / d.count) : 0,
         
-        firstTrips: viewMode === 'customizado' ? 0 : (firstTripsMap[fullName] || 0),
+        // Puxa do First Trips blindado sem o bloqueio antigo do customizado
+        firstTrips: firstTripsMap[fullName] || 0,
         dorm: b.dorm, risco: b.risco, churn: b.churn, novos: b.novos, capHub: b.capHub,
         
-        // 🔥 CORREÇÃO: Fleet Util agora tira a média simples dos turnos na Station
         util: d.count > 0 ? (d.capFleetUtil / d.count) : 0
       };
     }).filter(row => row.station.toLowerCase().includes(stationFilter.toLowerCase()));
@@ -210,7 +228,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
 
   const showTotals = viewMode === 'semana' || viewMode === 'mes';
 
-  // 🔥 CORREÇÃO: Cor sólida (Vermelho Escuro) no hover/active, removendo a transparência "black/10"
   const SortHeader = ({ label, sortKey, className = "" }) => (
     <th className={`px-3 py-3 cursor-pointer select-none bg-[#EE4D2D] hover:bg-[#D0011B] active:bg-[#a81c12] transition-colors group ${className}`} onClick={() => handleSort(sortKey)}>
       <div className="flex items-center justify-center gap-1 text-white">
@@ -236,7 +253,6 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
             <button onClick={() => setViewMode('customizado')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'customizado' ? 'bg-white text-[#113366]' : 'text-white/70 hover:text-white'}`}><Filter size={14}/> Manual (Filtros)</button>
           </div>
           
-          {/* 🔥 NOVO: Inputs de Data Inicial e Final lado a lado */}
           {viewMode === 'customizado' && (
             <div className="flex items-center gap-2 bg-white/10 p-1 rounded-lg">
               <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="bg-white text-[#113366] border-none rounded p-1 text-xs font-bold shadow-sm outline-none cursor-pointer" />
@@ -291,7 +307,8 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
                 <td className="px-3 py-3 text-[#113366] dark:text-white">{formatInt(row.atCarr)}</td>
                 <td className="px-3 py-3 text-[#D0011B] border-l border-slate-100 dark:border-gray-800">{formatInt(row.noShowAbs)}</td>
                 <td className="px-3 py-3 text-[#D0011B]">{formatPct(row.noShowPct)}</td>
-                <td className="px-3 py-3 text-green-600 border-l border-slate-100 dark:border-gray-800">{row.firstTrips === 0 && viewMode === 'customizado' ? '-' : row.firstTrips}</td>
+                {/* 🔥 Aqui também tiramos o bloqueio do traço manual */}
+                <td className="px-3 py-3 text-green-600 border-l border-slate-100 dark:border-gray-800">{row.firstTrips}</td>
                 
                 <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.sprRot)}</td>
                 <td className="px-3 py-3">{formatInt(row.sprExp)}</td>
