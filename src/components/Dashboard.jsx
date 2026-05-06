@@ -128,6 +128,7 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
     { id: 'volumes', label: 'Volumes & SPR', icon: <BarChart3 size={16}/> },
     { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
     { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },
+    { id: 'rodizio', label: 'Rodízio', icon: <CalendarDays size={16}/> },
     { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> },
   ];
 

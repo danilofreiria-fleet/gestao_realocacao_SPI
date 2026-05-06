@@ -10,7 +10,8 @@ import AtPisoCharts from './charts/AtPisoCharts';
 import AttentionPointsFeed from './charts/AttentionPointsFeed';
 import StatusEvolutionChart from './charts/StatusEvolutionChart';
 import FleetHealthCharts from './charts/FleetHealthCharts';
-import PackagesAndReallocation from './charts/PackagesAndReallocation'; // 🔥 IMPORTAÇÃO DO COMPONENTE NOVO AQUI!
+import PackagesAndReallocation from './charts/PackagesAndReallocation'; 
+import RotationTable from './charts/RotationTable';
 
 const Visualizations = ({ 
   activeCategory, 
@@ -103,6 +104,12 @@ const Visualizations = ({
               rawData={rawData} 
               filtrosGlobais={filtrosGlobais} 
            />
+        </div>
+      )}
+
+      {activeCategory === 'rodizio' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <RotationTable filtrosGlobais={filtrosGlobais} />
         </div>
       )}
 

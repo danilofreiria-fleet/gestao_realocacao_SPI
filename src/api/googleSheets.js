@@ -601,3 +601,43 @@ export const getHistoricoFrotaData = async () => {
 };
 
 
+
+// =================================================================
+// GET RODAGEM (Rodízio) - Padronizado com o sistema de Token
+// =================================================================
+export const getRodagemData = async (tabName) => {
+  try {
+    // Pegando o token que já existe no seu sistema
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    // Pegando o ID da planilha do seu arquivo .env
+    const sheetId = import.meta.env.VITE_SPREADSHEET_ID_RODIZIO;
+    
+    if (!sheetId) throw new Error("A variável VITE_SPREADSHEET_ID_RODIZIO não foi encontrada no .env");
+
+    // URL da API oficial do Google Sheets (Sem o ?key= da versão anterior)
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}`;
+
+    // Passando o token de segurança no Header, igual as outras funções!
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { 
+        "Authorization": `Bearer ${token}`, 
+        "Accept": "application/json" 
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn(`Aba ${tabName} ausente ou erro de permissão. Status: ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
+    return data.values || [];
+
+  } catch (error) {
+    console.error(`Falha no getRodagemData (${tabName}):`, error);
+    return []; // Retorna vazio para não quebrar a tela de rodízio
+  }
+};
