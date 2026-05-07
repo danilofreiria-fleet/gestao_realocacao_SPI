@@ -39,10 +39,11 @@ export default function VolumeDispatchCharts({ data }) {
   // MOTOR DE CÁLCULO DE DADOS E VARIAÇÕES INDIVIDUAIS
   // ========================================================
   const processedData = useMemo(() => {
-    if (!data || data.length === 0) return { monthlyAggregated: [], weeklyAggregated: [] };
+    if (!data || data.length === 0) return { dailyAggregated: [], weeklyAggregated: [], monthlyAggregated: [] };
 
-    const rawMonthAgg = {};
+    const rawDayAgg = {};
     const rawWeekAgg = {};
+    const rawMonthAgg = {};
 
     // 1. Agrupamento Bruto
     data.forEach(row => {
@@ -52,7 +53,7 @@ export default function VolumeDispatchCharts({ data }) {
       const volPlanned = parseNum(row[12]);     
       const volProcessed = parseNum(row[13]);   
       const volExpedited = parseNum(row[14]);   
-      const sprPlanned = parseNum(row[15]);  // 🔥 SPR Roteirizado (Coluna P)
+      const sprPlanned = parseNum(row[15]);  // SPR Roteirizado (Coluna P)
       const sprDelivering = parseNum(row[16]);  // SPR Expedido (Coluna Q)
 
       const rotasRoteirizadas = parseNum(row[24]); 
@@ -65,24 +66,40 @@ export default function VolumeDispatchCharts({ data }) {
       const baseDataObj = { 
         volPlanned: 0, volProcessed: 0, volExpedited: 0, 
         sprSum: 0, sprCount: 0, 
-        sprPlannedSum: 0, sprPlannedCount: 0, // 🔥 Acumuladores do SPR Roteirizado
+        sprPlannedSum: 0, sprPlannedCount: 0, 
         rotasRoteirizadas: 0, cargUtil: 0, cargPass: 0, cargMoto: 0, cargVan: 0, cargTotal: 0 
       };
 
       if (dateObj) {
+        // Chaves para Dia e Mês
+        const dayKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
         const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-        if (!rawMonthAgg[monthKey]) rawMonthAgg[monthKey] = { ...baseDataObj };
         
+        // --- AGREGADOR DIÁRIO ---
+        if (!rawDayAgg[dayKey]) rawDayAgg[dayKey] = { ...baseDataObj };
+        rawDayAgg[dayKey].volPlanned += volPlanned;
+        rawDayAgg[dayKey].volProcessed += volProcessed;
+        rawDayAgg[dayKey].volExpedited += volExpedited;
+        rawDayAgg[dayKey].sprSum += sprDelivering;
+        rawDayAgg[dayKey].sprCount += 1;
+        rawDayAgg[dayKey].sprPlannedSum += sprPlanned; 
+        rawDayAgg[dayKey].sprPlannedCount += 1; 
+        rawDayAgg[dayKey].rotasRoteirizadas += rotasRoteirizadas;
+        rawDayAgg[dayKey].cargUtil += cargUtil;
+        rawDayAgg[dayKey].cargPass += cargPass;
+        rawDayAgg[dayKey].cargMoto += cargMoto;
+        rawDayAgg[dayKey].cargVan += cargVan;
+        rawDayAgg[dayKey].cargTotal += cargTotal;
+
+        // --- AGREGADOR MENSAL ---
+        if (!rawMonthAgg[monthKey]) rawMonthAgg[monthKey] = { ...baseDataObj };
         rawMonthAgg[monthKey].volPlanned += volPlanned;
         rawMonthAgg[monthKey].volProcessed += volProcessed;
         rawMonthAgg[monthKey].volExpedited += volExpedited;
-        
         rawMonthAgg[monthKey].sprSum += sprDelivering;
         rawMonthAgg[monthKey].sprCount += 1;
-        
-        rawMonthAgg[monthKey].sprPlannedSum += sprPlanned; // 🔥 Somando SPR Rot
-        rawMonthAgg[monthKey].sprPlannedCount += 1; // 🔥 Contando SPR Rot
-
+        rawMonthAgg[monthKey].sprPlannedSum += sprPlanned; 
+        rawMonthAgg[monthKey].sprPlannedCount += 1; 
         rawMonthAgg[monthKey].rotasRoteirizadas += rotasRoteirizadas;
         rawMonthAgg[monthKey].cargUtil += cargUtil;
         rawMonthAgg[monthKey].cargPass += cargPass;
@@ -91,19 +108,16 @@ export default function VolumeDispatchCharts({ data }) {
         rawMonthAgg[monthKey].cargTotal += cargTotal;
       }
 
+      // --- AGREGADOR SEMANAL ---
       if (weekStr && weekStr.toUpperCase().includes('W-')) {
         if (!rawWeekAgg[weekStr]) rawWeekAgg[weekStr] = { ...baseDataObj };
-        
         rawWeekAgg[weekStr].volPlanned += volPlanned;
         rawWeekAgg[weekStr].volProcessed += volProcessed;
         rawWeekAgg[weekStr].volExpedited += volExpedited;
-        
         rawWeekAgg[weekStr].sprSum += sprDelivering;
         rawWeekAgg[weekStr].sprCount += 1;
-        
-        rawWeekAgg[weekStr].sprPlannedSum += sprPlanned; // 🔥 Somando SPR Rot
-        rawWeekAgg[weekStr].sprPlannedCount += 1; // 🔥 Contando SPR Rot
-
+        rawWeekAgg[weekStr].sprPlannedSum += sprPlanned; 
+        rawWeekAgg[weekStr].sprPlannedCount += 1; 
         rawWeekAgg[weekStr].rotasRoteirizadas += rotasRoteirizadas;
         rawWeekAgg[weekStr].cargUtil += cargUtil;
         rawWeekAgg[weekStr].cargPass += cargPass;
@@ -118,10 +132,13 @@ export default function VolumeDispatchCharts({ data }) {
       return Number((((curr - prev) / prev) * 100).toFixed(1));
     };
 
-    // 2. Formatador Genérico e Cálculo Específico de Modais
-    const formatAggregatedData = (rawObj, isMonth = false) => {
+    // 2. Formatador Genérico
+    const formatAggregatedData = (rawObj, periodType) => {
       return Object.keys(rawObj)
-        .sort((a, b) => isMonth ? a.localeCompare(b) : extractWeekNumber(a) - extractWeekNumber(b))
+        .sort((a, b) => {
+          if (periodType === 'week') return extractWeekNumber(a) - extractWeekNumber(b);
+          return a.localeCompare(b); // Para Day (YYYY-MM-DD) e Month (YYYY-MM) a ordem alfabética já resolve cronologicamente
+        })
         .map((key, index, arr) => {
           const d = rawObj[key];
           const prev = index > 0 ? rawObj[arr[index - 1]] : null;
@@ -129,14 +146,18 @@ export default function VolumeDispatchCharts({ data }) {
           const sprAvg = d.sprCount > 0 ? Number((d.sprSum / d.sprCount).toFixed(2)) : 0;
           const prevSprAvg = prev && prev.sprCount > 0 ? (prev.sprSum / prev.sprCount) : 0;
 
-          // 🔥 Média do SPR Roteirizado
           const sprPlannedAvg = d.sprPlannedCount > 0 ? Number((d.sprPlannedSum / d.sprPlannedCount).toFixed(2)) : 0;
           const prevSprPlannedAvg = prev && prev.sprPlannedCount > 0 ? (prev.sprPlannedSum / prev.sprPlannedCount) : 0;
 
+          const gapSpr = Number((sprAvg - sprPlannedAvg).toFixed(2));
+
           let name = key;
-          if (isMonth) {
+          if (periodType === 'month') {
             const [year, month] = key.split('-');
             name = `${NAMES_MESES[parseInt(month, 10) - 1]}/${year.substring(2)}`;
+          } else if (periodType === 'day') {
+            const [year, month, day] = key.split('-');
+            name = `${day}/${month}`;
           }
 
           return {
@@ -153,9 +174,10 @@ export default function VolumeDispatchCharts({ data }) {
             sprDeliveringAvg: sprAvg,
             varSprPct: calculateVar(sprAvg, prevSprAvg),
 
-            // 🔥 Exportando para o gráfico
             sprPlannedAvg: sprPlannedAvg,
             varSprPlannedPct: calculateVar(sprPlannedAvg, prevSprPlannedAvg),
+
+            gapSpr: gapSpr, 
 
             rotasRoteirizadas: d.rotasRoteirizadas,
             varRotasPct: calculateVar(d.rotasRoteirizadas, prev?.rotasRoteirizadas),
@@ -179,8 +201,9 @@ export default function VolumeDispatchCharts({ data }) {
     };
 
     return { 
-      monthlyAggregated: formatAggregatedData(rawMonthAgg, true), 
-      weeklyAggregated: formatAggregatedData(rawWeekAgg, false) 
+      dailyAggregated: formatAggregatedData(rawDayAgg, 'day'),
+      weeklyAggregated: formatAggregatedData(rawWeekAgg, 'week'),
+      monthlyAggregated: formatAggregatedData(rawMonthAgg, 'month')
     };
   }, [data]);
 
@@ -195,10 +218,26 @@ export default function VolumeDispatchCharts({ data }) {
     return tickItem.toString();
   };
 
-  const CustomTooltip = ({ active, payload, label, suffix = '', valueName = 'Valor', lineKey, isModal = false, selectedModal = 'ALL' }) => {
+  const CustomTooltip = ({ active, payload, label, suffix = '', valueName = 'Valor', lineKey, isModal = false, isSprCompare = false, selectedModal = 'ALL' }) => {
     if (active && payload && payload.length) {
       
-      // TOOLTIP INTELIGENTE PARA MODAIS
+      if (isSprCompare) {
+        const rot = payload.find(p => p.dataKey === 'sprPlannedAvg')?.value || 0;
+        const exp = payload.find(p => p.dataKey === 'sprDeliveringAvg')?.value || 0;
+        const gap = payload.find(p => p.dataKey === 'gapSpr')?.value || 0;
+
+        return (
+          <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-[#113366]">
+            <p className="font-black text-[#113366] dark:text-[#EE4D2D] border-b border-slate-200 pb-2 mb-2">{label}</p>
+            <p className="font-bold text-sm mt-1" style={{ color: '#EE4D2D' }}>SPR Roteirizado: {rot}</p>
+            <p className="font-bold text-sm mt-1" style={{ color: '#113366' }}>SPR Expedido: {exp}</p>
+            <p className="font-black mt-3 text-[#D0011B] pt-2 border-t border-slate-100">
+              Diferença (Gap): {gap > 0 ? '+' : ''}{gap} pacotes/rota
+            </p>
+          </div>
+        );
+      }
+
       if (isModal) {
         const varData = payload.find(p => p.dataKey === lineKey);
         const util = payload.find(p => p.dataKey === 'cargUtil')?.value || 0;
@@ -239,7 +278,6 @@ export default function VolumeDispatchCharts({ data }) {
         );
       }
 
-      // TOOLTIP PADRÃO
       const valData = payload.find(p => p.dataKey !== lineKey);
       const varData = payload.find(p => p.dataKey === lineKey);
 
@@ -285,7 +323,33 @@ export default function VolumeDispatchCharts({ data }) {
     </ResponsiveContainer>
   );
 
-  // GRÁFICO DINÂMICO DE MODAL (BARRAS AGRUPADAS)
+  const SprCompareChart = ({ data }) => (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data} margin={{ top: 30, right: 20, left: -10, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 'bold', fill: '#113366' }} angle={-45} textAnchor="end" interval={0} />
+        <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#113366' }} domain={[0, 'auto']} />
+        <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#D0011B' }} domain={['auto', 'auto']} />
+        
+        <Tooltip content={<CustomTooltip isSprCompare={true} />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+        <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', color: '#113366' }} />
+        <ReferenceLine yAxisId="right" y={0} stroke="#D0011B" strokeDasharray="3 3" />
+
+        <Bar yAxisId="left" dataKey="sprPlannedAvg" name="SPR Roteirizado" fill="#EE4D2D" radius={[4, 4, 0, 0]} maxBarSize={45}>
+          <LabelList dataKey="sprPlannedAvg" position="top" style={{ fill: '#EE4D2D', fontSize: 10, fontWeight: '900' }} />
+        </Bar>
+        
+        <Bar yAxisId="left" dataKey="sprDeliveringAvg" name="SPR Expedido" fill="#113366" radius={[4, 4, 0, 0]} maxBarSize={45}>
+          <LabelList dataKey="sprDeliveringAvg" position="top" style={{ fill: '#113366', fontSize: 10, fontWeight: '900' }} />
+        </Bar>
+
+        <Line yAxisId="right" type="monotone" dataKey="gapSpr" name="Diferença (Gap)" stroke="#D0011B" strokeWidth={3} dot={{ r: 5, strokeWidth: 2, fill: 'white', stroke: '#D0011B' }} activeDot={{ r: 6 }} >
+          <LabelList dataKey="gapSpr" position="bottom" formatter={(val) => `${val > 0 ? '+' : ''}${val}`} style={{ fill: '#D0011B', fontSize: 10, fontWeight: '900', textShadow: '1px 1px 2px rgba(255,255,255,0.8)' }} />
+        </Line>
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+
   const ModalBarLineVariationChart = ({ data, selectedModal }) => {
     let lineKey = 'varCargTotalPct';
     let lineName = 'Variação % Total';
@@ -306,13 +370,11 @@ export default function VolumeDispatchCharts({ data }) {
           <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', color: '#113366' }} />
           <ReferenceLine yAxisId="right" y={0} stroke="#D0011B" strokeDasharray="3 3" />
 
-          {/* Barras Agrupadas dinamicamente */}
           {(selectedModal === 'ALL' || selectedModal === 'UTIL') && <Bar yAxisId="left" dataKey="cargUtil" name="Utilitário" fill="#113366" radius={[4, 4, 0, 0]} maxBarSize={40} />}
           {(selectedModal === 'ALL' || selectedModal === 'PASS') && <Bar yAxisId="left" dataKey="cargPass" name="Passeio" fill="#EE4D2D" radius={[4, 4, 0, 0]} maxBarSize={40} />}
           {(selectedModal === 'ALL' || selectedModal === 'MOTO') && <Bar yAxisId="left" dataKey="cargMoto" name="Moto" fill="#D0011B" radius={[4, 4, 0, 0]} maxBarSize={40} />}
           {(selectedModal === 'ALL' || selectedModal === 'VAN') && <Bar yAxisId="left" dataKey="cargVan" name="Van" fill="#113366" fillOpacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={40} />}
 
-          {/* Linha de Variação Dinâmica */}
           <Line yAxisId="right" type="monotone" dataKey={lineKey} name={lineName} stroke="#D0011B" strokeWidth={3} dot={{ r: 5, strokeWidth: 2, fill: 'white', stroke: '#D0011B' }} activeDot={{ r: 6 }} >
             <LabelList dataKey={lineKey} position="top" formatter={(val) => `${val > 0 ? '+' : ''}${val}%`} style={{ fill: '#D0011B', fontSize: 10, fontWeight: '900', textShadow: '1px 1px 2px rgba(255,255,255,0.8)' }} />
           </Line>
@@ -322,15 +384,22 @@ export default function VolumeDispatchCharts({ data }) {
   };
 
   // ========================================================
-  // CARD INTELIGENTE (COM TOGGLE SEMANA/MÊS E MODAL)
+  // CARD INTELIGENTE (COM TOGGLE DIA/SEMANA/MÊS E MODAL)
   // ========================================================
-  const ToggleableChartCard = ({ id, titleBase, valueName, barKeyBase, varKeyBase, barColor, isAverage = false, isModal = false, colSpan = "col-span-1" }) => {
+  const ToggleableChartCard = ({ id, titleBase, valueName, barKeyBase, varKeyBase, barColor, isAverage = false, isModal = false, isSprCompare = false, colSpan = "col-span-1" }) => {
     const [timeframe, setTimeframe] = useState('week'); 
     const [selectedModal, setSelectedModal] = useState('ALL'); 
     
     const isFullscreen = fullscreenChart === id;
-    const chartData = timeframe === 'week' ? processedData.weeklyAggregated : processedData.monthlyAggregated;
-    const title = `${titleBase} [% VAR. PER ${timeframe === 'week' ? 'WEEK' : 'MONTH'}]`;
+    
+    // Puxa do State Dinamicamente
+    const chartData = timeframe === 'day' ? processedData.dailyAggregated 
+                    : timeframe === 'week' ? processedData.weeklyAggregated 
+                    : processedData.monthlyAggregated;
+    
+    // Altera o título para refletir a escolha (DIA, SEMANA ou MÊS)
+    const periodLabel = timeframe === 'day' ? 'DAY' : timeframe === 'week' ? 'WEEK' : 'MONTH';
+    const title = `${titleBase} [PER ${periodLabel}]`;
 
     const cardContent = (
       <div className={`bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative transition-all ${isFullscreen ? 'w-full h-full p-8' : `h-[450px] p-6 ${colSpan}`} print:break-inside-avoid print:h-[450px]`}>
@@ -340,7 +409,6 @@ export default function VolumeDispatchCharts({ data }) {
           </h3>
           
           <div className="flex items-center gap-3">
-            {/* DROPDOWN DE MODAIS */}
             {isModal && (
               <select 
                 value={selectedModal} 
@@ -355,7 +423,9 @@ export default function VolumeDispatchCharts({ data }) {
               </select>
             )}
 
+            {/* 🔥 NOVO: Botão de DIA incluso no Toggle de tempo */}
             <div className="flex items-center bg-slate-100 dark:bg-gray-800 p-1 rounded-lg">
+              <button onClick={() => setTimeframe('day')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeframe === 'day' ? 'bg-[#113366] shadow text-white' : 'text-[#113366] opacity-50 hover:opacity-100'}`}><CalendarDays size={14}/> Dia</button>
               <button onClick={() => setTimeframe('week')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeframe === 'week' ? 'bg-[#113366] shadow text-white' : 'text-[#113366] opacity-50 hover:opacity-100'}`}><CalendarDays size={14}/> Sem</button>
               <button onClick={() => setTimeframe('month')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeframe === 'month' ? 'bg-[#113366] shadow text-white' : 'text-[#113366] opacity-50 hover:opacity-100'}`}><Calendar size={14}/> Mês</button>
             </div>
@@ -368,7 +438,9 @@ export default function VolumeDispatchCharts({ data }) {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar print:overflow-hidden">
           <div className="w-full h-full min-h-[350px]">
-            {isModal ? (
+            {isSprCompare ? (
+              <SprCompareChart data={chartData} />
+            ) : isModal ? (
               <ModalBarLineVariationChart 
                 data={chartData} 
                 selectedModal={selectedModal}
@@ -421,14 +493,9 @@ export default function VolumeDispatchCharts({ data }) {
         <ToggleableChartCard id="planned" titleBase="VOL ROTEIRIZADO" valueName="Total Vol Planned" barKeyBase="volPlanned" varKeyBase="varPlannedPct" barColor="#113366" />
         <ToggleableChartCard id="processed" titleBase="VOL PROCESSADO" valueName="Total Vol Processado" barKeyBase="volProcessed" varKeyBase="varProcessedPct" barColor="#EE4D2D" />
         <ToggleableChartCard id="expedited" titleBase="VOL EXPEDIDO" valueName="Total Vol Expedido" barKeyBase="volExpedited" varKeyBase="varExpeditedPct" barColor="#D0011B" />
-        
-        {/* 🔥 GRÁFICO NOVO: SPR ROTEIRIZADO */}
-        <ToggleableChartCard id="sprRot" titleBase="SPR ROTEIRIZADO" valueName="Média SPR Roteirizado" barKeyBase="sprPlannedAvg" varKeyBase="varSprPlannedPct" barColor="#EE4D2D" isAverage={true} />
-        
-        {/* Gráfico antigo (SPR Expedido) mantido */}
-        <ToggleableChartCard id="sprExp" titleBase="SPR EXPEDIDO" valueName="Média SPR Delivering" barKeyBase="sprDeliveringAvg" varKeyBase="varSprPct" barColor="#113366" isAverage={true} />
-        
         <ToggleableChartCard id="rotas" titleBase="ROTAS ROTEIRIZADAS" valueName="Rotas Roteirizadas" barKeyBase="rotasRoteirizadas" varKeyBase="varRotasPct" barColor="#EE4D2D" />
+        
+        <ToggleableChartCard id="sprCompare" titleBase="COMPARAÇÃO DE SPR (ROTEIRIZADO VS EXPEDIDO)" isSprCompare={true} colSpan="xl:col-span-2" />
         
         <ToggleableChartCard id="modais" titleBase="ROTAS CARREGADAS [POR MODAL]" isModal={true} colSpan="xl:col-span-2" />
       </div>

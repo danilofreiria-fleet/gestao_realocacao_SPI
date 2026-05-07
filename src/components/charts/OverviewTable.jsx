@@ -1,7 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { LayoutDashboard, CalendarDays, Calendar, Filter, Clock, ArrowUpDown, Search } from 'lucide-react';
 
-export default function OverviewTable({ data, rawData, baseData, firstTripsData, filtrosGlobais = {} }) {
+const TRADUZ_MES = {
+  '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI', '06':'JUN', 
+  '07':'JUL', '08':'AGO', '09':'SET', '10':'OUT', '11':'NOV', '12':'DEZ'
+};
+
+export default function OverviewTable({ data, rawData, baseData, historicoFrotaData, firstTripsData, filtrosGlobais = {} }) {
   const [viewMode, setViewMode] = useState('semana'); 
   const hojeStr = new Date().toLocaleDateString('en-CA'); 
   
@@ -11,6 +16,12 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
   const [localTurno, setLocalTurno] = useState('ALL');
   const [stationFilter, setStationFilter] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'station', direction: 'asc' });
+
+  // Sincroniza o Manual local com os Globais
+  useEffect(() => {
+     if (filtrosGlobais.dataInicio) setCustomStartDate(filtrosGlobais.dataInicio);
+     if (filtrosGlobais.dataFim) setCustomEndDate(filtrosGlobais.dataFim);
+  }, [filtrosGlobais.dataInicio, filtrosGlobais.dataFim]);
 
   const parseNum = (val) => {
     if (val === undefined || val === null || val === '') return 0;
@@ -28,96 +39,80 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
     setSortConfig({ key, direction });
   };
 
-  const extractWeekNumber = (str) => {
-    const match = String(str || "").trim().match(/^W[- ]?0*(\d+)$/i);
-    return match ? parseInt(match[1], 10) : -1;
-  };
-
-  const extrairDataLocal = (val) => {
-    if (!val) return "";
-    let s = String(val).trim().split('T')[0].split(' ')[0];
+  const parseUniversalDate = (dateStr) => {
+    if (!dateStr) return null;
+    let s = String(dateStr).trim().split('T')[0].split(' ')[0];
     if (s.includes('/')) {
-      const parts = s.split('/');
-      return `${parts[2]}-${parts[1]}-${parts[0]}`; 
+      const [dia, m, a] = s.split('/');
+      return `${a}-${m.padStart(2, '0')}-${dia.padStart(2, '0')}`;
     }
     return s;
   };
 
-  const extrairMesAno = (val) => {
-    if (!val) return "";
-    let s = String(val).trim().split('T')[0].split(' ')[0];
-    if (s.includes('/')) {
-      const parts = s.split('/');
-      return `${parts[1]}/${parts[2]}`;
-    }
-    if (s.includes('-')) {
-      const parts = s.split('-');
-      return `${parts[1]}/${parts[0]}`; 
-    }
-    return "";
+  const getISOWeek = (dateStr) => {
+    const isoDate = parseUniversalDate(dateStr);
+    if (!isoDate) return "";
+    const d = new Date(isoDate + 'T12:00:00');
+    const dCopy = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = dCopy.getUTCDay() || 7;
+    dCopy.setUTCDate(dCopy.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(dCopy.getUTCFullYear(),0,1));
+    return `W-${String(Math.ceil((((dCopy - yearStart) / 86400000) + 1)/7)).padStart(2, '0')}`;
   };
 
-  const currentWeekNum = useMemo(() => {
+  const currentWeekStr = useMemo(() => {
     let maxW = 0;
     (rawData || []).forEach(r => {
-      const w = extractWeekNumber(r[2]);
+      const match = String(r[2] || "").match(/\d+/);
+      const w = match ? parseInt(match[0], 10) : 0;
       if (w > maxW) maxW = w;
     });
-    return maxW || 17;
+    return `W-${String(maxW || 17).padStart(2, '0')}`;
   }, [rawData]);
 
-  const mesAnoAlvo = useMemo(() => {
-    const agora = new Date();
-    const m = String(agora.getMonth() + 1).padStart(2, '0');
-    const a = agora.getFullYear();
-    return { label: `${m}/${a}`, monthNum: m };
-  }, []);
-
-  const actualWeekNum = useMemo(() => {
-    if (filtrosGlobais?.semana) return extractWeekNumber(filtrosGlobais.semana);
-    return currentWeekNum;
-  }, [filtrosGlobais, currentWeekNum]);
-
-  const actualMonthData = useMemo(() => {
-    if (filtrosGlobais?.mes) {
-      const a = new Date().getFullYear();
-      return { label: `${filtrosGlobais.mes}/${a}`, monthNum: filtrosGlobais.mes };
+  const actualWeekStr = useMemo(() => {
+    if (filtrosGlobais?.semana && !String(filtrosGlobais.semana).toLowerCase().includes('semana')) {
+      return String(filtrosGlobais.semana).trim().toUpperCase();
     }
-    return mesAnoAlvo;
-  }, [filtrosGlobais, mesAnoAlvo]);
+    return currentWeekStr;
+  }, [filtrosGlobais, currentWeekStr]);
+
+  const actualMonthStr = useMemo(() => {
+    const TR_REV = { 'JAN':'01', 'FEV':'02', 'MAR':'03', 'MARÇO':'03', 'ABR':'04', 'ABRIL':'04', 'MAI':'05', 'MAIO':'05', 'JUN':'06', 'JUL':'07', 'AGO':'08', 'SET':'09', 'OUT':'10', 'NOV':'11', 'DEZ':'12' };
+    if (filtrosGlobais?.mes && !String(filtrosGlobais.mes).toLowerCase().includes('mês')) {
+      const mesStr = String(filtrosGlobais.mes).trim().toUpperCase();
+      return TR_REV[mesStr] || String(filtrosGlobais.mes).padStart(2, '0');
+    }
+    return String(new Date().getMonth() + 1).padStart(2, '0');
+  }, [filtrosGlobais]);
+
+  const isGlobalFiltroActive = (arr) => arr && arr.length > 0 && !arr.some(v => String(v).toLowerCase().includes('todas') || String(v).toLowerCase().includes('todos'));
 
   const overviewData = useMemo(() => {
     const aggs = {};
-    
-    let opSet = [];
-    if (viewMode === 'semana') {
-      opSet = (rawData || []).filter(r => extractWeekNumber(r[2]) === actualWeekNum);
-    } else if (viewMode === 'mes') {
-      opSet = (rawData || []).filter(r => extrairMesAno(r[3]) === actualMonthData.label);
-    } else if (viewMode === 'customizado') {
-      opSet = (rawData || []).filter(r => {
-        const rowDateStr = extrairDataLocal(r[3]);
-        return rowDateStr >= customStartDate && rowDateStr <= customEndDate;
-      });
-    }
 
-    if (filtrosGlobais?.regional && filtrosGlobais.regional.length > 0) {
-      opSet = opSet.filter(r => filtrosGlobais.regional.includes(r[1]));
-    }
-    if (filtrosGlobais?.station && filtrosGlobais.station.length > 0) {
-      opSet = opSet.filter(r => filtrosGlobais.station.includes(r[4]));
-    }
-    if (filtrosGlobais?.turno && filtrosGlobais.turno.length > 0) {
-      opSet = opSet.filter(r => filtrosGlobais.turno.includes(String(r[5] || "").trim().toUpperCase()));
-    }
-    if (localTurno !== 'ALL') {
-      opSet = opSet.filter(r => String(r[5] || "").trim().toUpperCase() === localTurno);
-    }
+    // 1. Filtragem do Consolidado (Operacional)
+    let opSet = (rawData || []).filter(r => {
+        if (viewMode === 'semana') return String(r[2]).trim().toUpperCase() === actualWeekStr;
+        if (viewMode === 'mes') {
+            const iso = parseUniversalDate(r[3]);
+            return iso && iso.split('-')[1] === actualMonthStr;
+        }
+        if (viewMode === 'customizado') {
+            const iso = parseUniversalDate(r[3]);
+            return iso >= customStartDate && iso <= customEndDate;
+        }
+        return false;
+    });
+
+    if (isGlobalFiltroActive(filtrosGlobais?.regional)) opSet = opSet.filter(r => filtrosGlobais.regional.includes(r[1]));
+    if (isGlobalFiltroActive(filtrosGlobais?.station)) opSet = opSet.filter(r => filtrosGlobais.station.includes(r[4]));
+    if (isGlobalFiltroActive(filtrosGlobais?.turno)) opSet = opSet.filter(r => filtrosGlobais.turno.includes(String(r[5] || "").trim().toUpperCase()));
+    if (localTurno !== 'ALL') opSet = opSet.filter(r => String(r[5] || "").trim().toUpperCase() === localTurno);
 
     opSet.forEach(row => {
       const station = String(row[4] || "").trim();
       if (!station) return;
-      
       if (!aggs[station]) {
         aggs[station] = { full: station, volRot: 0, volProc: 0, volExp: 0, atRot: 0, atCarr: 0, noShowAbs: 0, capFleetUtil: 0, count: 0, ofertaTotal: 0 };
       }
@@ -132,67 +127,124 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       aggs[station].count++; 
     });
 
-    // 🔥 BLINDAGEM DA BUSCA DE FIRST TRIPS (Agora funciona no Manual!)
-    const firstTripsMap = {};
-    if (firstTripsData && firstTripsData.length > 1) {
-      const headers = firstTripsData[0];
-      
-      let targetStr = '';
-      if (viewMode === 'semana') {
-        targetStr = filtrosGlobais?.semana ? String(filtrosGlobais.semana).trim() : `W-${String(actualWeekNum).padStart(2, '0')}`;
-      } else if (viewMode === 'mes') {
-        const m = filtrosGlobais?.mes ? filtrosGlobais.mes : actualMonthData.monthNum;
-        targetStr = `M-${String(m).padStart(2, '0')}`;
-      } else if (viewMode === 'customizado') {
-        // Se estiver no manual, pega de forma inteligente o mês da "Data Final"
-        const customM = customEndDate ? customEndDate.split('-')[1] : actualMonthData.monthNum;
-        targetStr = `M-${String(customM).padStart(2, '0')}`;
-      }
+// 2. RH HÍBRIDO (HOJE + HISTÓRICO)
 
-      // Procura a coluna garantindo que os espaços extras ou diferença de caixa não quebrem a leitura
-      const targetCol = headers.findIndex(h => String(h).trim().toUpperCase() === targetStr.toUpperCase());
-      
-      if (targetCol !== -1) {
-        firstTripsData.slice(1).forEach(r => { 
-          const hubName = String(r[0] || "").trim();
-          firstTripsMap[hubName] = parseNum(r[targetCol]); 
+const rhMap = {};
+
+
+// Primeiro, popula com o SNAPSHOT DE HOJE (BaseData)
+
+(baseData || []).slice(1).forEach(r => {
+
+const st = String(r[0]).trim();
+
+const t = String(r[1] || "").trim().toUpperCase();
+
+
+if (!rhMap[st]) {
+
+rhMap[st] = { dorm: parseNum(r[11]), risco: parseNum(r[14]), churn: parseNum(r[10]), novos: parseNum(r[15]), capHub: 0 };
+
+}
+
+if (localTurno === 'ALL' || localTurno === t) {
+
+rhMap[st].capHub += parseNum(r[2]);
+
+}
+
+});
+
+
+
+// Se o filtro for do passado, sobrescreve o rhMap com os dados históricos exatos
+
+if (historicoFrotaData && historicoFrotaData.length > 1) {
+
+historicoFrotaData.slice(1).forEach(row => {
+
+const rowSemana = String(row[0]).trim().toUpperCase();
+
+const isoDate = parseUniversalDate(row[2]);
+
+const st = String(row[3] || "").trim();
+
+
+let isPastMatch = false;
+
+if (viewMode === 'semana') isPastMatch = (rowSemana === actualWeekStr);
+
+else if (viewMode === 'mes') isPastMatch = (isoDate?.split('-')[1] === actualMonthStr);
+
+else if (viewMode === 'customizado') isPastMatch = (isoDate >= customStartDate && isoDate <= customEndDate);
+
+
+
+if (isPastMatch && rhMap[st]) {
+
+rhMap[st].dorm = parseNum(row[5]);
+
+rhMap[st].risco = parseNum(row[6]);
+
+rhMap[st].churn = parseNum(row[7]);
+
+rhMap[st].novos = parseNum(row[8]);
+
+}
+
+});
+
+}
+
+
+
+    // 3. FIRST TRIPS (PIVOTADA) - Corrigido para ler o r[2]!
+    const ftMap = {};
+    if (firstTripsData && firstTripsData.length > 1) {
+        const headers = firstTripsData[0];
+        const validCols = headers
+          .map((h, i) => ({ label: parseUniversalDate(h), idx: i }))
+          .filter(c => {
+            if (!c.label) return false;
+            if (viewMode === 'semana') return getISOWeek(c.label) === actualWeekStr;
+            if (viewMode === 'mes') return c.label.split('-')[1] === actualMonthStr;
+            if (viewMode === 'customizado') return c.label >= customStartDate && c.label <= customEndDate;
+            return false;
+          });
+
+        firstTripsData.slice(1).forEach(r => {
+            const hubName = String(r[2] || "").trim(); // 🔥 FOI AQUI QUE O GPT ERROU (ele botou r[0])
+            let total = 0;
+            validCols.forEach(col => { total += parseNum(r[col.idx]); });
+            ftMap[hubName] = total;
         });
-      }
     }
 
+    // 4. CAP HUB DA ABA BASE
     const baseMap = {};
-    const rhVistos = new Set();
     (baseData || []).slice(1).forEach(r => {
       const stFull = String(r[0]).trim();
       const turnoLinha = String(r[1] || "").trim().toUpperCase();
-      if (!baseMap[stFull]) baseMap[stFull] = { capHub: 0, churn: 0, dorm: 0, risco: 0, novos: 0 };
+      if (!baseMap[stFull]) baseMap[stFull] = { capHub: 0 };
       if (localTurno === 'ALL' || localTurno === turnoLinha) baseMap[stFull].capHub += parseNum(r[2]);   
-      if (!rhVistos.has(stFull)) {
-        rhVistos.add(stFull);
-        baseMap[stFull].churn = parseNum(r[10]); baseMap[stFull].dorm = parseNum(r[11]);    
-        baseMap[stFull].risco = parseNum(r[14]); baseMap[stFull].novos = parseNum(r[15]);   
-      }
     });
 
     let finalArray = Object.keys(aggs).map(fullName => {
       const d = aggs[fullName];
-      const b = baseMap[fullName] || { capHub: 0, churn: 0, dorm: 0, risco: 0, novos: 0 };
+      const bCap = baseMap[fullName] || { capHub: 0 };
+      const rh = rhMap[fullName] || { dorm: 0, risco: 0, churn: 0, novos: 0 };
+
       return {
         station: fullName,
         volRot: d.volRot, volProc: d.volProc, volExp: d.volExp,
         atRot: d.atRot, atCarr: d.atCarr,
         noShowAbs: d.noShowAbs,
         noShowPct: d.atRot > 0 ? (d.noShowAbs / d.atRot) * 100 : 0,
-        
         sprRot: d.atRot > 0 ? Math.round(d.volRot / d.atRot) : 0,
         sprExp: d.atCarr > 0 ? Math.round(d.volExp / d.atCarr) : 0,
-        
         ofertas: d.count > 0 ? Math.round(d.ofertaTotal / d.count) : 0,
-        
-        // Puxa do First Trips blindado sem o bloqueio antigo do customizado
-        firstTrips: firstTripsMap[fullName] || 0,
-        dorm: b.dorm, risco: b.risco, churn: b.churn, novos: b.novos, capHub: b.capHub,
-        
+        firstTrips: ftMap[fullName] || 0,
+        dorm: rh.dorm, risco: rh.risco, churn: rh.churn, novos: rh.novos, capHub: bCap.capHub,
         util: d.count > 0 ? (d.capFleetUtil / d.count) : 0
       };
     }).filter(row => row.station.toLowerCase().includes(stationFilter.toLowerCase()));
@@ -201,27 +253,22 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
       finalArray.sort((a, b) => {
         const valA = a[sortConfig.key];
         const valB = b[sortConfig.key];
-        if (typeof valA === 'string') {
-          return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        }
+        if (typeof valA === 'string') return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
         return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
       });
     }
 
     return finalArray;
-  }, [rawData, data, baseData, firstTripsData, viewMode, actualWeekNum, actualMonthData, customStartDate, customEndDate, localTurno, filtrosGlobais, stationFilter, sortConfig]);
+  }, [rawData, baseData, historicoFrotaData, firstTripsData, viewMode, actualWeekStr, actualMonthStr, customStartDate, customEndDate, localTurno, filtrosGlobais, stationFilter, sortConfig]);
 
   const totals = useMemo(() => {
     return overviewData.reduce((acc, row) => {
       acc.volRot += row.volRot; acc.volProc += row.volProc; acc.volExp += row.volExp;
       acc.atRot += row.atRot; acc.atCarr += row.atCarr; acc.noShowAbs += row.noShowAbs; 
-      acc.ofertas += row.ofertas; if (typeof row.firstTrips === 'number') acc.firstTrips += row.firstTrips;
+      acc.ofertas += row.ofertas; acc.firstTrips += row.firstTrips;
       acc.dorm += row.dorm; acc.risco += row.risco; acc.churn += row.churn;
       acc.novos += row.novos; acc.capHub += row.capHub;
-      
-      acc.utilTotal += (row.util || 0);
-      acc.rowCount += 1;
-      
+      acc.utilTotal += (row.util || 0); acc.rowCount += 1;
       return acc;
     }, { volRot: 0, volProc: 0, volExp: 0, atRot: 0, atCarr: 0, noShowAbs: 0, ofertas: 0, firstTrips: 0, dorm: 0, risco: 0, churn: 0, novos: 0, capHub: 0, utilTotal: 0, rowCount: 0 });
   }, [overviewData]);
@@ -238,28 +285,36 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
 
   return (
     <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden mt-8">
+      
+      {/* HEADER DE COMANDOS COMPLETO */}
       <div className="bg-[#113366] py-4 px-6 flex flex-col xl:flex-row justify-between items-center gap-4">
         <h2 className="text-white text-xl font-black flex items-center gap-2 uppercase tracking-tight"><LayoutDashboard className="text-[#EE4D2D]" /> Overview Consolidado</h2>
         <div className="flex flex-wrap items-center gap-3">
+          
+          {/* SELETOR DE TURNO LOCAL */}
           <div className="flex items-center bg-white/10 rounded-lg p-1 mr-2">
             <span className="text-white text-xs font-bold mx-2 flex items-center gap-1"><Clock size={12}/> Turno:</span>
             {['ALL', 'AM', 'PM1', 'PM2'].map(shift => (
               <button key={shift} onClick={() => setLocalTurno(shift)} className={`px-3 py-1 rounded text-xs font-bold transition-all ${localTurno === shift ? 'bg-[#EE4D2D] text-white shadow' : 'text-white/70 hover:text-white'}`}>{shift === 'ALL' ? 'Todos' : shift}</button>
             ))}
           </div>
+
+          {/* SELETOR DE MODO DE VISÃO */}
           <div className="flex bg-white/10 p-1 rounded-lg">
             <button onClick={() => setViewMode('semana')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'semana' ? 'bg-white text-[#113366]' : 'text-white/70 hover:text-white'}`}><CalendarDays size={14}/> Semana</button>
             <button onClick={() => setViewMode('mes')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'mes' ? 'bg-white text-[#113366]' : 'text-white/70 hover:text-white'}`}><Calendar size={14}/> Mês</button>
             <button onClick={() => setViewMode('customizado')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'customizado' ? 'bg-white text-[#113366]' : 'text-white/70 hover:text-white'}`}><Filter size={14}/> Manual (Filtros)</button>
           </div>
           
+          {/* CONTROLES DE DATA (SÓ APARECE NO MODO MANUAL) */}
           {viewMode === 'customizado' && (
-            <div className="flex items-center gap-2 bg-white/10 p-1 rounded-lg">
+            <div className="flex items-center gap-2 bg-white/10 p-1 rounded-lg animate-in fade-in duration-300">
               <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="bg-white text-[#113366] border-none rounded p-1 text-xs font-bold shadow-sm outline-none cursor-pointer" />
               <span className="text-white text-xs font-bold">até</span>
               <input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="bg-white text-[#113366] border-none rounded p-1 text-xs font-bold shadow-sm outline-none cursor-pointer" />
             </div>
           )}
+
         </div>
       </div>
 
@@ -307,12 +362,9 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
                 <td className="px-3 py-3 text-[#113366] dark:text-white">{formatInt(row.atCarr)}</td>
                 <td className="px-3 py-3 text-[#D0011B] border-l border-slate-100 dark:border-gray-800">{formatInt(row.noShowAbs)}</td>
                 <td className="px-3 py-3 text-[#D0011B]">{formatPct(row.noShowPct)}</td>
-                {/* 🔥 Aqui também tiramos o bloqueio do traço manual */}
                 <td className="px-3 py-3 text-green-600 border-l border-slate-100 dark:border-gray-800">{row.firstTrips}</td>
-                
                 <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.sprRot)}</td>
                 <td className="px-3 py-3">{formatInt(row.sprExp)}</td>
-                
                 <td className="px-3 py-3 border-l border-slate-100 dark:border-gray-800">{formatInt(row.ofertas)}</td>
                 <td className="px-3 py-3 text-orange-400 border-l border-slate-100 dark:border-gray-800">{row.dorm}</td>
                 <td className="px-3 py-3 text-orange-600">{row.risco}</td>
@@ -336,17 +388,14 @@ export default function OverviewTable({ data, rawData, baseData, firstTripsData,
                 <td className="px-3 py-4 text-red-300 border-l border-white/20">{formatInt(totals.noShowAbs)}</td>
                 <td className="px-3 py-4 text-red-300">{totals.atRot > 0 ? formatPct((totals.noShowAbs / totals.atRot) * 100) : '0,00%'}</td>
                 <td className="px-3 py-4 text-green-300 border-l border-white/20">{totals.firstTrips}</td>
-                
                 <td className="px-3 py-4 border-l border-white/20">{totals.atRot > 0 ? formatInt(totals.volRot / totals.atRot) : '-'}</td>
                 <td className="px-3 py-4">{totals.atCarr > 0 ? formatInt(totals.volExp / totals.atCarr) : '-'}</td>
-                
                 <td className="px-3 py-4 border-l border-white/20">{formatInt(totals.ofertas)}</td>
                 <td className="px-3 py-4 text-orange-200 border-l border-white/20">{totals.dorm}</td>
                 <td className="px-3 py-4 text-orange-300">{totals.risco}</td>
                 <td className="px-3 py-4 text-red-300">{totals.churn}</td>
                 <td className="px-3 py-4 text-blue-300">{totals.novos}</td>
                 <td className="px-3 py-4 border-l border-white/20">{formatInt(totals.capHub)}</td>
-                
                 <td className="px-3 py-4">{totals.rowCount > 0 ? formatPct(totals.utilTotal / totals.rowCount) : '-'}</td>
               </tr>
             </tfoot>

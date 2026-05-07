@@ -71,12 +71,12 @@ const Visualizations = ({
       )}
 
       {/* 3.1. SAÚDE DE FROTA */}
-      {activeCategory === 'saude' && (
+{activeCategory === 'saude' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <FleetHealthCharts 
               rawData={rawData} 
-              baseData={baseData} 
-              ofertasModalData={ofertasModalData} 
+              historicoFrotaData={historicoFrotaData} 
+              firstTripsData={firstTripsData}          
               filtrosGlobais={filtrosGlobais} 
            />
         </div>

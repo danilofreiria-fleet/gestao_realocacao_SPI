@@ -557,23 +557,6 @@ export const verificarAcessoGestor = async (emailUsuario, token) => {
   }
 };
 
-
-export const getFirstTripsData = async () => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
-    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/FIRST_TRIPS!A:Z`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    const data = await resp.json();
-    return data.values || [];
-  } catch (error) {
-    console.error("Erro ao buscar First Trips:", error);
-    return [];
-  }
-};
-
-
 // =================================================================
 // GET HISTORICO DE FROTA
 // =================================================================
@@ -639,5 +622,22 @@ export const getRodagemData = async (tabName) => {
   } catch (error) {
     console.error(`Falha no getRodagemData (${tabName}):`, error);
     return []; // Retorna vazio para não quebrar a tela de rodízio
+  }
+};
+
+
+export const getFirstTripsData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+   
+    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/PIVOT_DIARIO_FIRST_TRIPS!A:ZZZ`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    const data = await resp.json();
+    return data.values || [];
+  } catch (error) {
+    console.error("Erro ao buscar First Trips:", error);
+    return [];
   }
 };
