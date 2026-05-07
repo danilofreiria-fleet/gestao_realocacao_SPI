@@ -52,7 +52,8 @@ export default function VolumeDispatchCharts({ data }) {
       const volPlanned = parseNum(row[12]);     
       const volProcessed = parseNum(row[13]);   
       const volExpedited = parseNum(row[14]);   
-      const sprDelivering = parseNum(row[16]);  
+      const sprPlanned = parseNum(row[15]);  // 🔥 SPR Roteirizado (Coluna P)
+      const sprDelivering = parseNum(row[16]);  // SPR Expedido (Coluna Q)
 
       const rotasRoteirizadas = parseNum(row[24]); 
       const cargUtil = parseNum(row[25]);          
@@ -62,7 +63,9 @@ export default function VolumeDispatchCharts({ data }) {
       const cargTotal = cargUtil + cargPass + cargMoto + cargVan;
 
       const baseDataObj = { 
-        volPlanned: 0, volProcessed: 0, volExpedited: 0, sprSum: 0, sprCount: 0, 
+        volPlanned: 0, volProcessed: 0, volExpedited: 0, 
+        sprSum: 0, sprCount: 0, 
+        sprPlannedSum: 0, sprPlannedCount: 0, // 🔥 Acumuladores do SPR Roteirizado
         rotasRoteirizadas: 0, cargUtil: 0, cargPass: 0, cargMoto: 0, cargVan: 0, cargTotal: 0 
       };
 
@@ -73,8 +76,13 @@ export default function VolumeDispatchCharts({ data }) {
         rawMonthAgg[monthKey].volPlanned += volPlanned;
         rawMonthAgg[monthKey].volProcessed += volProcessed;
         rawMonthAgg[monthKey].volExpedited += volExpedited;
+        
         rawMonthAgg[monthKey].sprSum += sprDelivering;
         rawMonthAgg[monthKey].sprCount += 1;
+        
+        rawMonthAgg[monthKey].sprPlannedSum += sprPlanned; // 🔥 Somando SPR Rot
+        rawMonthAgg[monthKey].sprPlannedCount += 1; // 🔥 Contando SPR Rot
+
         rawMonthAgg[monthKey].rotasRoteirizadas += rotasRoteirizadas;
         rawMonthAgg[monthKey].cargUtil += cargUtil;
         rawMonthAgg[monthKey].cargPass += cargPass;
@@ -89,8 +97,13 @@ export default function VolumeDispatchCharts({ data }) {
         rawWeekAgg[weekStr].volPlanned += volPlanned;
         rawWeekAgg[weekStr].volProcessed += volProcessed;
         rawWeekAgg[weekStr].volExpedited += volExpedited;
+        
         rawWeekAgg[weekStr].sprSum += sprDelivering;
         rawWeekAgg[weekStr].sprCount += 1;
+        
+        rawWeekAgg[weekStr].sprPlannedSum += sprPlanned; // 🔥 Somando SPR Rot
+        rawWeekAgg[weekStr].sprPlannedCount += 1; // 🔥 Contando SPR Rot
+
         rawWeekAgg[weekStr].rotasRoteirizadas += rotasRoteirizadas;
         rawWeekAgg[weekStr].cargUtil += cargUtil;
         rawWeekAgg[weekStr].cargPass += cargPass;
@@ -116,6 +129,10 @@ export default function VolumeDispatchCharts({ data }) {
           const sprAvg = d.sprCount > 0 ? Number((d.sprSum / d.sprCount).toFixed(2)) : 0;
           const prevSprAvg = prev && prev.sprCount > 0 ? (prev.sprSum / prev.sprCount) : 0;
 
+          // 🔥 Média do SPR Roteirizado
+          const sprPlannedAvg = d.sprPlannedCount > 0 ? Number((d.sprPlannedSum / d.sprPlannedCount).toFixed(2)) : 0;
+          const prevSprPlannedAvg = prev && prev.sprPlannedCount > 0 ? (prev.sprPlannedSum / prev.sprPlannedCount) : 0;
+
           let name = key;
           if (isMonth) {
             const [year, month] = key.split('-');
@@ -135,6 +152,10 @@ export default function VolumeDispatchCharts({ data }) {
             
             sprDeliveringAvg: sprAvg,
             varSprPct: calculateVar(sprAvg, prevSprAvg),
+
+            // 🔥 Exportando para o gráfico
+            sprPlannedAvg: sprPlannedAvg,
+            varSprPlannedPct: calculateVar(sprPlannedAvg, prevSprPlannedAvg),
 
             rotasRoteirizadas: d.rotasRoteirizadas,
             varRotasPct: calculateVar(d.rotasRoteirizadas, prev?.rotasRoteirizadas),
@@ -266,7 +287,6 @@ export default function VolumeDispatchCharts({ data }) {
 
   // GRÁFICO DINÂMICO DE MODAL (BARRAS AGRUPADAS)
   const ModalBarLineVariationChart = ({ data, selectedModal }) => {
-    // Define qual linha de variação desenhar baseado no dropdown
     let lineKey = 'varCargTotalPct';
     let lineName = 'Variação % Total';
     if (selectedModal === 'UTIL') { lineKey = 'varCargUtilPct'; lineName = 'Var % Utilitário'; }
@@ -320,7 +340,7 @@ export default function VolumeDispatchCharts({ data }) {
           </h3>
           
           <div className="flex items-center gap-3">
-            {/* DROPDOWN DE MODAIS (Apenas se for o gráfico de modais) */}
+            {/* DROPDOWN DE MODAIS */}
             {isModal && (
               <select 
                 value={selectedModal} 
@@ -401,11 +421,16 @@ export default function VolumeDispatchCharts({ data }) {
         <ToggleableChartCard id="planned" titleBase="VOL ROTEIRIZADO" valueName="Total Vol Planned" barKeyBase="volPlanned" varKeyBase="varPlannedPct" barColor="#113366" />
         <ToggleableChartCard id="processed" titleBase="VOL PROCESSADO" valueName="Total Vol Processado" barKeyBase="volProcessed" varKeyBase="varProcessedPct" barColor="#EE4D2D" />
         <ToggleableChartCard id="expedited" titleBase="VOL EXPEDIDO" valueName="Total Vol Expedido" barKeyBase="volExpedited" varKeyBase="varExpeditedPct" barColor="#D0011B" />
-        <ToggleableChartCard id="spr" titleBase="SPR EXPEDIDO" valueName="Média SPR Delivering" barKeyBase="sprDeliveringAvg" varKeyBase="varSprPct" barColor="#113366" isAverage={true} />
         
-        {/* NOVOS GRÁFICOS */}
+        {/* 🔥 GRÁFICO NOVO: SPR ROTEIRIZADO */}
+        <ToggleableChartCard id="sprRot" titleBase="SPR ROTEIRIZADO" valueName="Média SPR Roteirizado" barKeyBase="sprPlannedAvg" varKeyBase="varSprPlannedPct" barColor="#EE4D2D" isAverage={true} />
+        
+        {/* Gráfico antigo (SPR Expedido) mantido */}
+        <ToggleableChartCard id="sprExp" titleBase="SPR EXPEDIDO" valueName="Média SPR Delivering" barKeyBase="sprDeliveringAvg" varKeyBase="varSprPct" barColor="#113366" isAverage={true} />
+        
         <ToggleableChartCard id="rotas" titleBase="ROTAS ROTEIRIZADAS" valueName="Rotas Roteirizadas" barKeyBase="rotasRoteirizadas" varKeyBase="varRotasPct" barColor="#EE4D2D" />
-        <ToggleableChartCard id="modais" titleBase="ROTAS CARREGADAS [POR MODAL]" isModal={true} />
+        
+        <ToggleableChartCard id="modais" titleBase="ROTAS CARREGADAS [POR MODAL]" isModal={true} colSpan="xl:col-span-2" />
       </div>
     </div>
   );
