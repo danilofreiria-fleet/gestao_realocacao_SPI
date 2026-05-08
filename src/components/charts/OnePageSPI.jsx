@@ -276,7 +276,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
                   <td className="px-4 py-4">{formatInt(row.ofertaAtual)}</td>
                   <td className="px-4 py-4 bg-slate-50/50 dark:bg-gray-800">{formatInt(row.mediaDisp)}</td>
                   <td className="px-4 py-4">{formatInt(row.rotas)}</td>
-                  <td className={`px-4 py-4 ${row.noShowPct > 2 ? 'text-[#D0011B]' : 'text-green-600'}`}>{row.noShowPct.toFixed(2)}%</td>
+                  <td className={`px-4 py-4 ${row.noShowPct > 1 ? 'text-[#D0011B]' : 'text-green-600'}`}>{row.noShowPct.toFixed(2)}%</td>
                   <td className="px-4 py-4 border-l dark:border-gray-700">{formatMil(row.ativos)}</td>
                   <td className="px-4 py-4 text-orange-600">{formatMil(row.dormentes)}</td>
                   <td className="px-4 py-4 text-[#D0011B]">{formatMil(row.churn)}</td>
