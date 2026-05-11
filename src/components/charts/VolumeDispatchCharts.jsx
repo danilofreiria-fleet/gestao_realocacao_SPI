@@ -56,7 +56,7 @@ export default function VolumeDispatchCharts({ data }) {
       const sprPlanned = parseNum(row[15]);  // SPR Roteirizado (Coluna P)
       const sprDelivering = parseNum(row[16]);  // SPR Expedido (Coluna Q)
 
-      const rotasRoteirizadas = parseNum(row[24]); 
+      const rotasRoteirizadas = parseNum(row[11]); 
       const cargUtil = parseNum(row[25]);          
       const cargPass = parseNum(row[26]);          
       const cargMoto = parseNum(row[27]);          
