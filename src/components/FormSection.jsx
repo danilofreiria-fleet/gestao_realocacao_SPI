@@ -203,7 +203,7 @@ const FormSection = ({ isOpen, mode, rowIndex, formData, onChange, onSave, onDel
                     value={formData[field.idx] ?? ""} 
                     onChange={(e) => onChange(field.idx, e.target.value)} 
                     disabled={isFieldDisabled} 
-                    maxLength={1000}
+                    maxLength={3000}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)} 
                     className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none h-20 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} 
