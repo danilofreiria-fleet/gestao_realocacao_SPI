@@ -9,6 +9,18 @@ const STATUS_MAP = {
   'INDISP': { icon: <Slash size={10} />, color: 'bg-slate-100 text-slate-400 dark:bg-gray-700 dark:text-gray-500', label: 'Indisponível' }
 };
 
+// 🔥 VACINA CONTRA ERROS DE DIGITAÇÃO NA PLANILHA
+const padronizarHubLocal = (nome) => {
+  if (!nome) return "";
+  let n = String(nome).trim();
+  let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
+  
+  if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
+  if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  
+  return n;
+};
+
 export default function RotationTable({ filtrosGlobais = {} }) {
   const [rawData, setRawData] = useState([]); 
   const [loading, setLoading] = useState(false);
@@ -20,7 +32,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
   const [targetMonth, setTargetMonth] = useState(new Date().getMonth() + 1); 
   const [targetYear] = useState(new Date().getFullYear());
   
-  // 🔥 NOVO: Modos de visualização (semana, mês, customizado)
   const [viewMode, setViewMode] = useState('semana'); 
   const [targetWeek, setTargetWeek] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -29,7 +40,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50); 
 
-  // Carrega a aba da planilha com base no mês
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -48,9 +58,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
     fetchData();
   }, [targetMonth, targetYear]);
 
-  // ==========================================
-  // LÓGICA DE DATAS E SEMANAS
-  // ==========================================
   const parseUniversalDate = (dateStr) => {
     if (!dateStr) return null;
     let s = String(dateStr).trim().split('T')[0].split(' ')[0];
@@ -72,7 +79,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
     return `W-${String(Math.ceil((((dCopy - yearStart) / 86400000) + 1)/7)).padStart(2, '0')}`;
   };
 
-  // Descobre quais semanas existem na aba carregada
   const availableWeeks = useMemo(() => {
     if (!rawData || rawData.length < 1) return [];
     const headers = rawData[0];
@@ -86,7 +92,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
     return Array.from(weeks).sort();
   }, [rawData]);
 
-  // Sincroniza a semana alvo com o filtro global ou com a última semana disponível
   useEffect(() => {
     if (availableWeeks.length > 0) {
       if (filtrosGlobais?.semana && availableWeeks.includes(filtrosGlobais.semana)) {
@@ -98,15 +103,12 @@ export default function RotationTable({ filtrosGlobais = {} }) {
   }, [availableWeeks, filtrosGlobais.semana]);
 
 
-  // ==========================================
-  // PROCESSAMENTO DA MATRIZ
-  // ==========================================
   const modaisDisponiveis = useMemo(() => {
     if (!rawData || rawData.length < 2) return [];
     const modais = new Set();
     
     rawData.slice(1).forEach(row => {
-      const rowHub = row[4]; 
+      const rowHub = padronizarHubLocal(row[4]); // 🔥 APLICANDO A VACINA AQUI
       const matchesHub = filtrosGlobais.station?.length > 0 ? filtrosGlobais.station.includes(rowHub) : true;
       if (matchesHub && row[1]) modais.add(String(row[1]).trim().toUpperCase());
     });
@@ -119,7 +121,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
     const headers = rawData[0];
     const dataColsStart = 5; 
 
-    // Filtra as colunas (dias) com base no modo de visão escolhido
     const activeDateCols = headers.map((h, i) => ({ label: String(h), idx: i })).filter((col, i) => {
       if (i < dataColsStart) return false;
       const dateStr = parseUniversalDate(col.label);
@@ -134,7 +135,7 @@ export default function RotationTable({ filtrosGlobais = {} }) {
     });
 
     let rows = rawData.slice(1).filter(row => {
-      const rowHub = row[4]; 
+      const rowHub = padronizarHubLocal(row[4]); // 🔥 APLICANDO A VACINA AQUI TAMBÉM
       const rowModal = String(row[1] || "").trim().toUpperCase(); 
 
       const matchesHub = filtrosGlobais.station?.length > 0 ? filtrosGlobais.station.includes(rowHub) : true;
@@ -155,7 +156,7 @@ export default function RotationTable({ filtrosGlobais = {} }) {
       return {
         id: row[0],
         modal: row[1] || "-",
-        hub: row[4], 
+        hub: padronizarHubLocal(row[4]), // 🔥 E AQUI PARA EXIBIR CERTO NA TABELA
         days,
         total: countRodou
       };
@@ -189,7 +190,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
   return (
     <div className="flex flex-col space-y-4 mt-6">
       
-      {/* HEADER DE CONTROLES */}
       <div className="bg-white dark:bg-[#1f232d] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 p-4 shrink-0">
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           
@@ -233,7 +233,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
             </select>
           </div>
 
-          {/* 🔥 CONTROLES DE TEMPO: MÊS E SEMANA */}
           <div className="flex flex-col border-l border-slate-200 dark:border-gray-700 pl-4 ml-2">
             <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Mês Base</label>
             <div className="flex items-center bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-lg p-0.5 h-[30px]">
@@ -264,7 +263,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
             </div>
           )}
 
-          {/* TOGGLE MODO DE VISÃO */}
           <div className="flex bg-slate-100 dark:bg-gray-800 p-1 rounded-lg ml-auto border border-slate-200 dark:border-gray-700">
             <button onClick={() => setViewMode('semana')} className={`flex items-center gap-1.5 px-4 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'semana' ? 'bg-[#113366] text-white shadow-sm' : 'text-slate-500 hover:text-[#113366]'}`}><CalendarDays size={12}/>Semana</button>
             <button onClick={() => setViewMode('month')} className={`flex items-center gap-1.5 px-4 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'month' ? 'bg-[#113366] text-white shadow-sm' : 'text-slate-500 hover:text-[#113366]'}`}><Calendar size={12}/>Mês</button>
@@ -282,7 +280,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
         )}
       </div>
 
-      {/* CONTAINER DA TABELA */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden flex flex-col relative">
         <div className="overflow-auto custom-scrollbar w-full max-h-[55vh] min-h-[300px]">
           <table className="w-full border-collapse text-center">
@@ -348,7 +345,6 @@ export default function RotationTable({ filtrosGlobais = {} }) {
           </table>
         </div>
 
-        {/* RODAPÉ / PAGINAÇÃO */}
         <div className="px-4 py-2 border-t border-[#113366] flex justify-between items-center bg-slate-50 dark:bg-[#1f232d] shrink-0 z-50">
           <div className="flex items-center gap-3">
             <div className="text-[9px] font-black text-[#113366] dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-gray-800 px-2 py-1 rounded border border-slate-200 dark:border-gray-700 shadow-sm">

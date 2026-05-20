@@ -35,10 +35,14 @@ export default function MainLayout() {
         const restante = TEMPO_LIMITE - tempoLogado;
 
         if (restante <= 0) {
-          // Expulsa o usuário
+          // Expulsa o usuário e limpa TUDO da nova arquitetura
           localStorage.removeItem("spiToken");
           localStorage.removeItem("userEmail");
           localStorage.removeItem("spiTokenTime");
+          localStorage.removeItem("isGestor");
+          localStorage.removeItem("userRegional");
+          localStorage.removeItem("userRole");
+          localStorage.removeItem("selectedRegional");
           
           alert("Sua sessão expirou por segurança (60 minutos). Por favor, faça login novamente.");
           navigate("/"); 
@@ -70,16 +74,20 @@ export default function MainLayout() {
   };
 
   const handleLogout = () => {
+    // 🔥 Garante que nenhuma permissão antiga fique presa no navegador
     localStorage.removeItem('spiToken');
     localStorage.removeItem('isGestor');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('spiTokenTime');
+    localStorage.removeItem('userRegional');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('selectedRegional');
     navigate('/');
   };
 
   const isGestor = localStorage.getItem("isGestor") === "true";
 
-const menuItems = [
+  const menuItems = [
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
     // Só inclui o Dashboard se a variável isGestor for verdadeira
     ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
@@ -124,8 +132,8 @@ const menuItems = [
             
             {!isCollapsed && (
               <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
-                <h1 className="text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">SPI Control</h1>
-                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Nexus Fleet</p>
+                <h1 className="text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">Control Nexus</h1>
+                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Operação Logística</p>
               </div>
             )}
           </div>

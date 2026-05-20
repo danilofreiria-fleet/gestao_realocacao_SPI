@@ -2,37 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
 import { Maximize2, Minimize2, X, Info, Filter } from 'lucide-react';
 
-const MAPA_REGIONAL = {
-  "LM Hub_SP_Campinas_São Martinho": "SPI1",  
-  "LM Hub_SP_Leme": "SPI1",  
-  "LM Hub_SP_Limeira_Campo Belo": "SPI1",  
-  "LM Hub_SP_Mogi Mirim": "SPI1",  
-  "LM Hub_SP_Piracicaba": "SPI1",  
-  "LM Hub_SP_Sumaré_Nova Veneza": "SPI1",  
-  "LM Hub_SP_Campinas_PqCidade": "SPI1",  
-  "LM Hub_SP_Araraquara": "SPO1",  
-  "LM Hub_SP_Bauru_Centro": "SPO3",  
-  "LM Hub_SP_Jaú": "SPO1",  
-  "LM Hub_SP_Ribeirão Preto_02": "SPO1",  
-  "LM Hub_SP_São Carlos": "SPO1",  
-  "LM Hub_SP_RibeirãoPretoEstaça": "SPO1",  
-  "LM Hub_SP_Barretos": "SPO2",  
-  "LM Hub_SP_Franca_Distrito_Indust": "SPO2",  
-  "LM Hub_SP_São José do Rio P": "SPO2",  
-  "LM Hub_SP_Votuporanga": "SPO2",  
-  "LM Hub_SP_Botucatu": "SPI3",  
-  "LM Hub_SP_Atibaia_Ponte_Alta": "SPI2",  
-  "LM Hub_SP_Itapetininga": "SPI3",  
-  "LM Hub_SP_Itapeva": "SPI3",  
-  "LM Hub_SP_Jundiaí": "SPI2",  
-  "LM Hub_SP_Sorocaba_Região Norte": "SPI3",  
-  "LM Hub_SP_Tatuí": "SPI3",  
-  "LM Hub_SP_Várzea Paulista": "SPI2",  
-  "LM Hub_SP_Araçatuba": "SPO2",  
-  "LM Hub_SP_Assis": "SPO3",  
-  "LM Hub_SP_Marília": "SPO3",  
-  "LM Hub_SP_Presidente Prudente": "SPO3"
-};
+// 🔥 IMPORTAÇÃO DO MAPA UNIVERSAL
+import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
 export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
   const [fullscreenChart, setFullscreenChart] = useState(null);
@@ -92,7 +63,8 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
 
   const filteredChartData = useMemo(() => {
     return chartData.filter(item => {
-      const regDoItem = MAPA_REGIONAL[item.fullName] || "";
+      // 🔥 AGORA ELE LÊ DO MAPA COMPLETO
+      const regDoItem = MAPA_REGIONAL_COMPLETO[item.fullName] || "";
       
       let matchTurno = true;
       if (localTurno !== 'ALL') {
@@ -108,7 +80,7 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
       return matchTurno && matchRegional && matchStation;
     }).map(item => ({
       ...item,
-      displayName: station.length > 0 ? item.turno : item.name // Mostra o turno se filtrou station específica
+      displayName: station.length > 0 ? item.turno : item.name 
     }));
   }, [chartData, regional, station, turno, localTurno]);
 

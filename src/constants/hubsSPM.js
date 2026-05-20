@@ -1,0 +1,35 @@
+export const HUBS_SPM = {
+  
+ "LM Hub_SP_Jardim Adriana": "SPC01", 
+ "LM Hub_SP_Itaqua_Zimba": "SPC01", 
+ "LM Hub_SP_Guarulhos": "SPC01", 
+ "LM Hub_SP_São Paulo_Mooca": "SPC03", 
+ "LM Hub_SP_São Paulo_Lapa": "SPC03", 
+ "LM Hub_SP_São Paulo_Carandiru": "SPC03", 
+ "LM Hub_SP_Mooca_02": "SPC03", 
+ "LM Hub_SP_VilaGuilherme": "SPC04", 
+ "LM Hub_SP_Embu das Artes": "SPC02", 
+ "LM Hub_SP_Itapevi": "SPC02", 
+ "LM Hub_SP_Osasco_02": "SPC02", 
+ "LM Hub_SP_Barueri_01": "SPC02", 
+ "LM Hub_SP_Embu das Artes_02": "SPC02", 
+ "LM Hub_SP_Guarujá": "SPM01", 
+ "LM Hub_SP_Artur Alvim": "SPM01", 
+ "LM Hub_SP_Santos_Praia Grande": "SPM01", 
+ "LM Hub_SP_Santos_PraiaGrande_02": "SPM01", 
+ "LM Hub_SP_Mauá": "SPM01", 
+ "LM Hub_SP_São Bernardo do Campo": "SPM01", 
+ "LM Hub_SP_Santo André": "SPM01", 
+ "LM Hub_SP_São José dos Campos": "SPM02", 
+ "LM Hub_SP_Taubaté": "SPM02", 
+ "LM Hub_SP_Guaratinguetá": "SPM02", 
+ "LM Hub_SP_Suzano_Baruel": "SPM02", 
+ "LM Hub_SP_Jurubatuba": "SPM03", 
+ "LM Hub_SP_Mogi das Cruzes_Jund": "SPM03", 
+ "LM Hub_SP_Parque Novo Mundo": "SPC01", 
+ "LM Hub_SP_Taubaté_02": "SPM04", 
+ "LM Hub_SP_Osasco_Bonfim": "SPM02", 
+ "LM Hub_SP_Granja Julieta": "SPM05" 
+};
+
+export const LISTA_SPM = Object.keys(HUBS_SPM);

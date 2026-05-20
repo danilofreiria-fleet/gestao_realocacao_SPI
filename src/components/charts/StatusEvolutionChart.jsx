@@ -2,18 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Cell } from 'recharts';
 import { Calendar, TrendingUp, CalendarDays, Filter, ChevronDown } from 'lucide-react';
 
-const MAPA_REGIONAL = {
-  "LM Hub_SP_Campinas_São Martinho": "SPI1", "LM Hub_SP_Leme": "SPI1", "LM Hub_SP_Limeira_Campo Belo": "SPI1",
-  "LM Hub_SP_Mogi Mirim": "SPI1", "LM Hub_SP_Piracicaba": "SPI1", "LM Hub_SP_Sumaré_Nova Veneza": "SPI1",
-  "LM Hub_SP_Campinas_PqCidade": "SPI1", "LM Hub_SP_Araraquara": "SPO1", "LM Hub_SP_Bauru_Centro": "SPO3",
-  "LM Hub_SP_Jaú": "SPO1", "LM Hub_SP_Ribeirão Preto_02": "SPO1", "LM Hub_SP_São Carlos": "SPO1",
-  "LM Hub_SP_RibeirãoPretoEstaça": "SPO1", "LM Hub_SP_Barretos": "SPO2", "LM Hub_SP_Franca_Distrito_Indust": "SPO2",
-  "LM Hub_SP_São José do Rio P": "SPO2", "LM Hub_SP_Votuporanga": "SPO2", "LM Hub_SP_Botucatu": "SPI3",
-  "LM Hub_SP_Atibaia_Ponte_Alta": "SPI2", "LM Hub_SP_Itapetininga": "SPI3", "LM Hub_SP_Itapeva": "SPI3",
-  "LM Hub_SP_Jundiaí": "SPI2", "LM Hub_SP_Sorocaba_Região Norte": "SPI3", "LM Hub_SP_Tatuí": "SPI3",
-  "LM Hub_SP_Várzea Paulista": "SPI2", "LM Hub_SP_Araçatuba": "SPO2", "LM Hub_SP_Assis": "SPO3",
-  "LM Hub_SP_Marília": "SPO3", "LM Hub_SP_Presidente Prudente": "SPO3"
-};
+// 🔥 IMPORTAÇÃO DO MAPA UNIVERSAL
+import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
 const STATUS_OPTIONS = ['Ativos', 'Novos', 'Dormentes', 'Risco', 'Churn'];
 
@@ -50,7 +40,9 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
       const mesRow = String(row[1] || "");
       const dataStr = String(row[2] || ""); 
       const hubRow = String(row[3] || "");
-      const regDoHub = MAPA_REGIONAL[hubRow] || "";
+      
+      // 🔥 AGORA ELE LÊ DO MAPA COMPLETO
+      const regDoHub = MAPA_REGIONAL_COMPLETO[hubRow] || "";
 
       if (regional.length > 0 && !regional.includes(regDoHub)) return;
       if (station.length > 0 && !station.includes(hubRow)) return;
@@ -66,8 +58,6 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
       if (periodo === 'semana' && semana && semRow !== semana) return;
       if (periodo === 'mes' && mes && mesRow !== TRADUZ_MES[mes]) return;
 
-      // Lógica de Snapshot: Se for uma nova data para o mesmo período/hub, sobrescreve. 
-      // Como o forEach percorre a planilha, se o dia 29 vier depois do 28, o dado do dia 29 prevalece.
       const idUnico = `${chavePeriodo}_${hubRow}`;
       
       if (!snapshotMap[idUnico] || dataStr >= snapshotMap[idUnico].dataRef) {

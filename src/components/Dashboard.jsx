@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData } from '../api/googleSheets';import Visualizations from './Visualizations';
+import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData } from '../api/googleSheets';
+import Visualizations from './Visualizations';
 import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning } from 'lucide-react';
+
+// 🔥 IMPORTAÇÃO DA CATRACA DE REGIONAL
+import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -30,19 +34,18 @@ export default function Dashboard() {
   const [atPisoData, setAtPisoData] = useState([]);
   const [firstTripsData, setFirstTripsData] = useState([]);
   const [historicoFrotaData, setHistoricoFrotaData] = useState([]);
-  const [ofertasModalData, setOfertasModalData] = useState([]); // 🔥 NOVO ESTADO;
+  const [ofertasModalData, setOfertasModalData] = useState([]);
   
-  // 🔥 ESTADOS DE FILTROS GLOBAIS (Regional e Station agora são Arrays!)
+  // ESTADOS DE FILTROS GLOBAIS
   const [filtros, setFiltros] = useState({
     regional: [], station: [], turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
   });
 
-  // ESTADOS DE MENU ABERTO (Para os Dropdowns customizados)
+  // ESTADOS DE MENU ABERTO
   const [isTurnoMenuOpen, setIsTurnoMenuOpen] = useState(false);
   const [isStationMenuOpen, setIsStationMenuOpen] = useState(false);
   const [isRegionalMenuOpen, setIsRegionalMenuOpen] = useState(false);
   
-  // Busca interna dentro do dropdown de stations
   const [stationSearchText, setStationSearchText] = useState('');
 
   const turnoMenuRef = useRef(null);
@@ -65,19 +68,25 @@ export default function Dashboard() {
     const carregarDados = async () => {
       setLoading(true);
       try {
-const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataOfertasModal] = await Promise.all([
+        const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataOfertasModal] = await Promise.all([
           getConsolidadoData(),
           getDadosRHDashboard(),
           getBaseReferenceData(),
           getDadosAtPiso(),
           getFirstTripsData(),
-          getHistoricoFrotaData(),
-          
+          getHistoricoFrotaData()
         ]);
         
-        if (dataConsol && dataConsol.length > 1) setRawData(dataConsol.slice(1));
+        // 🔥 CATRACA DE REGIONAL APLICADA A TODOS OS CONJUNTOS DE DADOS
+        const regEscolhida = localStorage.getItem("selectedRegional");
+        const hubsPermitidos = getHubsPermitidos(regEscolhida);
+
+        if (dataConsol && dataConsol.length > 1) {
+          // Índice 4 é Station
+          setRawData(dataConsol.slice(1).filter(r => hubsPermitidos.includes(String(r[4]).trim())));
+        }
         
-        if (dataRH) {
+        if (dataRH && dataRH.length > 1) {
           const getTime = (dateStr) => {
             if (!dateStr) return 0;
             let s = String(dateStr).trim().split('T')[0].split(' ')[0];
@@ -91,15 +100,30 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
             }
             return new Date(s).getTime() || 0;
           };
-          const sorted = dataRH.slice(1).sort((a,b) => getTime(b[1]) - getTime(a[1]));
-          setDashData(sorted);
+          // Índice 2 é Station no RH
+          const rhFiltrado = dataRH.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()));
+          setDashData(rhFiltrado.sort((a,b) => getTime(b[1]) - getTime(a[1])));
         }
 
-        if (dataBase) setBaseData(dataBase);
-        if (dataPiso) setAtPisoData(dataPiso);
-        if (dataFirstTrips) setFirstTripsData(dataFirstTrips);
-        if (dataHistoricoFrota) setHistoricoFrotaData(dataHistoricoFrota);
-        if (dataOfertasModal) setOfertasModalData(dataOfertasModal); // 🔥 SALVA NO ESTADO;
+        if (dataBase && dataBase.length > 1) {
+          // Índice 0 é Station na Base
+          setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
+        }
+        
+        if (dataPiso && dataPiso.length > 1) {
+          // AT PISO NÃO SE FILTRA AQUI POIS ELE É MATRIZ, FILTRA NO COMPONENTE!
+          setAtPisoData(dataPiso); 
+        }
+
+        if (dataFirstTrips && dataFirstTrips.length > 1) {
+          // Índice 2 é Station na FirstTrips
+          setFirstTripsData([dataFirstTrips[0], ...dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))]);
+        }
+
+        if (dataHistoricoFrota && dataHistoricoFrota.length > 1) {
+          // Índice 3 é Station no Historico
+          setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
+        }
         
       } catch (error) { 
         console.error("Erro ao carregar Dashboard", error); 
@@ -124,7 +148,7 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
     { id: 'resumo', label: 'Resumo (Overview)', icon: <LayoutDashboard size={16}/> },
     { id: 'onePage', label: 'One Page', icon: <Zap size={16}/> },
     { id: 'frota', label: 'Gestão de Frota', icon: <Users size={16}/> },
-    { id: 'saude', label: 'Saúde de Frota', icon: <Activity size={16}/> }, // 🔥 NOVA ABA AQUI!
+    { id: 'saude', label: 'Saúde de Frota', icon: <Activity size={16}/> },
     { id: 'volumes', label: 'Volumes & SPR', icon: <BarChart3 size={16}/> },
     { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
     { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },
@@ -132,13 +156,16 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
     { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> },
   ];
 
-
   const opcoes = useMemo(() => {
     const regionais = new Set(), stations = new Set(), semanas = new Set(), turnos = new Set();
     rawData.forEach(row => {
-      if (row[1]) regionais.add(row[1]); 
+      // 🔥 Força a Regional usando o mapa novo! (Caso o usuário digite vazio no forms)
+      const st = String(row[4]).trim();
+      const regionalForcada = MAPA_REGIONAL_COMPLETO[st] || row[1];
+
+      if (regionalForcada) regionais.add(regionalForcada); 
       if (row[2]) semanas.add(row[2]);   
-      if (row[4]) stations.add(row[4]);  
+      if (st) stations.add(st);  
       if (row[5]) turnos.add(row[5]);    
     });
     return {
@@ -151,7 +178,6 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
 
   const handleChange = (e) => setFiltros(prev => ({ ...prev, [e.target.name]: e.target.value }));
   
-  // 🔥 LÓGICA DE MÚLTIPLA ESCOLHA GENÉRICA PARA ARRAY
   const toggleArrayFilter = (filtroNome, valor) => {
     setFiltros(prev => {
       const itensAtuais = prev[filtroNome];
@@ -171,9 +197,11 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
       const dObj = parseDate(dataRow);
       let pass = true;
       
-      // 🔥 Ajuste na Filtragem: Verifica se o array tem algo, se sim, a linha TEM QUE estar no array
-      if (filtros.regional.length > 0 && !filtros.regional.includes(row[1])) pass = false;
-      if (filtros.station.length > 0 && !filtros.station.includes(row[4])) pass = false;
+      const st = String(row[4]).trim();
+      const regionalForcada = MAPA_REGIONAL_COMPLETO[st] || row[1];
+      
+      if (filtros.regional.length > 0 && !filtros.regional.includes(regionalForcada)) pass = false;
+      if (filtros.station.length > 0 && !filtros.station.includes(st)) pass = false;
       if (filtros.turno.length > 0 && !filtros.turno.includes(row[5])) pass = false;
       if (filtros.semana && row[2] !== filtros.semana) pass = false;
       
@@ -193,7 +221,6 @@ const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrot
 const exportarCSV = () => {
     if (dadosFiltrados.length === 0) return alert("Não há dados para exportar.");
     
-    // 1. Cabeçalhos atualizados com os novos KPIs
     const headersCSV = [
       "Regional", "Semana", "Data", "Station", "Turno", 
       "AT Piso", "Vol Roteirizado", "Vol Processado", "Vol Expedido",
@@ -201,23 +228,17 @@ const exportarCSV = () => {
       "Taxa Correcao (%)", "Desvio Fleet", "Desvio Hub", "Eficiencia (%)", "Justificativa de Desvio"
     ];
 
-    // 2. Mapeamento das colunas garantindo que textos com vírgula não quebrem o CSV
     const linhasCSV = dadosFiltrados.map(row => {
-      // Limpa quebras de linha e envolve em aspas para proteger as vírgulas digitadas pelo usuário
       let justificativa = String(row[42] || "").replace(/"/g, '""').replace(/\n/g, ' ');
+      const st = String(row[4]).trim();
+      const regionalForcada = MAPA_REGIONAL_COMPLETO[st] || row[1];
 
       return [
-        row[1] || "", row[2] || "", row[3] || "", row[4] || "", row[5] || "", 
+        regionalForcada || "", row[2] || "", row[3] || "", st || "", row[5] || "", 
         row[19] || 0, row[11] || 0, row[13] || 0, row[14] || 0,
-        row[51] || 0, // Realoc Pre
-        row[52] || 0, // Realoc Durante
-        row[54] || 0, // Não Coube
-        row[55] || 0, // Outros Motivos
-        row[56] || 0, // Taxa Correcao
-        row[57] || 0, // Desvio Fleet
-        row[58] || 0, // Desvio Hub
-        row[59] || 0, // Eficiencia
-        `"${justificativa}"` // Protegido com aspas duplas!
+        row[51] || 0, row[52] || 0, row[54] || 0, row[55] || 0, 
+        row[56] || 0, row[57] || 0, row[58] || 0, row[59] || 0, 
+        `"${justificativa}"`
       ].join(",");
     });
     
@@ -241,8 +262,7 @@ const exportarCSV = () => {
     );
   }
 
-  // Label Dinâmico para os Dropdowns
-const getDropdownLabel = (arr, emptyLabel) => {
+  const getDropdownLabel = (arr, emptyLabel) => {
     if (arr.length === 0) return emptyLabel;
     if (arr.length === 1) return arr[0]; 
     return `${arr.length} selecionados`;
@@ -251,7 +271,6 @@ const getDropdownLabel = (arr, emptyLabel) => {
   return (
     <div className="flex flex-col h-full space-y-6 print:space-y-0 print:block">
       
-      {/* 1. CARD DE FILTROS GLOBAIS */}
       <div className="relative bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 shrink-0 print:hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
@@ -276,7 +295,6 @@ const getDropdownLabel = (arr, emptyLabel) => {
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-slate-50 dark:bg-[#15171e] p-4 rounded-xl border border-slate-100 dark:border-gray-800">
           
-          {/* 🔥 NOVO: MULTI-SELECT REGIONAL */}
           <div className="flex flex-col lg:col-span-1 relative" ref={regionalMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label>
             <div 
@@ -300,7 +318,6 @@ const getDropdownLabel = (arr, emptyLabel) => {
             )}
           </div>
 
-          {/* 🔥 NOVO: MULTI-SELECT STATION COM BUSCA */}
           <div className="flex flex-col lg:col-span-2 relative" ref={stationMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Search size={12}/> Station</label>
             <div 
@@ -332,7 +349,6 @@ const getDropdownLabel = (arr, emptyLabel) => {
             )}
           </div>
           
-          {/* MULTI-SELECT TURNOS */}
           <div className="flex flex-col lg:col-span-1 relative" ref={turnoMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Clock size={12}/> Turnos</label>
             <div 
@@ -356,7 +372,6 @@ const getDropdownLabel = (arr, emptyLabel) => {
             )}
           </div>
           
-          {/* SEMANA, MÊS, DATAS (Estáticos) */}
           <div className="flex flex-col lg:col-span-2">
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Hash size={12}/> Semana / Mês</label>
             <div className="flex gap-2">
@@ -370,7 +385,6 @@ const getDropdownLabel = (arr, emptyLabel) => {
         </div>
       </div>
 
-      {/* 2. MENU DE NAVEGAÇÃO DO DASHBOARD */}
       <div className="flex bg-white dark:bg-[#1f232d] p-1.5 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 overflow-x-auto custom-scrollbar shrink-0 print:hidden">
         {CATEGORIAS.map((cat) => (
           <button
@@ -388,7 +402,6 @@ const getDropdownLabel = (arr, emptyLabel) => {
         ))}
       </div>
 
-      {/* 3. RENDERIZAÇÃO CONDICIONAL DOS GRÁFICOS */}
       <div className="flex-1 overflow-y-auto print:overflow-visible">
         <Visualizations 
           activeCategory={activeCategory}

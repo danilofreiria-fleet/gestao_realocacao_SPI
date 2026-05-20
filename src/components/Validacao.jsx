@@ -3,39 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { getConsolidadoData, getBaseReferenceData } from '../api/googleSheets';
 import { AlertCircle, CheckCircle2, Search, Filter, ShieldCheck, AlertTriangle, ArrowRightCircle, CalendarDays, MapPin, Clock, Download, ChevronDown, X } from 'lucide-react';
 
-const MAPA_REGIONAL = {
-"LM Hub_SP_Campinas_São Martinho": "SPI1",  
-"LM Hub_SP_Leme": "SPI1",  
-"LM Hub_SP_Limeira_Campo Belo": "SPI1",  
-"LM Hub_SP_Mogi Mirim": "SPI1",  
-"LM Hub_SP_Piracicaba": "SPI1",  
-"LM Hub_SP_Sumaré_Nova Veneza": "SPI1",  
-"LM Hub_SP_Campinas_PqCidade": "SPI1",  
-"LM Hub_SP_Araraquara": "SPO1",  
-"LM Hub_SP_Bauru_Centro": "SPO3",  
-"LM Hub_SP_Jaú": "SPO1",  
-"LM Hub_SP_Ribeirão Preto_02": "SPO1",  
-"LM Hub_SP_São Carlos": "SPO1",  
-"LM Hub_SP_RibeirãoPretoEstaça": "SPO1",  
-"LM Hub_SP_Barretos": "SPO2",  
-"LM Hub_SP_Franca_Distrito_Indust": "SPO2",  
-"LM Hub_SP_São José do Rio P": "SPO2",  
-"LM Hub_SP_Votuporanga": "SPO2",  
-"LM Hub_SP_Botucatu": "SPI3",  
-"LM Hub_SP_Atibaia_Ponte_Alta": "SPI2",  
-"LM Hub_SP_Itapetininga": "SPI3",  
-"LM Hub_SP_Itapeva": "SPI3",  
-"LM Hub_SP_Jundiaí": "SPI2",  
-"LM Hub_SP_Sorocaba_Região Norte": "SPI3",  
-"LM Hub_SP_Tatuí": "SPI3",  
-"LM Hub_SP_Várzea Paulista": "SPI2",  
-"LM Hub_SP_Araçatuba": "SPO2",  
-"LM Hub_SP_Assis": "SPO3",  
-"LM Hub_SP_Marília": "SPO3",  
-"LM Hub_SP_Presidente Prudente": "SPO3"
-};
+// 🔥 IMPORTAÇÃO DINÂMICA
+import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
-const STATIONS_ESPERADAS = Object.keys(MAPA_REGIONAL).sort();
 const TURNOS_ESPERADOS = ['AM', 'PM1', 'PM2']; 
 
 const CAMPOS_AUDITADOS = [
@@ -62,6 +32,7 @@ const getISOWeek = (d) => {
   const week1 = new Date(date.getFullYear(), 0, 4);
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 };
+
 const hj = new Date();
 const currentYear = hj.getFullYear();
 const currentWeekStr = `${currentYear}-W${String(getISOWeek(hj)).padStart(2, '0')}`;
@@ -73,7 +44,6 @@ export default function Validacao() {
   const [rawData, setRawData] = useState([]);
   const [baseData, setBaseData] = useState([]); 
   
-  // 🔥 NOVOS ESTADOS DE FILTRO DE PERÍODO (Semana, Mês, Manual)
   const [tipoPeriodo, setTipoPeriodo] = useState('semana'); 
   const [semanaSelecionada, setSemanaSelecionada] = useState(currentWeekStr);
   const [mesSelecionado, setMesSelecionado] = useState(currentMonthStr);
@@ -88,6 +58,21 @@ export default function Validacao() {
   const [buscaHub, setBuscaHub] = useState('');
   const [isDropdownHubOpen, setIsDropdownHubOpen] = useState(false);
 
+  // 🔥 DESCOBRINDO HUBS E REGIONAIS PERMITIDOS DO USUÁRIO LOGADO
+  const regEscolhida = localStorage.getItem("selectedRegional");
+  
+  const STATIONS_ESPERADAS = useMemo(() => {
+    return getHubsPermitidos(regEscolhida).sort();
+  }, [regEscolhida]);
+
+  const subRegionaisUnicas = useMemo(() => {
+    const sigtasUnicas = new Set();
+    STATIONS_ESPERADAS.forEach(hub => {
+      if (MAPA_REGIONAL_COMPLETO[hub]) sigtasUnicas.add(MAPA_REGIONAL_COMPLETO[hub]);
+    });
+    return Array.from(sigtasUnicas).sort();
+  }, [STATIONS_ESPERADAS]);
+
   useEffect(() => { carregarDados(); }, []);
 
   const carregarDados = async () => {
@@ -98,14 +83,21 @@ export default function Validacao() {
         getBaseReferenceData()
       ]);
       
-      if (data && data.length > 0) setRawData(data.slice(1));
-      if (base && base.length > 0) setBaseData(base);
+      const allowedHubs = getHubsPermitidos(regEscolhida);
+
+      // 🔥 FILTRAGEM NA RAIZ: Só guarda no estado os hubs permitidos
+      if (data && data.length > 0) {
+        setRawData(data.slice(1).filter(r => allowedHubs.includes(String(r[4]).trim())));
+      }
+      if (base && base.length > 0) {
+        setBaseData(base.filter(r => allowedHubs.includes(String(r[0]).trim())));
+      }
     } catch (error) { console.error("Erro", error); } 
     finally { setLoading(false); }
   };
 
   // =========================================================
-  // MÓDULO DE DATAS INTELIGENTE (Semana ISO, Mês, Manual)
+  // MÓDULO DE DATAS INTELIGENTE
   // =========================================================
   const getDatesFromISOWeek = (weekStr) => {
     if(!weekStr) return [];
@@ -190,7 +182,7 @@ export default function Validacao() {
     return map;
   }, [baseData]);
 
-const relatorioValidacao = useMemo(() => {
+  const relatorioValidacao = useMemo(() => {
     if (rawData.length === 0 || diasAnalisados.length === 0) return [];
 
     const mapaRegistros = new Map();
@@ -212,7 +204,7 @@ const relatorioValidacao = useMemo(() => {
     const relatorio = [];
 
     STATIONS_ESPERADAS.forEach(station => {
-      if (filtroRegional && MAPA_REGIONAL[station] !== filtroRegional) return;
+      if (filtroRegional && MAPA_REGIONAL_COMPLETO[station] !== filtroRegional) return;
       if (hubsSelecionados.length > 0 && !hubsSelecionados.includes(station)) return;
 
       const turnosDestaStation = turnosPorStation[station] || TURNOS_ESPERADOS;
@@ -235,7 +227,7 @@ const relatorioValidacao = useMemo(() => {
                     data: dia.dataFomartadaISO, 
                     station: station, 
                     turno: turno,
-                    regional: MAPA_REGIONAL[station],
+                    regional: MAPA_REGIONAL_COMPLETO[station],
                     semana: `W-${String(getISOWeek(dia.dataObj)).padStart(2, '0')}`
                   } 
                 }
@@ -262,7 +254,7 @@ const relatorioValidacao = useMemo(() => {
     });
 
     return relatorio;
-  }, [rawData, diasAnalisados, filtroStatus, filtroRegional, hubsSelecionados, filtroTurno, turnosPorStation]);
+  }, [rawData, diasAnalisados, filtroStatus, filtroRegional, hubsSelecionados, filtroTurno, turnosPorStation, STATIONS_ESPERADAS]);
 
   const relatorioAgrupado = useMemo(() => {
     const agrupado = {};
@@ -285,7 +277,7 @@ const relatorioValidacao = useMemo(() => {
     const headersCSV = ["Data", "Regional", "Hub (Station)", "Turno", "Status", "Campos Afetados"];
     const linhasCSV = relatorioValidacao.map(item => {
       const data = item.dataBR;
-      const regional = MAPA_REGIONAL[item.station] || "";
+      const regional = MAPA_REGIONAL_COMPLETO[item.station] || "";
       const station = item.station;
       const turno = item.turno;
       const status = item.status === 'pendente' ? 'Não Iniciado' : 'Incompleto';
@@ -298,7 +290,7 @@ const relatorioValidacao = useMemo(() => {
     const link = document.createElement("a");
     link.href = url;
     const hoje = new Date().toISOString().split('T')[0];
-    link.setAttribute("download", `Auditoria_SPI_SOP_${hoje}.csv`);
+    link.setAttribute("download", `Auditoria_Nexus_${hoje}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -306,11 +298,11 @@ const relatorioValidacao = useMemo(() => {
 
   const hubsDisponiveis = useMemo(() => {
     return STATIONS_ESPERADAS.filter(s => {
-      if (filtroRegional && MAPA_REGIONAL[s] !== filtroRegional) return false;
+      if (filtroRegional && MAPA_REGIONAL_COMPLETO[s] !== filtroRegional) return false;
       if (buscaHub && !s.toLowerCase().includes(buscaHub.toLowerCase())) return false;
       return true;
     });
-  }, [filtroRegional, buscaHub]);
+  }, [filtroRegional, buscaHub, STATIONS_ESPERADAS]);
 
   const toggleHub = (hub) => {
     setHubsSelecionados(prev => 
@@ -334,7 +326,7 @@ const relatorioValidacao = useMemo(() => {
             <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
               <ShieldCheck className="text-[#EE4D2D]" size={28} /> Validação de Preenchimento
             </h2>
-            <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">Auditoria de campos obrigatórios SPI e Realocação SOP.</p>
+            <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">Auditoria de campos obrigatórios e Realocação SOP.</p>
           </div>
           
           <div className="flex gap-2">
@@ -397,7 +389,7 @@ const relatorioValidacao = useMemo(() => {
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label>
             <select value={filtroRegional} onChange={(e) => {setFiltroRegional(e.target.value); setHubsSelecionados([]);}} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2.5 text-sm h-[42px] cursor-pointer">
               <option value="">Todas</option>
-              {['SPI1','SPI2','SPI3','SPO1','SPO2','SPO3'].map(r => <option key={r} value={r}>{r}</option>)}
+              {subRegionaisUnicas.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
 
@@ -498,7 +490,7 @@ const relatorioValidacao = useMemo(() => {
                   <div className="bg-[#0055A5] text-white p-2 rounded-lg"><MapPin size={20}/></div>
                   <div>
                     <h3 className="font-black text-slate-800 dark:text-white text-lg">{station}</h3>
-                    <p className="text-xs text-slate-500 dark:text-gray-400 font-bold uppercase">{MAPA_REGIONAL[station]} • {alertas.length} ocorrência(s)</p>
+                    <p className="text-xs text-slate-500 dark:text-gray-400 font-bold uppercase">{MAPA_REGIONAL_COMPLETO[station]} • {alertas.length} ocorrência(s)</p>
                   </div>
                 </div>
               </div>

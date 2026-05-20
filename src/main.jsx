@@ -7,9 +7,10 @@ import Login from './pages/Login.jsx';
 import MainLayout from './layouts/MainLayout.jsx';
 import DataTable from './components/DataTable.jsx';
 import Dashboard from './components/Dashboard.jsx';
-
-// 1. IMPORTAMOS A NOVA TELA DE VALIDAÇÃO AQUI 👇
 import Validacao from './components/Validacao.jsx'; 
+
+// 🔥 1. IMPORTAMOS A TELA DE SELEÇÃO DE REGIONAL AQUI
+import SelecionarRegional from './components/RegionalSelection.jsx'; 
 
 import './index.css';
 
@@ -28,6 +29,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* Rota de Login */}
           <Route path="/" element={<Login />} />
           
+          {/* 🔥 2. ADICIONAMOS A ROTA DA CATRACA AQUI (Protegida para ninguém pular o login) */}
+          <Route path="/selecionar-regional" element={
+            <PrivateRoute>
+              <SelecionarRegional />
+            </PrivateRoute>
+          } />
+          
           {/* Rotas Internas Protegidas (Com a Sidebar) */}
           <Route path="/app" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
             {/* Se entrar só em /app, manda pra tabela */}
@@ -35,14 +43,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             
             {/* Aqui vão as páginas que aparecem ao lado da Sidebar */}
             <Route path="tabela" element={<DataTable />} />
-            
-            {/* CORREÇÃO AQUI: <Dashboard /> ao invés de Dashboard */}
             <Route path="dashboard" element={<Dashboard />} />
-            
-            {/* 2. SUBSTITUÍMOS A DIV "EM CONSTRUÇÃO" PELO COMPONENTE AQUI 👇 */}
             <Route path="validacao" element={<Validacao />} />
-            
           </Route>
+
         </Routes>
       </BrowserRouter>
     </GoogleOAuthProvider>

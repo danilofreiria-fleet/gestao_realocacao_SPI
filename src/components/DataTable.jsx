@@ -4,37 +4,8 @@ import { getConsolidadoData, updateRowData, insertRowData, deleteRowData, getBas
 import { Search, ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp, AlertTriangle, Eraser, LucideBarChartHorizontal } from 'lucide-react';
 import FormSection from './FormSection';
 
-const MAPA_REGIONAL = {
-"LM Hub_SP_Campinas_São Martinho": "SPI1",  
-"LM Hub_SP_Leme": "SPI1",  
-"LM Hub_SP_Limeira_Campo Belo": "SPI1",  
-"LM Hub_SP_Mogi Mirim": "SPI1",  
-"LM Hub_SP_Piracicaba": "SPI1",  
-"LM Hub_SP_Sumaré_Nova Veneza": "SPI1",  
-"LM Hub_SP_Campinas_PqCidade": "SPI1",  
-"LM Hub_SP_Araraquara": "SPO1",  
-"LM Hub_SP_Bauru_Centro": "SPO3",  
-"LM Hub_SP_Jaú": "SPO1",  
-"LM Hub_SP_Ribeirão Preto_02": "SPO1",  
-"LM Hub_SP_São Carlos": "SPO1",  
-"LM Hub_SP_RibeirãoPretoEstaça": "SPO1",  
-"LM Hub_SP_Barretos": "SPO2",  
-"LM Hub_SP_Franca_Distrito_Indust": "SPO2",  
-"LM Hub_SP_São José do Rio P": "SPO2",  
-"LM Hub_SP_Votuporanga": "SPO2",  
-"LM Hub_SP_Botucatu": "SPI3",  
-"LM Hub_SP_Atibaia_Ponte_Alta": "SPI2",  
-"LM Hub_SP_Itapetininga": "SPI3",  
-"LM Hub_SP_Itapeva": "SPI3",  
-"LM Hub_SP_Jundiaí": "SPI2",  
-"LM Hub_SP_Sorocaba_Região Norte": "SPI3",  
-"LM Hub_SP_Tatuí": "SPI3",  
-"LM Hub_SP_Várzea Paulista": "SPI2",  
-"LM Hub_SP_Araçatuba": "SPO2",  
-"LM Hub_SP_Assis": "SPO3",  
-"LM Hub_SP_Marília": "SPO3",  
-"LM Hub_SP_Presidente Prudente": "SPO3"
-};
+
+import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -92,7 +63,8 @@ const DataTable = () => {
         emptyRow[3] = action.prefill.data;
         emptyRow[4] = action.prefill.station;
         emptyRow[5] = action.prefill.turno;
-        emptyRow[1] = action.prefill.regional || MAPA_REGIONAL[action.prefill.station] || "";
+        // 🔥 Usa o mapa dinâmico para preencher a regional
+        emptyRow[1] = action.prefill.regional || MAPA_REGIONAL_COMPLETO[action.prefill.station] || "";
         emptyRow[2] = action.prefill.semana || ""; 
 
         const ref = baseData.find(r => String(r[0]).trim() === String(action.prefill.station).trim() && String(r[1]).trim() === String(action.prefill.turno).trim());
@@ -111,13 +83,11 @@ const DataTable = () => {
     }
   }, [location.state, loading, baseData, headers, navigate]);
 
-  // Função movida para cima para poder ser usada na ordenação
-const parseDate = (dateStr) => {
+  const parseDate = (dateStr) => {
     if (!dateStr) return new Date(0);
     let str = String(dateStr).trim().split(' ')[0];
     if (str.includes('/')) {
       let [dia, mes, ano] = str.split('/');
-      // 🔥 CORREÇÃO: Se o Google mandar o ano como "26", o sistema converte para "2026"
       if (ano && ano.length === 2) ano = `20${ano}`;
       return new Date(`${ano}-${mes}-${dia}T12:00:00`);
     }
@@ -131,7 +101,6 @@ const parseDate = (dateStr) => {
       if (data && data.length > 0) {
         setHeaders(data[0]);
         
-        // 1. Processa e marca o número da linha real (Para não dar erro ao editar)
         let processedRows = data.slice(1).map((row, idx) => {
           const fullRow = Array(data[0].length).fill("");
           row.forEach((cell, i) => { fullRow[i] = cell; });
@@ -139,11 +108,18 @@ const parseDate = (dateStr) => {
           return fullRow;
         });
 
-        // 2. 🔥 ORDENAÇÃO INTELIGENTE: Do mais novo (topo) para o mais velho (fim)
+        // 🔥 CATRACA DE REGIONAL: Filtra só as stations da regional logada
+        const regEscolhida = localStorage.getItem("selectedRegional");
+        const hubsPermitidos = getHubsPermitidos(regEscolhida);
+        
+        // Mantém APENAS as stations permitidas (Índice 4 = Station na base de Gestão)
+        processedRows = processedRows.filter(row => hubsPermitidos.includes(String(row[4]).trim()));
+
+        // Ordenação Inteligente: Mais novo primeiro
         processedRows.sort((a, b) => {
           const dataA = parseDate(a[3]) || new Date(0);
           const dataB = parseDate(b[3]) || new Date(0);
-          return dataB - dataA; // Decrescente
+          return dataB - dataA; 
         });
 
         setRows(processedRows);
@@ -290,7 +266,7 @@ const parseDate = (dateStr) => {
     setIsModalOpen(true);
   };
 
-const handleEditChange = (index, value) => {
+  const handleEditChange = (index, value) => {
     setEditFormData(prevData => {
       const newData = [...prevData];
       newData.capHubVirtual = prevData.capHubVirtual;
@@ -299,7 +275,8 @@ const handleEditChange = (index, value) => {
       newData[index] = value;
       
       if (index === 3) newData[2] = calcularSemana(value); 
-      if (index === 4) newData[1] = MAPA_REGIONAL[value] || ""; 
+      // 🔥 Usa o mapa dinâmico para preencher a regional
+      if (index === 4) newData[1] = MAPA_REGIONAL_COMPLETO[value] || ""; 
 
       if (index === 4 || index === 5) {
         const stationAtual = index === 4 ? value : newData[4];
@@ -333,7 +310,7 @@ const handleEditChange = (index, value) => {
     return Number(s) || 0;
   };
 
-const calcularCampos = (data) => {
+  const calcularCampos = (data) => {
     const getNum = (idx) => parseBrNumber(data[idx]);
     const formatPercent = (val) => String((val * 100).toFixed(2)).replace('.', ',') + "%";
 
@@ -423,8 +400,7 @@ const calcularCampos = (data) => {
     return data;
   };
 
-const salvarDados = async () => {
-    // 🔥 TRAVA ANTI CLIQUE-DUPLO NINJA: Se já estiver salvando, ignora novos cliques!
+  const salvarDados = async () => {
     if (isSaving) return; 
     
     setIsSaving(true);
@@ -434,11 +410,8 @@ const salvarDados = async () => {
       payload.capFleetVirtual = editFormData.capFleetVirtual;
       payload[3] = formatDataForGoogle(payload[3]);
 
-      // ======== ANTI-DUPLICIDADE BLINDADO (À Prova de Espaços e Datas) ========
       if (modalMode === 'new') {
-        // Transforma a data num número absoluto de tempo para não ter erro de "/04/" vs "/4/"
         const dataCompNum = parseDate(payload[3])?.getTime();
-        // Limpa espaços no começo/fim e joga tudo pra minúsculo
         const stationCompStr = String(payload[4]).trim().toLowerCase();
         const turnoCompStr = String(payload[5]).trim().toLowerCase();
 
@@ -457,10 +430,9 @@ const salvarDados = async () => {
         if (jaExiste) {
           setDuplicateAlert({ station: payload[4], turno: payload[5], data: payload[3] });
           setIsSaving(false);
-          return; // Para o salvamento aqui mesmo
+          return; 
         }
       }
-      // ========================================================================
 
       try { payload = calcularCampos(payload); } catch (errCalc) { console.error("Erro interno nos cálculos:", errCalc); }
 
@@ -473,13 +445,11 @@ const salvarDados = async () => {
       if (modalMode === 'edit') {
         await updateRowData(editingRowIndex, payload, originalRowData); 
       } else {
-        // Salva tudo ao mesmo tempo (Super Rápido)
         await Promise.all([
           insertRowData(payload),
           salvarNasOrigens(payload)
         ]);
 
-        // Injeção visual imediata e ordenação no topo
         setRows(prevRows => {
           const linhaVisual = [...payload];
           linhaVisual._rowIndex = prevRows.length > 0 ? prevRows[0]._rowIndex + 1 : 9999;
@@ -489,9 +459,9 @@ const salvarDados = async () => {
       }
       
       setIsModalOpen(false); 
-      setIsSaving(false); // Libera o botão só no final de tudo
+      setIsSaving(false); 
       
-      carregarDados(); // Atualiza silenciosamente no fundo
+      carregarDados(); 
       
     } catch (error) {
       console.error(error);
@@ -500,14 +470,14 @@ const salvarDados = async () => {
     }
   };
 
-const handleExcluir = async () => {
+  const handleExcluir = async () => {
     setIsDeleting(true);
     try {
       await deleteRowData(editingRowIndex, originalRowData); 
       setIsModalOpen(false);
-      setIsDeleting(false); // Libera o usuário na mesma hora!
+      setIsDeleting(false); 
       
-      carregarDados(); // Faz o F5 silencioso no fundo
+      carregarDados(); 
     } catch (error) {
       console.error(error);
       alert("Falha ao excluir a linha.");
@@ -518,7 +488,6 @@ const handleExcluir = async () => {
   return (
     <div className="flex flex-col h-full bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 transition-colors relative">
       
-      {/* OVERLAY DE LOADING */}
       {(isSaving || isDeleting) && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4 shadow-lg"></div>
@@ -529,7 +498,6 @@ const handleExcluir = async () => {
         </div>
       )}
 
-      {/* OVERLAY DO ALERTA DE DUPLICIDADE (O BONITÃO) */}
       {duplicateAlert && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-2xl p-6 max-w-md w-full border border-red-100 dark:border-red-900/30">
@@ -583,7 +551,6 @@ const handleExcluir = async () => {
         <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Data Início</label><input type="date" name="dataInicio" value={draftFilters.dataInicio} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-gray-300 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm" /></div>
         <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Data Fim</label><input type="date" name="dataFim" value={draftFilters.dataFim} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-gray-300 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm" /></div>
         
-        {/* BOTÕES DE BUSCAR E LIMPAR */}
         <div className="flex gap-2 lg:col-span-1 md:col-span-4 col-span-2 h-[38px]">
           <button onClick={limparFiltros} className="flex flex-1 items-center justify-center bg-slate-200 dark:bg-gray-700 hover:bg-slate-300 dark:hover:bg-gray-600 text-slate-700 dark:text-gray-200 font-bold rounded-lg transition-colors" title="Limpar Filtros">
             <Eraser size={16} />

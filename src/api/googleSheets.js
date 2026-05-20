@@ -6,6 +6,8 @@ const SPREADSHEET_ID = import.meta.env.VITE_SPREADSHEET_ID_PRINCIPAL;
 const ID_PLANILHA_REPORTS = import.meta.env.VITE_SPREADSHEET_ID_REPORTS;
 const ID_PLANILHA_SOP = import.meta.env.VITE_SPREADSHEET_ID_SOP;
 const ID_PLANILHA_LOGS = import.meta.env.VITE_SPREADSHEET_ID_LOGS;
+const ID_PERMISSION_SHEET = import.meta.env.VITE_PERMISSION_SHEET;
+
 
 const ABA_NOME = "CONSOLIDADO-GESTÃO-SPI_REALOCAÇÃO";
 
@@ -639,5 +641,34 @@ export const getFirstTripsData = async () => {
   } catch (error) {
     console.error("Erro ao buscar First Trips:", error);
     return [];
+  }
+};
+
+
+// =================================================================
+// PERMISSÃO DE USUÁRIO Regional
+// =================================================================
+export const buscarPermissoesUsuario = async (email, token) => {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PERMISSION_SHEET}/values/PERMISSOES!A:C`;
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const result = await response.json();
+    
+    if (!result.values) return null;
+
+    const permissao = result.values.find(row => 
+      String(row[0]).trim().toLowerCase() === String(email).trim().toLowerCase()
+    );
+
+    if (!permissao) return null;
+
+    return {
+      email: permissao[0],
+      regional: permissao[1], // 'SPI', 'SPM' ou 'BOTH'
+      cargo: permissao[2]
+    };
+  } catch (error) {
+    console.error("Erro ao buscar permissões:", error);
+    return null;
   }
 };

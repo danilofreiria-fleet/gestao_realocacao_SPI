@@ -1,54 +1,70 @@
 import React from 'react';
 import { useNavigate } from "react-router-dom";
 import { useGoogleLogin } from '@react-oauth/google';
-import { Database } from 'lucide-react'; 
 import axios from 'axios';
 import logoImg from '../assets/logo.png';
-import { verificarAcessoGestor } from '../api/googleSheets';
+import { verificarAcessoGestor, buscarPermissoesUsuario } from '../api/googleSheets';
 
 export default function Login() {
   const navigate = useNavigate();
 
   const fazerLogin = useGoogleLogin({
     scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email",
-    // 🔥 1. hosted_domain COMENTADO para o Google deixar outras contas tentarem logar
-    // hosted_domain: "shopee.com", 
+    // hosted_domain: "shopee.com", // Comentado para testar com outras contas, se precisar
     
     onSuccess: async (tokenResponse) => {
       try {
+        // 1. Extrai o Token do Google
+        const token = tokenResponse.access_token;
+
+        // 2. Pega as informações do usuário logado
         const response = await axios.get(
           'https://www.googleapis.com/oauth2/v3/userinfo',
-          { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
         const emailLogado = response.data.email;
 
-        // 🔥 2. NOVA CATRACA: Aceita o e-mail interno OU o e-mail externo
+        // 3. Primeira Catraca: Verifica se é um e-mail Shopee
         if (emailLogado.endsWith("@shopee.com") || emailLogado.endsWith("@shopeemobile-external.com")) {
-          const token = tokenResponse.access_token;
-
+          
+          // 4. Salva as informações básicas
           localStorage.setItem("spiToken", token);
           localStorage.setItem("userEmail", emailLogado);
           localStorage.setItem("spiTokenTime", Date.now().toString()); 
           
-          // Pergunta para a API se ele é Gestor e salva o crachá
-          const isGestor = await verificarAcessoGestor(emailLogado, token);
-          if (isGestor) {
-            localStorage.setItem("isGestor", "true");
+          // 5. Verifica Permissões na aba PERMISSOES
+          const infoUsuario = await buscarPermissoesUsuario(emailLogado, token);
+
+          if (infoUsuario) {
+            localStorage.setItem("userRegional", infoUsuario.regional); // SPI, SPM, SPC ou BOTH
+            localStorage.setItem("userRole", infoUsuario.cargo);
+            
+            // 6. Pergunta para a API se ele é Gestor
+            const isGestor = await verificarAcessoGestor(emailLogado, token);
+            if (isGestor) {
+              localStorage.setItem("isGestor", "true");
+            } else {
+              localStorage.removeItem("isGestor"); 
+            }
+            
+            // 7. Tudo certo! Manda para a tela de Seleção de Regional
+            navigate("/selecionar-regional"); 
+            
           } else {
-            localStorage.removeItem("isGestor"); // Garante que não tenha lixo
+            alert("Seu e-mail não está cadastrado na planilha de permissões.");
+            // localStorage.removeItem("spiToken"); // Descomente para forçar bloqueio duro
           }
-          
-          navigate("/app/tabela"); 
+
         } else {
-          alert("Acesso negado. Use seu e-mail corporativo autorizado.");
+          alert("Acesso negado. Use seu e-mail corporativo autorizado (@shopee.com ou @shopeemobile-external.com).");
         }
       } catch (error) {
         console.error("Erro ao validar credenciais", error);
         alert("Erro ao validar credenciais no Google.");
       }
     },
-    onError: () => alert('Erro no Login')
+    onError: () => alert('Erro no Login. Tente novamente.')
   });
 
   return (
@@ -64,7 +80,7 @@ export default function Login() {
               className="h-full w-auto object-contain drop-shadow-md"
             />
           </div>
-          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">SPI CONTROL</h1>
+          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">CONTROL SPC/SPI/SPM/SPO</h1>
           <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Acesso Restrito - Logística</p>
         </div>
 
