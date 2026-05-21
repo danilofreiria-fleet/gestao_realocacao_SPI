@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import RotationTable from './components/charts/RotationTable.jsx'; 
 
 import Login from './pages/Login.jsx';
 import MainLayout from './layouts/MainLayout.jsx';
@@ -29,24 +30,31 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* Rota de Login */}
           <Route path="/" element={<Login />} />
           
-          {/* 🔥 2. ADICIONAMOS A ROTA DA CATRACA AQUI (Protegida para ninguém pular o login) */}
+        
           <Route path="/selecionar-regional" element={
             <PrivateRoute>
               <SelecionarRegional />
             </PrivateRoute>
           } />
           
-          {/* Rotas Internas Protegidas (Com a Sidebar) */}
+{/* Rotas Internas Protegidas (Com a Sidebar) */}
           <Route path="/app" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
-            {/* Se entrar só em /app, manda pra tabela */}
             <Route index element={<Navigate to="tabela" />} /> 
             
-            {/* Aqui vão as páginas que aparecem ao lado da Sidebar */}
             <Route path="tabela" element={<DataTable />} />
+            
+            {/* 🔥 A ROTA NOVA VEM AQUI! */}
+            <Route path="rodizio" element={
+              <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 h-full flex flex-col">
+                <h2 className="text-2xl font-black text-[#113366] dark:text-white uppercase tracking-tight mb-2">Painel de Rodízio</h2>
+                <p className="text-sm text-slate-500 dark:text-gray-400 mb-4">Gestão de alocação de frota.</p>
+                <RotationTable />
+              </div>
+            } />
+            
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="validacao" element={<Validacao />} />
           </Route>
-
         </Routes>
       </BrowserRouter>
     </GoogleOAuthProvider>

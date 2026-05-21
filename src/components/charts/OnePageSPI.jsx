@@ -296,7 +296,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
                       <td className="px-4 py-2">{formatInt(hub.driversOferta)}</td>
                       <td className="px-4 py-2 font-bold bg-white/5">{formatInt(hub.mediaDisp)}</td>
                       <td className="px-4 py-2">{formatInt(hub.rotasDisp)}</td>
-                      <td className={`px-4 py-2 font-bold ${hub.noShowPct > 2 ? 'text-[#D0011B]' : 'text-green-600'}`}>{hub.noShowPct.toFixed(2)}%</td>
+                      <td className={`px-4 py-2 font-bold ${hub.noShowPct > 1 ? 'text-[#D0011B]' : 'text-green-600'}`}>{hub.noShowPct.toFixed(2)}%</td>
                       <td className="px-4 py-2 border-l dark:border-gray-700">{formatInt(hub.ativos)}</td>
                       <td className="px-4 py-2">{formatInt(hub.dormentes)}</td>
                       <td className="px-4 py-2">{formatInt(hub.churn)}</td>

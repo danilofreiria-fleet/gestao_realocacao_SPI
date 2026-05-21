@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar } from 'lucide-react';
+import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin } from 'lucide-react';
 import { getRodagemData } from '../../api/googleSheets';
+
+// 🔥 IMPORTAMOS A CATRACA PARA O RODÍZIO TAMBÉM RESPEITAR O BOTÃO DO TOPO
+import { getHubsPermitidos } from '../../constants/regionais';
 
 const STATUS_MAP = {
   'RODOU': { icon: <CheckCircle size={12} />, color: 'bg-green-500 text-white', label: 'Trabalhou' },
@@ -21,11 +24,12 @@ const padronizarHubLocal = (nome) => {
   return n;
 };
 
-export default function RotationTable({ filtrosGlobais = {} }) {
+export default function RotationTable() {
   const [rawData, setRawData] = useState([]); 
   const [loading, setLoading] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedHub, setSelectedHub] = useState('ALL'); // 🔥 NOVO ESTADO: SELETOR DE HUB
   const [selectedModal, setSelectedModal] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   
@@ -39,6 +43,9 @@ export default function RotationTable({ filtrosGlobais = {} }) {
   const [sortConfig, setSortConfig] = useState({ direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50); 
+
+  // PEGA A REGIONAL ATIVA NO TOPO DA TELA
+  const regEscolhida = localStorage.getItem("selectedRegional");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -94,26 +101,46 @@ export default function RotationTable({ filtrosGlobais = {} }) {
 
   useEffect(() => {
     if (availableWeeks.length > 0) {
-      if (filtrosGlobais?.semana && availableWeeks.includes(filtrosGlobais.semana)) {
-        setTargetWeek(filtrosGlobais.semana);
-      } else if (!targetWeek || !availableWeeks.includes(targetWeek)) {
+      if (!targetWeek || !availableWeeks.includes(targetWeek)) {
         setTargetWeek(availableWeeks[availableWeeks.length - 1]);
       }
     }
-  }, [availableWeeks, filtrosGlobais.semana]);
+  }, [availableWeeks]);
 
+  // 🔥 LISTA DINÂMICA DE HUBS BASEADA NA REGIONAL ATIVA
+  const hubsDisponiveis = useMemo(() => {
+    if (!rawData || rawData.length < 2) return [];
+    const hubs = new Set();
+    const permitidos = regEscolhida && regEscolhida !== "TODOS" ? getHubsPermitidos(regEscolhida) : null;
+
+    rawData.slice(1).forEach(row => {
+      const rowHub = padronizarHubLocal(row[4]);
+      if (!rowHub) return;
+      if (permitidos && !permitidos.includes(rowHub)) return; // Trava da Catraca
+      hubs.add(rowHub);
+    });
+    return Array.from(hubs).sort();
+  }, [rawData, regEscolhida]);
 
   const modaisDisponiveis = useMemo(() => {
     if (!rawData || rawData.length < 2) return [];
     const modais = new Set();
+    const permitidos = regEscolhida && regEscolhida !== "TODOS" ? getHubsPermitidos(regEscolhida) : null;
     
     rawData.slice(1).forEach(row => {
-      const rowHub = padronizarHubLocal(row[4]); // 🔥 APLICANDO A VACINA AQUI
-      const matchesHub = filtrosGlobais.station?.length > 0 ? filtrosGlobais.station.includes(rowHub) : true;
+      const rowHub = padronizarHubLocal(row[4]);
+      const matchesHub = permitidos ? permitidos.includes(rowHub) : true;
       if (matchesHub && row[1]) modais.add(String(row[1]).trim().toUpperCase());
     });
     return Array.from(modais).sort();
-  }, [rawData, filtrosGlobais.station]);
+  }, [rawData, regEscolhida]);
+
+  // Se a regional mudou e o hub selecionado não pertence a ela, reseta para TODOS
+  useEffect(() => {
+    if (selectedHub !== 'ALL' && !hubsDisponiveis.includes(selectedHub)) {
+      setSelectedHub('ALL');
+    }
+  }, [hubsDisponiveis]);
 
   const matrix = useMemo(() => {
     if (!rawData || rawData.length < 1) return { headers: [], rows: [] };
@@ -134,11 +161,17 @@ export default function RotationTable({ filtrosGlobais = {} }) {
       return true; 
     });
 
+    const permitidos = regEscolhida && regEscolhida !== "TODOS" ? getHubsPermitidos(regEscolhida) : null;
+
     let rows = rawData.slice(1).filter(row => {
-      const rowHub = padronizarHubLocal(row[4]); // 🔥 APLICANDO A VACINA AQUI TAMBÉM
+      const rowHub = padronizarHubLocal(row[4]); 
       const rowModal = String(row[1] || "").trim().toUpperCase(); 
 
-      const matchesHub = filtrosGlobais.station?.length > 0 ? filtrosGlobais.station.includes(rowHub) : true;
+      // 1. Filtro Global (SPI vs SPM)
+      if (permitidos && !permitidos.includes(rowHub)) return false;
+
+      // 2. Filtros da Tela
+      const matchesHub = selectedHub === 'ALL' ? true : rowHub === selectedHub;
       const matchesSearch = String(row[0] || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesModal = selectedModal === 'ALL' ? true : rowModal === selectedModal;
       
@@ -156,7 +189,7 @@ export default function RotationTable({ filtrosGlobais = {} }) {
       return {
         id: row[0],
         modal: row[1] || "-",
-        hub: padronizarHubLocal(row[4]), // 🔥 E AQUI PARA EXIBIR CERTO NA TABELA
+        hub: padronizarHubLocal(row[4]), 
         days,
         total: countRodou
       };
@@ -171,12 +204,12 @@ export default function RotationTable({ filtrosGlobais = {} }) {
     });
 
     return { headers: activeDateCols, rows };
-  }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedModal, selectedStatus, sortConfig, filtrosGlobais]);
+  }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedHub, selectedModal, selectedStatus, sortConfig, regEscolhida]);
 
   const totalPages = Math.max(1, Math.ceil(matrix.rows.length / itemsPerPage));
   const paginatedRows = matrix.rows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedModal, selectedStatus, itemsPerPage, viewMode, targetWeek]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedHub, selectedModal, selectedStatus, itemsPerPage, viewMode, targetWeek]);
 
   const formatDateHeader = (d) => {
     if (!d || !d.includes('-')) return d;
@@ -193,7 +226,7 @@ export default function RotationTable({ filtrosGlobais = {} }) {
       <div className="bg-white dark:bg-[#1f232d] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 p-4 shrink-0">
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           
-          <div className="flex flex-col flex-1 min-w-[150px] max-w-[250px]">
+          <div className="flex flex-col flex-1 min-w-[120px] max-w-[180px]">
             <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Buscar ID</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#EE4D2D]" size={14} />
@@ -205,6 +238,19 @@ export default function RotationTable({ filtrosGlobais = {} }) {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+          </div>
+
+          {/* 🔥 NOVO SELETOR DE HUB (STATION) AQUI */}
+          <div className="flex flex-col flex-1 min-w-[150px] max-w-[200px]">
+            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1 flex items-center gap-1"><MapPin size={10}/> Station / Hub</label>
+            <select 
+              className="w-full bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-xs font-bold text-[#113366] dark:text-white outline-none cursor-pointer hover:border-[#113366] transition-colors truncate"
+              value={selectedHub}
+              onChange={(e) => setSelectedHub(e.target.value)}
+            >
+              <option value="ALL">Todas as Stations</option>
+              {hubsDisponiveis.map(hub => <option key={hub} value={hub}>{hub}</option>)}
+            </select>
           </div>
 
           <div className="flex flex-col">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer } from 'lucide-react';
+// 🔥 1. Adicionei o CalendarDays aqui na importação dos ícones
+import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
 export default function MainLayout() {
@@ -9,10 +10,12 @@ export default function MainLayout() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false); 
   
-  // 🔥 NOVO ESTADO: Guarda o tempo restante em milissegundos
   const [tempoRestante, setTempoRestante] = useState(null);
 
-  // Verifica o tema inicial
+  const isGestor = localStorage.getItem("isGestor") === "true";
+  const userRegional = localStorage.getItem("userRegional"); 
+  const currentRegional = localStorage.getItem("selectedRegional"); 
+
   useEffect(() => {
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       document.documentElement.classList.add('dark');
@@ -23,9 +26,8 @@ export default function MainLayout() {
     }
   }, []);
 
-  // 🔥 VIGIA DE SESSÃO COM CRONÔMETRO VISUAL (1 SEGUNDO)
   useEffect(() => {
-    const TEMPO_LIMITE = 60 * 60 * 1000; // 60 minutos em milissegundos
+    const TEMPO_LIMITE = 60 * 60 * 1000; 
 
     const atualizarCronometro = () => {
       const loginTime = localStorage.getItem("spiTokenTime");
@@ -35,7 +37,6 @@ export default function MainLayout() {
         const restante = TEMPO_LIMITE - tempoLogado;
 
         if (restante <= 0) {
-          // Expulsa o usuário e limpa TUDO da nova arquitetura
           localStorage.removeItem("spiToken");
           localStorage.removeItem("userEmail");
           localStorage.removeItem("spiTokenTime");
@@ -47,17 +48,13 @@ export default function MainLayout() {
           alert("Sua sessão expirou por segurança (60 minutos). Por favor, faça login novamente.");
           navigate("/"); 
         } else {
-          // Atualiza o reloginho na tela
           setTempoRestante(restante);
         }
       }
     };
 
-    atualizarCronometro(); // Roda a primeira vez na hora
-    
-    // Agora o intervalo roda a cada 1000ms (1 segundo) para vermos o relógio descendo
+    atualizarCronometro(); 
     const intervalo = setInterval(atualizarCronometro, 1000);
-    
     return () => clearInterval(intervalo);
   }, [navigate]);
 
@@ -74,7 +71,6 @@ export default function MainLayout() {
   };
 
   const handleLogout = () => {
-    // 🔥 Garante que nenhuma permissão antiga fique presa no navegador
     localStorage.removeItem('spiToken');
     localStorage.removeItem('isGestor');
     localStorage.removeItem('userEmail');
@@ -85,16 +81,20 @@ export default function MainLayout() {
     navigate('/');
   };
 
-  const isGestor = localStorage.getItem("isGestor") === "true";
+  const handleSwitchRegional = (novaRegional) => {
+    if (novaRegional === currentRegional) return;
+    localStorage.setItem('selectedRegional', novaRegional);
+    window.location.reload(); 
+  };
 
+  // 🔥 2. Adicionei a Rota do Rodízio aqui na lista!
   const menuItems = [
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
-    // Só inclui o Dashboard se a variável isGestor for verdadeira
+    { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> }, // Rota livre para todos
     ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
     { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
   ];
 
-  // 🔥 FUNÇÃO PARA FORMATAR O TEMPO (Ex: 59:59)
   const formatarTempo = (ms) => {
     if (ms === null) return "--:--";
     const minutos = Math.floor(ms / 60000);
@@ -105,13 +105,11 @@ export default function MainLayout() {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 transition-colors duration-300 overflow-hidden">
       
-      {/* SIDEBAR COM LARGURA DINÂMICA */}
       <aside 
         className={`relative bg-white dark:bg-[#1f232d] border-r border-gray-200 dark:border-gray-800 flex flex-col justify-between shadow-lg z-20 transition-all duration-300 ease-in-out print:hidden ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
-        {/* BOTÃO DE RECOLHER FLUTUANTE */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-8 bg-white dark:bg-[#1f232d] border border-gray-200 dark:border-gray-800 rounded-full p-1 shadow-md hover:bg-slate-50 dark:hover:bg-gray-800 z-50 text-[#113366] dark:text-gray-300 transition-transform"
@@ -120,7 +118,6 @@ export default function MainLayout() {
         </button>
 
         <div>
-          {/* Logo e Título */}
           <div className={`p-6 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 transition-all ${isCollapsed ? 'px-2' : ''}`}>
             <div className="mb-3 shrink-0 flex items-center justify-center min-h-[3rem]">
               <img 
@@ -138,7 +135,6 @@ export default function MainLayout() {
             )}
           </div>
 
-          {/* Menu de Navegação */}
           <nav className={`p-4 space-y-2 ${isCollapsed ? 'px-2' : ''}`}>
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path;
@@ -161,10 +157,7 @@ export default function MainLayout() {
           </nav>
         </div>
 
-        {/* Rodapé da Sidebar (Tema, Cronômetro e Logout) */}
         <div className={`p-4 border-t border-gray-100 dark:border-gray-800 space-y-2 ${isCollapsed ? 'px-2' : ''}`}>
-          
-          {/* 🔥 VISUAL DO CRONÔMETRO */}
           <div 
             title={isCollapsed ? `Sessão expira em: ${formatarTempo(tempoRestante)}` : ""}
             className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-2 rounded-xl text-xs font-bold ${tempoRestante && tempoRestante < 300000 ? 'text-red-500 animate-pulse' : 'text-slate-400 dark:text-gray-500'}`}
@@ -195,8 +188,40 @@ export default function MainLayout() {
         </div>
       </aside>
 
-      {/* ÁREA DE CONTEÚDO */}
-      <main className="flex-1 overflow-hidden flex flex-col print:overflow-visible">
+      <main className="flex-1 overflow-hidden flex flex-col print:overflow-visible relative">
+        
+        {userRegional === 'BOTH' && (
+          <div className="w-full bg-white dark:bg-[#1f232d] border-b border-gray-200 dark:border-gray-800 p-4 flex justify-end shrink-0 print:hidden z-10 shadow-sm">
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#15171e] p-1.5 rounded-lg border border-slate-200 dark:border-gray-700">
+              <div className="text-[10px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1">
+                <MapPin size={12} /> Visão Ativa:
+              </div>
+              
+              <button
+                onClick={() => handleSwitchRegional('SPI')} 
+                className={`px-4 py-1.5 text-xs font-black tracking-wide rounded-md transition-all ${
+                  currentRegional === 'SPI' || currentRegional === 'SPI/SPO'
+                    ? 'bg-[#EE4D2D] text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-white dark:hover:bg-gray-800'
+                }`}
+              >
+                SPI / SPO
+              </button>
+
+              <button
+                onClick={() => handleSwitchRegional('SPM')} 
+                className={`px-4 py-1.5 text-xs font-black tracking-wide rounded-md transition-all ${
+                  currentRegional === 'SPM' || currentRegional === 'SPM/SPC'
+                    ? 'bg-[#113366] text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-white dark:hover:bg-gray-800'
+                }`}
+              >
+                SPM / SPC
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-8 print:p-0 print:overflow-visible">
            <Outlet /> 
         </div>

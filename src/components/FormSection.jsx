@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2, AlertTriangle } from 'lucide-react';
 
 // 🔥 IMPORTANDO A FONTE ÚNICA DE VERDADE
-// Altere esta linha:
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
+
 // ===================================================================
 // TODOS OS CAMPOS EDITÁVEIS AGORA SÃO OBRIGATÓRIOS
 // ===================================================================
@@ -54,17 +54,7 @@ export const FORM_FIELDS = [
   { idx: 42, label: 'Justificativa Desvio', type: 'textarea', span: 'col-span-2' },
 ];
 
-// ===================================================================
-// CAMPOS OBRIGATÓRIOS
-// ===================================================================
-
-const CAMPOS_OBRIGATORIOS = FORM_FIELDS
-  .filter(field => !field.disabled)
-  .map(field => field.idx);
-
-// ===================================================================
-// COMPONENTE
-// ===================================================================
+const CAMPOS_OBRIGATORIOS = FORM_FIELDS.filter(field => !field.disabled).map(field => field.idx);
 
 const FormSection = ({
   isOpen,
@@ -78,7 +68,6 @@ const FormSection = ({
   isSaving,
   baseData
 }) => {
-
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
 
@@ -91,14 +80,11 @@ const FormSection = ({
       setAtPisoConfirmado(false);
       setVolExpMaiorConfirmado(false);
       setSemOperacao(false);
+      setShowConfirmDelete(false);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  // ================================================================
-  // FECHAR
-  // ================================================================
 
   const handleClose = () => {
     setShowConfirmDelete(false);
@@ -106,62 +92,33 @@ const FormSection = ({
     onClose();
   };
 
-  // ================================================================
-  // SEM OPERAÇÃO
-  // ================================================================
-
   const handleSemOperacaoToggle = (e) => {
-
     const isChecked = e.target.checked;
-
     setSemOperacao(isChecked);
 
     if (isChecked) {
-
       FORM_FIELDS.forEach(field => {
-
         if (field.type === 'number') {
           onChange(field.idx, 0);
         }
       });
-
       onChange(41, "Sem Expedição no turno");
     }
   };
 
-  // ================================================================
-  // REGRAS
-  // ================================================================
-
   const volumeAtPiso = Number(formData[19]) || 0;
   const volProc = Number(formData[13]) || 0;
   const volExp = Number(formData[14]) || 0;
-
   const isVolExpMaior = volExp > volProc;
 
-  // ================================================================
-  // VALIDAÇÃO CAMPOS OBRIGATÓRIOS
-  // ================================================================
-
   const camposFaltando = CAMPOS_OBRIGATORIOS.filter(idx => {
-
     const valor = formData[idx];
-
     if (valor === undefined || valor === null) return true;
-
-    if (typeof valor === 'string' && valor.trim() === '') {
-      return true;
-    }
-
+    if (typeof valor === 'string' && valor.trim() === '') return true;
     return false;
   });
 
-  const camposObrigatoriosPreenchidos =
-    camposFaltando.length === 0;
-
-  // ================================================================
-  // BLOQUEIOS
-  // ================================================================
+  const camposObrigatoriosPreenchidos = camposFaltando.length === 0;
 
   const bloqueiaSalvamento =
     !camposObrigatoriosPreenchidos ||
@@ -170,212 +127,112 @@ const FormSection = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-
       <div className="bg-white dark:bg-[#1f232d] w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-
+        
         {/* HEADER */}
-
         <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-gray-800">
-
           <div>
             <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
-              {mode === 'new'
-                ? 'Adicionar Novo Registro'
-                : `Editar Registro (Linha ${rowIndex})`}
+              {mode === 'new' ? 'Adicionar Novo Registro' : `Editar Registro (Linha ${rowIndex})`}
             </h2>
-
-            <p className="text-xs text-slate-500 mt-1 font-bold italic">
-              Todos os campos são obrigatórios.
-            </p>
+            <p className="text-xs text-slate-500 mt-1 font-bold italic">Todos os campos são obrigatórios.</p>
           </div>
-
-          <button
-            onClick={handleClose}
-            className="text-slate-400 hover:text-red-500 transition-colors"
-          >
+          <button onClick={handleClose} className="text-slate-400 hover:text-red-500 transition-colors">
             <X size={24} />
           </button>
         </div>
 
         {/* SEM OPERAÇÃO */}
-
         <div className="px-6 pt-4 pb-2">
-
           <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-[#15171e] dark:hover:bg-gray-800 p-3 rounded-lg border border-slate-200 dark:border-gray-700 w-max transition-colors">
-
             <input
               type="checkbox"
               checked={semOperacao}
               onChange={handleSemOperacaoToggle}
               className="w-4 h-4 text-blue-600 rounded border-gray-300"
             />
-
             <span className="text-sm font-bold text-slate-700 dark:text-gray-300 uppercase tracking-wide">
               Sem operação neste turno
             </span>
-
           </label>
         </div>
 
-        {/* FORM */}
-
+        {/* FORM GRID */}
         <div className="p-6 pt-2 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-
           {FORM_FIELDS.map((field) => {
-  let fieldOptions = field.options;
-  let isFieldDisabled = field.disabled;
+            let fieldOptions = field.options;
+            let isFieldDisabled = field.disabled;
 
-  // ========================================================
-  // 🔥 FILTRO DINÂMICO: STATION (Baseado na Regional)
-  // ========================================================
-  if (field.idx === 4) {
-    const regEscolhida = localStorage.getItem("selectedRegional");
-    if (regEscolhida && regEscolhida !== "TODOS") {
-      fieldOptions = getHubsPermitidos(regEscolhida).sort();
-    } else {
-      fieldOptions = Object.keys(MAPA_REGIONAL_COMPLETO).sort();
-    }
-  }
+            if (field.idx === 4) {
+              const regEscolhida = localStorage.getItem("selectedRegional");
+              if (regEscolhida && regEscolhida !== "TODOS") {
+                fieldOptions = getHubsPermitidos(regEscolhida).sort();
+              } else {
+                fieldOptions = Object.keys(MAPA_REGIONAL_COMPLETO).sort();
+              }
+            }
 
-  // ========================================================
-  // TURNO DINÂMICO (Baseado na Station selecionada)
-  // ========================================================
-  if (field.idx === 5) {
-    const stationAtual = formData[4];
-    if (stationAtual && baseData?.length > 0) {
-      const turnosDoHub = baseData
-        .filter(r => String(r[0]).trim() === String(stationAtual).trim())
-        .map(r => String(r[1]).trim())
-        .filter(t => t);
+            if (field.idx === 5) {
+              const stationAtual = formData[4];
+              if (stationAtual && baseData?.length > 0) {
+                const turnosDoHub = baseData
+                  .filter(r => String(r[0]).trim() === String(stationAtual).trim())
+                  .map(r => String(r[1]).trim())
+                  .filter(t => t);
 
-      if (turnosDoHub.length > 0) {
-        fieldOptions = [...new Set(turnosDoHub)];
-      } else {
-        fieldOptions = [];
-      }
-    } else {
-      fieldOptions = [];
-      isFieldDisabled = true;
-    }
-  }
+                if (turnosDoHub.length > 0) {
+                  fieldOptions = [...new Set(turnosDoHub)];
+                } else {
+                  fieldOptions = [];
+                }
+              } else {
+                fieldOptions = [];
+                isFieldDisabled = true;
+              }
+            }
 
-            // ========================================================
-            // OBRIGATÓRIO
-            // ========================================================
-
-            const isObrigatorio =
-              !field.disabled;
-
-            const valorVazio =
-              formData[field.idx] === undefined ||
-              formData[field.idx] === null ||
-              String(formData[field.idx]).trim() === '';
+            const isObrigatorio = !field.disabled;
+            const valorVazio = formData[field.idx] === undefined || formData[field.idx] === null || String(formData[field.idx]).trim() === '';
+            const fieldValue = formData[field.idx] != null ? formData[field.idx] : "";
 
             return (
-
-              <div
-                key={field.idx}
-                className={`flex flex-col relative ${field.span}`}
-              >
-
-                {/* LABEL */}
-
+              <div key={field.idx} className={`flex flex-col relative ${field.span}`}>
                 <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1 flex items-center">
-
                   {field.label}
-
-                  {isObrigatorio && (
-                    <span className="text-red-500 ml-1 text-xs">*</span>
-                  )}
-
+                  {isObrigatorio && <span className="text-red-500 ml-1 text-xs">*</span>}
                 </label>
 
-                {/* SELECT */}
-
                 {field.type === 'select' ? (
-
                   <select
-                    value={formData[field.idx] ?? ""}
+                    value={fieldValue}
                     onChange={(e) => onChange(field.idx, e.target.value)}
                     disabled={isFieldDisabled}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    className={`
-                      bg-slate-50 dark:bg-[#15171e]
-                      text-slate-800 dark:text-gray-200
-                      border
-                      ${isObrigatorio && valorVazio
-                        ? 'border-red-400 dark:border-red-700'
-                        : 'border-slate-200 dark:border-gray-700'}
-                      rounded-lg
-                      p-2
-                      text-sm
-                      focus:border-blue-500
-                      ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}
-                    `}
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2 text-sm focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
-
-                    <option value="">
-                      {field.idx === 5 && !formData[4]
-                        ? "Selecione a Station..."
-                        : "Selecione..."}
-                    </option>
-
+                    <option value="">{field.idx === 5 && !formData[4] ? "Selecione a Station..." : "Selecione..."}</option>
                     {fieldOptions?.map(opt => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
+                      <option key={opt} value={opt}>{opt}</option>
                     ))}
-
                   </select>
-
                 ) : field.type === 'textarea' ? (
-
-                  // ====================================================
-                  // TEXTAREA
-                  // ====================================================
-
                   <textarea
-                    value={formData[field.idx] ?? ""}
+                    value={fieldValue}
                     onChange={(e) => onChange(field.idx, e.target.value)}
                     disabled={isFieldDisabled}
                     maxLength={3000}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    className={`
-                      bg-slate-50 dark:bg-[#15171e]
-                      text-slate-800 dark:text-gray-200
-                      border
-                      ${isObrigatorio && valorVazio
-                        ? 'border-red-400 dark:border-red-700'
-                        : 'border-slate-200 dark:border-gray-700'}
-                      rounded-lg
-                      p-2.5
-                      text-sm
-                      focus:outline-none
-                      focus:border-blue-500
-                      resize-none
-                      h-20
-                    `}
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none h-20`}
                   />
-
                 ) : (
-
-                  // ====================================================
-                  // INPUT
-                  // ====================================================
-
                   <input
                     type={field.type}
-                    value={formData[field.idx] ?? ""}
+                    value={fieldValue}
                     onInput={(e) => {
-
-                      if (
-                        field.idx === 11 &&
-                        e.target.value.length > 3
-                      ) {
-                        e.target.value =
-                          e.target.value.slice(0, 3);
+                      if (field.idx === 11 && e.target.value.length > 3) {
+                        e.target.value = e.target.value.slice(0, 3);
                       }
                     }}
                     onChange={(e) => onChange(field.idx, e.target.value)}
@@ -384,165 +241,81 @@ const FormSection = ({
                     onBlur={() => setFocusedField(null)}
                     min="0"
                     max={field.idx === 11 ? "999" : undefined}
-                    className={`
-                      bg-slate-50 dark:bg-[#15171e]
-                      text-slate-800 dark:text-gray-200
-                      border
-                      ${isObrigatorio && valorVazio
-                        ? 'border-red-400 dark:border-red-700'
-                        : 'border-slate-200 dark:border-gray-700'}
-                      rounded-lg
-                      p-2.5
-                      text-sm
-                      focus:outline-none
-                      focus:border-blue-500
-                      ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}
-                    `}
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   />
                 )}
 
-                {/* ALERTA VOL EXP */}
-
+                {/* ALERTAS */}
                 {field.idx === 14 && isVolExpMaior && (
                   <div className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 p-2 rounded-md flex items-start gap-2">
-
-                    <input
-                      type="checkbox"
-                      checked={volExpMaiorConfirmado}
-                      onChange={(e) =>
-                        setVolExpMaiorConfirmado(e.target.checked)
-                      }
-                      className="mt-0.5 shrink-0 w-4 h-4 text-orange-600 rounded cursor-pointer"
-                    />
-
-                    <span className="text-[9px] font-bold text-orange-700 dark:text-orange-400 uppercase">
-                      Confirmo que o Volume Expedido é superior ao Volume Processado.
-                    </span>
-
+                    <input type="checkbox" checked={volExpMaiorConfirmado} onChange={(e) => setVolExpMaiorConfirmado(e.target.checked)} className="mt-0.5 shrink-0 w-4 h-4 text-orange-600 rounded cursor-pointer" />
+                    <span className="text-[9px] font-bold text-orange-700 dark:text-orange-400 uppercase">Confirmo que o Volume Expedido é superior ao Volume Processado.</span>
                   </div>
                 )}
-
-                {/* ALERTA AT PISO */}
-
                 {field.idx === 19 && volumeAtPiso > 0 && (
                   <div className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 rounded-md flex items-start gap-2">
-
-                    <input
-                      type="checkbox"
-                      checked={atPisoConfirmado}
-                      onChange={(e) =>
-                        setAtPisoConfirmado(e.target.checked)
-                      }
-                      className="mt-0.5 shrink-0 w-4 h-4 text-red-600 rounded cursor-pointer"
-                    />
-
-                    <span className="text-[9px] font-bold text-red-700 dark:text-red-400 uppercase">
-                      Confirmo que as AT's no Piso serão expedidas no D+1.
-                    </span>
-
+                    <input type="checkbox" checked={atPisoConfirmado} onChange={(e) => setAtPisoConfirmado(e.target.checked)} className="mt-0.5 shrink-0 w-4 h-4 text-red-600 rounded cursor-pointer" />
+                    <span className="text-[9px] font-bold text-red-700 dark:text-red-400 uppercase">Confirmo que as AT's no Piso serão expedidas no D+1.</span>
                   </div>
                 )}
-
               </div>
             );
           })}
         </div>
 
         {/* FOOTER */}
-
         <div className="p-6 border-t border-slate-100 dark:border-gray-800 flex justify-between bg-slate-50 dark:bg-[#1f232d] rounded-b-2xl">
-
           <div>
-
-            {mode === 'edit' && !showConfirmDelete && (
-              <button
-                onClick={() => setShowConfirmDelete(true)}
-                className="text-red-500 font-bold text-sm flex items-center gap-2"
-              >
-                <Trash2 size={16}/>
-                Excluir
-              </button>
+            {mode === 'edit' && (
+              showConfirmDelete ? (
+                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-2">
+                  <span className="text-sm font-bold text-red-500 flex items-center gap-1">
+                    <AlertTriangle size={16} /> Tem certeza?
+                  </span>
+                  <button onClick={() => { onDelete(); setShowConfirmDelete(false); }} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors">
+                    Sim, excluir
+                  </button>
+                  <button onClick={() => setShowConfirmDelete(false)} className="text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200 text-xs font-bold transition-colors">
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setShowConfirmDelete(true)} className="text-red-500 hover:text-red-600 font-bold text-sm flex items-center gap-2 transition-colors">
+                  <Trash2 size={16}/> Excluir Registro
+                </button>
+              )
             )}
-
           </div>
 
           <div className="flex gap-2 items-center">
-
-            <button
-              onClick={handleClose}
-              className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400"
-            >
+            <button onClick={handleClose} className="px-4 py-2 font-bold text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200 transition-colors">
               Cancelar
             </button>
-
             <button
               onClick={() => {
-
                 if (!camposObrigatoriosPreenchidos) {
-
-                  alert(
-                    `Preencha todos os campos obrigatórios.\n\nFaltando: ${camposFaltando.join(', ')}`
-                  );
-
+                  alert(`Preencha todos os campos obrigatórios.\n\nFaltando: ${camposFaltando.join(', ')}`);
                   return;
                 }
-
-                if (
-                  volumeAtPiso > 0 &&
-                  !atPisoConfirmado
-                ) {
-
-                  alert(
-                    "Confirme a regra de AT Piso."
-                  );
-
+                if (volumeAtPiso > 0 && !atPisoConfirmado) {
+                  alert("Confirme a regra de AT Piso.");
                   return;
                 }
-
-                if (
-                  isVolExpMaior &&
-                  !volExpMaiorConfirmado
-                ) {
-
-                  alert(
-                    "Confirme a divergência de Volume Expedido."
-                  );
-
+                if (isVolExpMaior && !volExpMaiorConfirmado) {
+                  alert("Confirme a divergência de Volume Expedido.");
                   return;
                 }
-
                 onSave();
               }}
               disabled={isSaving || bloqueiaSalvamento}
-              className={`
-                text-white
-                px-6
-                py-2
-                rounded-lg
-                font-bold
-                shadow-md
-                flex
-                items-center
-                gap-2
-                transition-all
-                ${
-                  isSaving || bloqueiaSalvamento
-                    ? 'bg-slate-400 cursor-not-allowed opacity-70'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }
-              `}
+              className={`text-white px-6 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all ${isSaving || bloqueiaSalvamento ? 'bg-slate-400 cursor-not-allowed opacity-70' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
-
               <Save size={18}/>
-
-              {isSaving
-                ? "Salvando..."
-                : "Salvar Dados Unificados"}
-
+              {isSaving ? "Salvando..." : "Salvar Dados Unificados"}
             </button>
-
           </div>
         </div>
+
       </div>
     </div>
   );

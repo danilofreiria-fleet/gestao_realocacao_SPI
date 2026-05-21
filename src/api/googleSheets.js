@@ -9,6 +9,7 @@ const ID_PLANILHA_LOGS = import.meta.env.VITE_SPREADSHEET_ID_LOGS;
 const ID_PERMISSION_SHEET = import.meta.env.VITE_PERMISSION_SHEET;
 
 
+
 const ABA_NOME = "CONSOLIDADO-GESTÃO-SPI_REALOCAÇÃO";
 
 // =================================================================
@@ -497,29 +498,39 @@ export const getDadosRHDashboard = async () => {
   }
 };
 
-// =================================================================
-// GET DADOS DO AT PISO DIÁRIO
+// ====// =================================================================
+// GET DADOS DO AT PISO (Matriz Original para a One Page)
 // =================================================================
 export const getDadosAtPiso = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/AT_PISO!A:ZZ`;
+    // 🔥 ID CHUMBADO: Garantia 100% que vai buscar na planilha de Permissões
+    const ID_PLANILHA_AT_PISO = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_AT_PISO}/values/PIVOT_AT_PISO!A:ZZ`;
+    
+    // Requisição com os Headers de Autenticação Nativos embutidos
+    const response = await fetch(url, { 
+      method: "GET", 
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      } 
     });
 
     if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
     const result = await response.json();
+    
+    // 🔥 Devolvemos a Matriz de Arrays crua exatamente como a One Page espera ler
     return result.values || [];
   } catch (error) {
-    console.error("Erro na API (GET AT PISO DIÁRIO):", error);
+    console.error("Erro na API (GET PIVOT AT PISO):", error);
     return [];
   }
 };
+
 
 // =================================================================
 // VERIFICAÇÃO DE ACESSO AO DASHBOARD
@@ -560,6 +571,29 @@ export const verificarAcessoGestor = async (emailUsuario, token) => {
 };
 
 // =================================================================
+// GET FIRST TRIPS
+// =================================================================
+export const getFirstTripsData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+   
+    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/PIVOT_DIARIO_FIRST_TRIPS!A:ZZZ`, {
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      }
+    });
+    const data = await resp.json();
+    return data.values || [];
+  } catch (error) {
+    console.error("Erro ao buscar First Trips:", error);
+    return [];
+  }
+};
+
+
+// =================================================================
 // GET HISTORICO DE FROTA
 // =================================================================
 export const getHistoricoFrotaData = async () => {
@@ -588,59 +622,67 @@ export const getHistoricoFrotaData = async () => {
 
 
 // =================================================================
-// GET RODAGEM (Rodízio) - Padronizado com o sistema de Token
+// GET RODAGEM (Rodízio) - Mesclando SPI e SPM Automaticamente
 // =================================================================
 export const getRodagemData = async (tabName) => {
   try {
-    // Pegando o token que já existe no seu sistema
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // Pegando o ID da planilha do seu arquivo .env
-    const sheetId = import.meta.env.VITE_SPREADSHEET_ID_RODIZIO;
+    // ID da SPI (Que já estava no seu .env)
+    const idSPI = import.meta.env.VITE_SPREADSHEET_ID_RODIZIO;
+    // 🔥 NOVO: ID da SPM que você me passou
+    const idSPM = "1_-P1-RA5rTdc_-L40GUwP5pG1iqVytOKchYz_Oq712o";
     
-    if (!sheetId) throw new Error("A variável VITE_SPREADSHEET_ID_RODIZIO não foi encontrada no .env");
+    if (!idSPI) throw new Error("A variável VITE_SPREADSHEET_ID_RODIZIO não foi encontrada no .env");
 
-    // URL da API oficial do Google Sheets (Sem o ?key= da versão anterior)
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}`;
+    const urlSPI = `https://sheets.googleapis.com/v4/spreadsheets/${idSPI}/values/${tabName}`;
+    const urlSPM = `https://sheets.googleapis.com/v4/spreadsheets/${idSPM}/values/${tabName}`;
 
-    // Passando o token de segurança no Header, igual as outras funções!
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { 
-        "Authorization": `Bearer ${token}`, 
-        "Accept": "application/json" 
+    const headers = { 
+      "Authorization": `Bearer ${token}`, 
+      "Accept": "application/json" 
+    };
+
+    // 🔥 PULO DO GATO: Dispara as duas buscas ao mesmo tempo!
+    const [respSPI, respSPM] = await Promise.all([
+      fetch(urlSPI, { method: "GET", headers }).catch(() => null),
+      fetch(urlSPM, { method: "GET", headers }).catch(() => null)
+    ]);
+
+    let dadosCombinados = [];
+    let cabecalho = null;
+
+    // 1. Processa os dados da SPI
+    if (respSPI && respSPI.ok) {
+      const dataSPI = await respSPI.json();
+      if (dataSPI.values && dataSPI.values.length > 0) {
+        cabecalho = dataSPI.values[0]; // Salva a linha de cabeçalho
+        dadosCombinados.push(...dataSPI.values.slice(1)); // Adiciona os motoristas
       }
-    });
-    
-    if (!response.ok) {
-      console.warn(`Aba ${tabName} ausente ou erro de permissão. Status: ${response.status}`);
+    }
+
+    // 2. Processa os dados da SPM
+    if (respSPM && respSPM.ok) {
+      const dataSPM = await respSPM.json();
+      if (dataSPM.values && dataSPM.values.length > 0) {
+        if (!cabecalho) cabecalho = dataSPM.values[0]; // Pega o cabeçalho se a SPI estiver vazia
+        dadosCombinados.push(...dataSPM.values.slice(1)); // Adiciona os motoristas embaixo
+      }
+    }
+
+    // Se nenhuma aba existir no mês (ex: Mês futuro), retorna vazio
+    if (!cabecalho) {
+      console.warn(`Aba ${tabName} não encontrada em nenhuma das planilhas.`);
       return [];
     }
 
-    const data = await response.json();
-    return data.values || [];
+    // Devolve a matriz final: Cabeçalho na linha 0, seguido de todos os motoristas
+    return [cabecalho, ...dadosCombinados];
 
   } catch (error) {
-    console.error(`Falha no getRodagemData (${tabName}):`, error);
-    return []; // Retorna vazio para não quebrar a tela de rodízio
-  }
-};
-
-
-export const getFirstTripsData = async () => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
-   
-    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/PIVOT_DIARIO_FIRST_TRIPS!A:ZZZ`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    const data = await resp.json();
-    return data.values || [];
-  } catch (error) {
-    console.error("Erro ao buscar First Trips:", error);
-    return [];
+    console.error(`Falha Crítica no getRodagemData (${tabName}):`, error);
+    return []; 
   }
 };
 

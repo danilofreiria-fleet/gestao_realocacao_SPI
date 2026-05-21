@@ -98,7 +98,6 @@ export default function AtPisoCharts({ data }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid print:grid-cols-2 print:gap-4 print:pb-0 pt-6">
       
-      {/* 🔥 NOVO BANNER ESTILIZADO OCUPANDO TODO O GRID */}
       <div className="col-span-1 lg:col-span-2 bg-[#113366] rounded-2xl shadow-sm overflow-hidden border border-[#113366] print:break-inside-avoid mb-2">
         <div className="text-white text-center py-4 px-6 flex flex-col items-center justify-center gap-1">
           <h2 className="text-xl md:text-2xl font-black uppercase tracking-widest flex items-center gap-2">

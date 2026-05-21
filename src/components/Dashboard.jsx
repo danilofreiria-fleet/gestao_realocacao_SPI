@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData, getDadosRHDashboard, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData } from '../api/googleSheets';
+import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
 import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning } from 'lucide-react';
 
@@ -68,60 +68,37 @@ export default function Dashboard() {
     const carregarDados = async () => {
       setLoading(true);
       try {
-        const [dataConsol, dataRH, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataOfertasModal] = await Promise.all([
+        // 🔥 1. A ORDEM AQUI AGORA ESTÁ PERFEITA
+        const [dataConsol, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota] = await Promise.all([
           getConsolidadoData(),
-          getDadosRHDashboard(),
           getBaseReferenceData(),
           getDadosAtPiso(),
           getFirstTripsData(),
           getHistoricoFrotaData()
         ]);
         
-        // 🔥 CATRACA DE REGIONAL APLICADA A TODOS OS CONJUNTOS DE DADOS
         const regEscolhida = localStorage.getItem("selectedRegional");
         const hubsPermitidos = getHubsPermitidos(regEscolhida);
 
         if (dataConsol && dataConsol.length > 1) {
-          // Índice 4 é Station
           setRawData(dataConsol.slice(1).filter(r => hubsPermitidos.includes(String(r[4]).trim())));
         }
         
-        if (dataRH && dataRH.length > 1) {
-          const getTime = (dateStr) => {
-            if (!dateStr) return 0;
-            let s = String(dateStr).trim().split('T')[0].split(' ')[0];
-            if (s.includes('/')) {
-              const [d, m, a] = s.split('/');
-              return new Date(a, m - 1, d).getTime();
-            }
-            if (s.includes('-')) {
-              const [a, m, d] = s.split('-');
-              return new Date(a, m - 1, d).getTime();
-            }
-            return new Date(s).getTime() || 0;
-          };
-          // Índice 2 é Station no RH
-          const rhFiltrado = dataRH.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()));
-          setDashData(rhFiltrado.sort((a,b) => getTime(b[1]) - getTime(a[1])));
-        }
+        // 🔥 2. BLOCO DO dataRH FOI REMOVIDO DAQUI POIS NÃO EXISTE MAIS!
 
         if (dataBase && dataBase.length > 1) {
-          // Índice 0 é Station na Base
           setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
         }
         
         if (dataPiso && dataPiso.length > 1) {
-          // AT PISO NÃO SE FILTRA AQUI POIS ELE É MATRIZ, FILTRA NO COMPONENTE!
           setAtPisoData(dataPiso); 
         }
 
         if (dataFirstTrips && dataFirstTrips.length > 1) {
-          // Índice 2 é Station na FirstTrips
           setFirstTripsData([dataFirstTrips[0], ...dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))]);
         }
 
         if (dataHistoricoFrota && dataHistoricoFrota.length > 1) {
-          // Índice 3 é Station no Historico
           setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
         }
         
@@ -257,7 +234,7 @@ const exportarCSV = () => {
     return (
       <div className="flex h-full items-center justify-center flex-col gap-4">
         <div className="w-12 h-12 border-4 border-[#EE4D2D] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 font-bold animate-pulse">Carregando e Cruzando Indicadores de Malha e RH...</p>
+        <p className="text-slate-500 font-bold animate-pulse">Carregando Dados </p>
       </div>
     );
   }

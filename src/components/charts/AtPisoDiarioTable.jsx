@@ -50,7 +50,6 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
     return { label: `${m}/${a}`, monthNum: m };
   }, []);
 
-  // 🔥 MAPEAMENTO: Quais semanas pertencem a cada mês
   const monthToWeeksMap = useMemo(() => {
     const mapStr = {}; 
     const mapNum = {}; 
@@ -78,7 +77,6 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
     const rawSeguro = rawData || []; 
     const dataSeguro = data || [];
 
-    // 1. LÓGICA DE DETETIVE PARA ACHAR AS SEMANAS ALVO
     let targetWeeks = [];
 
     if (viewMode === 'semana') {
@@ -101,25 +99,16 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
       } else if (filtrosGlobais?.mes) {
         targetWeeks = Array.from(monthToWeeksMap.num[filtrosGlobais.mes] || []);
       } else if (weeksInData.size === 1) {
-        targetWeeks = [Array.from(weeksInData)[0]]; // Usa a inteligência do seu código antigo!
+        targetWeeks = [Array.from(weeksInData)[0]]; 
       } else {
         targetWeeks = [currentWeekNum]; 
       }
     }
 
-    // 2. ENCONTRA A LINHA DE CABEÇALHO COM PRECISÃO
-    let headerRowIdx = -1;
-    for (let i = 0; i < Math.min(20, atPisoData.length); i++) {
-      if (atPisoData[i] && String(atPisoData[i][4]).trim() === "Abbreviation") {
-        headerRowIdx = i;
-        break;
-      }
-    }
-    if (headerRowIdx === -1) return [];
-    
+    // 🔥 NOVO: O Cabeçalho na planilha nova é sempre a linha 0!
+    const headerRowIdx = 0; 
     const headerRow = atPisoData[headerRowIdx];
 
-    // 3. COLETA TODAS AS SEMANAS DISPONÍVEIS NA PLANILHA
     const availableWeeks = [];
     headerRow.forEach((h, idx) => {
       const w = extractWeekNumber(h);
@@ -129,23 +118,20 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
     if (availableWeeks.length === 0) return [];
     const maxAvailableWeek = Math.max(...availableWeeks.map(x => x.week));
 
-    // 4. CRUZAMENTO (O que eu quero vs O que a planilha tem)
     const weekColIndices = [];
     targetWeeks.forEach(tw => {
       const match = availableWeeks.find(aw => aw.week === tw);
       if (match) weekColIndices.push(match.colIdx);
     });
 
-    // 🛡️ MODO ANTI-FALHA: Se a planilha estiver atrasada e não tiver a semana atual, puxa a última disponível!
     if (weekColIndices.length === 0) {
       const fallbackCol = availableWeeks.find(aw => aw.week === maxAvailableWeek);
       if (fallbackCol) {
         weekColIndices.push(fallbackCol.colIdx);
-        targetWeeks = [fallbackCol.week]; // Atualiza para o título não mentir
+        targetWeeks = [fallbackCol.week]; 
       }
     }
 
-    // 5. PROCESSAMENTO DE HUBS ATIVOS
     const validHubs = new Set();
     datasetToProcess.forEach(r => {
       const hub = String(r[4] || "").trim();
@@ -154,15 +140,16 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
 
     const aggs = {};
 
-    // 6. AGREGAÇÃO E SOMA DE DIAS (Se for Mês, ele soma tudo!)
     for (let i = headerRowIdx + 1; i < atPisoData.length; i++) {
       const row = atPisoData[i];
-      const rawHubName = String(row[4] || "").trim();
+      // 🔥 A Planilha nova tem o Hub na Coluna C (Índice 2)
+      const rawHubName = String(row[2] || "").trim(); 
       if (!rawHubName) continue;
 
       if (validHubs.size > 0 && !validHubs.has(rawHubName)) continue;
 
-      const subregional = String(row[3] || "Sem Subregional").trim();
+      // 🔥 A Planilha nova tem a Subregional na Coluna B (Índice 1)
+      const subregional = String(row[1] || "Sem Subregional").trim();
       
       let total = 0, seg = 0, ter = 0, qua = 0, qui = 0, sex = 0, sab = 0, dom = 0;
 
