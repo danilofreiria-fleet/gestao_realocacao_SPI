@@ -9,8 +9,7 @@ import MainLayout from './layouts/MainLayout.jsx';
 import DataTable from './components/DataTable.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Validacao from './components/Validacao.jsx'; 
-
-// 🔥 1. IMPORTAMOS A TELA DE SELEÇÃO DE REGIONAL AQUI
+import ReportsProntos from './pages/ReportsProntos.jsx'; 
 import SelecionarRegional from './components/RegionalSelection.jsx'; 
 
 import './index.css';
@@ -30,20 +29,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* Rota de Login */}
           <Route path="/" element={<Login />} />
           
-        
           <Route path="/selecionar-regional" element={
             <PrivateRoute>
               <SelecionarRegional />
             </PrivateRoute>
           } />
           
-{/* Rotas Internas Protegidas (Com a Sidebar) */}
+          {/* Rotas Internas Protegidas (Com a Sidebar) */}
           <Route path="/app" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
             <Route index element={<Navigate to="tabela" />} /> 
             
             <Route path="tabela" element={<DataTable />} />
             
-            {/* 🔥 A ROTA NOVA VEM AQUI! */}
             <Route path="rodizio" element={
               <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 h-full flex flex-col">
                 <h2 className="text-2xl font-black text-[#113366] dark:text-white uppercase tracking-tight mb-2">Painel de Rodízio</h2>
@@ -51,6 +48,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <RotationTable />
               </div>
             } />
+            
+            
+            <Route path="reports" element={<ReportsProntos />} />
             
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="validacao" element={<Validacao />} />

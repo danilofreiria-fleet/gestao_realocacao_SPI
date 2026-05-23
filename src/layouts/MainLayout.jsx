@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-// 🔥 1. Adicionei o CalendarDays aqui na importação dos ícones
-import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays, ClipboardList } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
 export default function MainLayout() {
@@ -87,10 +86,10 @@ export default function MainLayout() {
     window.location.reload(); 
   };
 
-  // 🔥 2. Adicionei a Rota do Rodízio aqui na lista!
-  const menuItems = [
+const menuItems = [
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
-    { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> }, // Rota livre para todos
+    { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
+    { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> }, // 🔥 NOVO BOTÃO
     ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
     { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
   ];
