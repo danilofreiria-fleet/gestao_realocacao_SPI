@@ -86,10 +86,10 @@ export default function MainLayout() {
     window.location.reload(); 
   };
 
-const menuItems = [
+  const menuItems = [
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
     { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
-    { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> }, // 🔥 NOVO BOTÃO
+    { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> },
     ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
     { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
   ];
@@ -116,7 +116,7 @@ const menuItems = [
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
 
-        <div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
           <div className={`p-6 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 transition-all ${isCollapsed ? 'px-2' : ''}`}>
             <div className="mb-3 shrink-0 flex items-center justify-center min-h-[3rem]">
               <img 
@@ -156,7 +156,8 @@ const menuItems = [
           </nav>
         </div>
 
-        <div className={`p-4 border-t border-gray-100 dark:border-gray-800 space-y-2 ${isCollapsed ? 'px-2' : ''}`}>
+        {/* RODAPÉ DO MENU COM ASSINATURA */}
+        <div className={`p-4 border-t border-gray-100 dark:border-gray-800 space-y-2 shrink-0 ${isCollapsed ? 'px-2' : ''}`}>
           <div 
             title={isCollapsed ? `Sessão expira em: ${formatarTempo(tempoRestante)}` : ""}
             className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-2 rounded-xl text-xs font-bold ${tempoRestante && tempoRestante < 300000 ? 'text-red-500 animate-pulse' : 'text-slate-400 dark:text-gray-500'}`}
@@ -184,6 +185,18 @@ const menuItems = [
             <div className="shrink-0"><LogOut size={20} /></div>
             {!isCollapsed && <span className="truncate">Sair do Sistema</span>}
           </button>
+
+          {/*ASSINATURA*/}
+          {!isCollapsed && (
+            <div className="pt-4 mt-2 border-t border-gray-100 dark:border-gray-800 text-center animate-in fade-in">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                Desenvolvido por
+              </p>
+              <p className="text-[11px] font-black text-[#113366] dark:text-blue-400 uppercase tracking-wide">
+                Danilo Freiria - SPO3
+              </p>
+            </div>
+          )}
         </div>
       </aside>
 
