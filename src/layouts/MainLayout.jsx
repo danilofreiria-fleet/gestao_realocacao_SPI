@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays, ClipboardList } from 'lucide-react';
 import logoImg from '../assets/logo.png';
+import { BookOpen } from 'lucide-react'; 
 
 export default function MainLayout() {
   const navigate = useNavigate();
@@ -86,13 +87,14 @@ export default function MainLayout() {
     window.location.reload(); 
   };
 
-  const menuItems = [
-    { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
-    { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
-    { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> },
-    ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
-    { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
-  ];
+const menuItems = [
+  { path: '/app/premissas', name: 'Manual do Sistema', icon: <BookOpen size={20} /> }, 
+  { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
+  { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
+  { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> },
+  ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
+  { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
+];
 
   const formatarTempo = (ms) => {
     if (ms === null) return "--:--";

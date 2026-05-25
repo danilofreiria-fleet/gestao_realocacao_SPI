@@ -26,7 +26,7 @@ export default function Dashboard() {
   }, [navigate]);
 
   const [loading, setLoading] = useState(true);
-  
+ 
   // ESTADOS GLOBAIS DE DADOS
   const [rawData, setRawData] = useState([]);
   const [dashData, setDashData] = useState([]);
@@ -35,7 +35,7 @@ export default function Dashboard() {
   const [firstTripsData, setFirstTripsData] = useState([]);
   const [historicoFrotaData, setHistoricoFrotaData] = useState([]);
   const [ofertasModalData, setOfertasModalData] = useState([]);
-  
+ 
   // ESTADOS DE FILTROS GLOBAIS
   const [filtros, setFiltros] = useState({
     regional: [], station: [], turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
@@ -45,12 +45,15 @@ export default function Dashboard() {
   const [isTurnoMenuOpen, setIsTurnoMenuOpen] = useState(false);
   const [isStationMenuOpen, setIsStationMenuOpen] = useState(false);
   const [isRegionalMenuOpen, setIsRegionalMenuOpen] = useState(false);
-  
+ 
   const [stationSearchText, setStationSearchText] = useState('');
 
   const turnoMenuRef = useRef(null);
   const stationMenuRef = useRef(null);
   const regionalMenuRef = useRef(null);
+  
+  // 💡 NOVA REF: Para capturar o container do menu de categorias
+  const menuCategoriesRef = useRef(null);
 
   const [activeCategory, setActiveCategory] = useState('resumo');
 
@@ -64,11 +67,30 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // 💡 NOVO EFFECT: Transforma o scroll vertical do mouse em scroll horizontal no menu
+  useEffect(() => {
+    const menuElement = menuCategoriesRef.current;
+    if (!menuElement) return;
+
+    const handleWheel = (e) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault(); // Impede a página de rolar para baixo/cima
+        menuElement.scrollLeft += e.deltaY * 1.5; // Ajuste o multiplicador (1.5) se quiser mais rápido ou devagar
+      }
+    };
+
+    // Usamos addEventListener manual com passive: false para o preventDefault funcionar perfeitamente
+    menuElement.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      menuElement.removeEventListener('wheel', handleWheel);
+    };
+  }, [loading]); // Executa após sumir o loading e o menu renderizar de fato
+
   useEffect(() => {
     const carregarDados = async () => {
       setLoading(true);
       try {
-        // 🔥 1. A ORDEM AQUI AGORA ESTÁ PERFEITA
         const [dataConsol, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota] = await Promise.all([
           getConsolidadoData(),
           getBaseReferenceData(),
@@ -76,22 +98,20 @@ export default function Dashboard() {
           getFirstTripsData(),
           getHistoricoFrotaData()
         ]);
-        
+       
         const regEscolhida = localStorage.getItem("selectedRegional");
         const hubsPermitidos = getHubsPermitidos(regEscolhida);
 
         if (dataConsol && dataConsol.length > 1) {
           setRawData(dataConsol.slice(1).filter(r => hubsPermitidos.includes(String(r[4]).trim())));
         }
-        
-        // 🔥 2. BLOCO DO dataRH FOI REMOVIDO DAQUI POIS NÃO EXISTE MAIS!
-
+       
         if (dataBase && dataBase.length > 1) {
           setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
         }
-        
+       
         if (dataPiso && dataPiso.length > 1) {
-          setAtPisoData(dataPiso); 
+          setAtPisoData(dataPiso);
         }
 
         if (dataFirstTrips && dataFirstTrips.length > 1) {
@@ -101,14 +121,14 @@ export default function Dashboard() {
         if (dataHistoricoFrota && dataHistoricoFrota.length > 1) {
           setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
         }
-        
-      } catch (error) { 
-        console.error("Erro ao carregar Dashboard", error); 
-      } finally { 
-        setLoading(false); 
+       
+      } catch (error) {
+        console.error("Erro ao carregar Dashboard", error);
+      } finally {
+        setLoading(false);
       }
     };
-    
+   
     carregarDados();
   }, []);
 
@@ -129,6 +149,7 @@ export default function Dashboard() {
     { id: 'volumes', label: 'Volumes & SPR', icon: <BarChart3 size={16}/> },
     { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
     { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },
+    { id: 'tempo', label: 'Tempo de Expedição', icon: <Clock size={16}/> },
     { id: 'rodizio', label: 'Rodízio', icon: <CalendarDays size={16}/> },
     { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> },
   ];
@@ -136,12 +157,11 @@ export default function Dashboard() {
   const opcoes = useMemo(() => {
     const regionais = new Set(), stations = new Set(), semanas = new Set(), turnos = new Set();
     rawData.forEach(row => {
-      // 🔥 Força a Regional usando o mapa novo! (Caso o usuário digite vazio no forms)
       const st = String(row[4]).trim();
       const regionalForcada = MAPA_REGIONAL_COMPLETO[st] || row[1];
 
-      if (regionalForcada) regionais.add(regionalForcada); 
-      if (row[2]) semanas.add(row[2]);   
+      if (regionalForcada) regionais.add(regionalForcada);
+      if (row[2]) semanas.add(row[2]);  
       if (st) stations.add(st);  
       if (row[5]) turnos.add(row[5]);    
     });
@@ -154,7 +174,7 @@ export default function Dashboard() {
   }, [rawData]);
 
   const handleChange = (e) => setFiltros(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  
+ 
   const toggleArrayFilter = (filtroNome, valor) => {
     setFiltros(prev => {
       const itensAtuais = prev[filtroNome];
@@ -170,18 +190,18 @@ export default function Dashboard() {
 
   const dadosFiltrados = useMemo(() => {
     return rawData.filter(row => {
-      const dataRow = row[3]; 
+      const dataRow = row[3];
       const dObj = parseDate(dataRow);
       let pass = true;
-      
+     
       const st = String(row[4]).trim();
       const regionalForcada = MAPA_REGIONAL_COMPLETO[st] || row[1];
-      
+     
       if (filtros.regional.length > 0 && !filtros.regional.includes(regionalForcada)) pass = false;
       if (filtros.station.length > 0 && !filtros.station.includes(st)) pass = false;
       if (filtros.turno.length > 0 && !filtros.turno.includes(row[5])) pass = false;
       if (filtros.semana && row[2] !== filtros.semana) pass = false;
-      
+     
       if (dObj && !isNaN(dObj)) {
         if (filtros.mes && String(dObj.getMonth() + 1).padStart(2, '0') !== filtros.mes) pass = false;
         if (filtros.dataInicio || filtros.dataFim) {
@@ -195,11 +215,11 @@ export default function Dashboard() {
     });
   }, [rawData, filtros]);
 
-const exportarCSV = () => {
+  const exportarCSV = () => {
     if (dadosFiltrados.length === 0) return alert("Não há dados para exportar.");
-    
+   
     const headersCSV = [
-      "Regional", "Semana", "Data", "Station", "Turno", 
+      "Regional", "Semana", "Data", "Station", "Turno",
       "AT Piso", "Vol Roteirizado", "Vol Processado", "Vol Expedido",
       "Realocacao Pre", "Realocacao Durante", "Nao Coube", "Outros Motivos",
       "Taxa Correcao (%)", "Desvio Fleet", "Desvio Hub", "Eficiencia (%)", "Justificativa de Desvio"
@@ -211,14 +231,14 @@ const exportarCSV = () => {
       const regionalForcada = MAPA_REGIONAL_COMPLETO[st] || row[1];
 
       return [
-        regionalForcada || "", row[2] || "", row[3] || "", st || "", row[5] || "", 
+        regionalForcada || "", row[2] || "", row[3] || "", st || "", row[5] || "",
         row[19] || 0, row[11] || 0, row[13] || 0, row[14] || 0,
-        row[51] || 0, row[52] || 0, row[54] || 0, row[55] || 0, 
-        row[56] || 0, row[57] || 0, row[58] || 0, row[59] || 0, 
+        row[51] || 0, row[52] || 0, row[54] || 0, row[55] || 0,
+        row[56] || 0, row[57] || 0, row[58] || 0, row[59] || 0,
         `"${justificativa}"`
       ].join(",");
     });
-    
+   
     const csvContent = "\uFEFF" + [headersCSV.join(","), ...linhasCSV].join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -241,13 +261,14 @@ const exportarCSV = () => {
 
   const getDropdownLabel = (arr, emptyLabel) => {
     if (arr.length === 0) return emptyLabel;
-    if (arr.length === 1) return arr[0]; 
+    if (arr.length === 1) return arr[0];
     return `${arr.length} selecionados`;
   };
 
   return (
     <div className="flex flex-col h-full space-y-6 print:space-y-0 print:block">
-      
+     
+      {/* CARD DE FILTROS */}
       <div className="relative bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 shrink-0 print:hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
@@ -256,7 +277,7 @@ const exportarCSV = () => {
             </h2>
             <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">Visão Executiva: {dadosFiltrados.length} registros analisados.</p>
           </div>
-          
+         
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={exportarCSV} className="flex items-center gap-2 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 px-4 py-2 rounded-xl text-sm font-bold transition-colors">
               <Download size={16}/> Baixar CSV
@@ -271,10 +292,10 @@ const exportarCSV = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-slate-50 dark:bg-[#15171e] p-4 rounded-xl border border-slate-100 dark:border-gray-800">
-          
+         
           <div className="flex flex-col lg:col-span-1 relative" ref={regionalMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label>
-            <div 
+            <div
               className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm cursor-pointer flex justify-between items-center shadow-sm"
               onClick={() => setIsRegionalMenuOpen(!isRegionalMenuOpen)}
             >
@@ -285,7 +306,7 @@ const exportarCSV = () => {
               <div className="absolute top-[100%] left-0 w-full mt-1 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto py-1">
                 {opcoes.regionais.map(r => (
                   <label key={r} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-medium text-slate-700 dark:text-gray-200 transition-colors">
-                    <input 
+                    <input
                       type="checkbox" checked={filtros.regional.includes(r)} onChange={() => toggleArrayFilter('regional', r)}
                       className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-3 h-3 cursor-pointer"
                     /> {r}
@@ -297,7 +318,7 @@ const exportarCSV = () => {
 
           <div className="flex flex-col lg:col-span-2 relative" ref={stationMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Search size={12}/> Station</label>
-            <div 
+            <div
               className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm cursor-pointer flex justify-between items-center shadow-sm"
               onClick={() => setIsStationMenuOpen(!isStationMenuOpen)}
             >
@@ -307,7 +328,7 @@ const exportarCSV = () => {
             {isStationMenuOpen && (
               <div className="absolute top-[100%] left-0 w-full mt-1 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden flex flex-col">
                 <div className="p-2 border-b border-slate-100 dark:border-gray-800">
-                  <input 
+                  <input
                     type="text" placeholder="Buscar Station..." value={stationSearchText} onChange={(e) => setStationSearchText(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-gray-800 dark:text-white text-xs py-1.5 px-2 rounded border border-slate-200 dark:border-gray-700 outline-none"
                   />
@@ -315,20 +336,20 @@ const exportarCSV = () => {
                 <div className="max-h-48 overflow-y-auto py-1">
                   {opcoes.stations.filter(s => s.toLowerCase().includes(stationSearchText.toLowerCase())).map(s => (
                   <label key={s} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-medium text-slate-700 dark:text-gray-200 transition-colors">
-                    <input 
+                    <input
                       type="checkbox" checked={filtros.station.includes(s)} onChange={() => toggleArrayFilter('station', s)}
                       className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-3 h-3 cursor-pointer"
-                  /> {s} 
+                  /> {s}
                   </label>
                   ))}
                 </div>
               </div>
             )}
           </div>
-          
+         
           <div className="flex flex-col lg:col-span-1 relative" ref={turnoMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Clock size={12}/> Turnos</label>
-            <div 
+            <div
               className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm cursor-pointer flex justify-between items-center shadow-sm"
               onClick={() => setIsTurnoMenuOpen(!isTurnoMenuOpen)}
             >
@@ -339,7 +360,7 @@ const exportarCSV = () => {
               <div className="absolute top-[100%] left-0 w-full mt-1 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto py-1">
                 {opcoes.turnos.map(t => (
                   <label key={t} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-medium text-slate-700 dark:text-gray-200 transition-colors">
-                    <input 
+                    <input
                       type="checkbox" checked={filtros.turno.includes(t)} onChange={() => toggleArrayFilter('turno', t)}
                       className="rounded border-slate-300 text-[#0055A5] focus:ring-[#0055A5] w-3 h-3 cursor-pointer"
                     /> {t}
@@ -348,7 +369,7 @@ const exportarCSV = () => {
               </div>
             )}
           </div>
-          
+         
           <div className="flex flex-col lg:col-span-2">
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Hash size={12}/> Semana / Mês</label>
             <div className="flex gap-2">
@@ -362,14 +383,18 @@ const exportarCSV = () => {
         </div>
       </div>
 
-      <div className="flex bg-white dark:bg-[#1f232d] p-1.5 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 overflow-x-auto custom-scrollbar shrink-0 print:hidden">
+      {/* 💡 MENU DE CATEGORIAS COM SCROLL VIA WHEEL DO MOUSE */}
+      <div 
+        ref={menuCategoriesRef} 
+        className="flex bg-white dark:bg-[#1f232d] p-1.5 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 overflow-x-auto custom-scrollbar shrink-0 print:hidden"
+      >
         {CATEGORIAS.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black uppercase transition-all whitespace-nowrap ${
-              activeCategory === cat.id 
-                ? 'bg-[#113366] text-white shadow-md' 
+              activeCategory === cat.id
+                ? 'bg-[#113366] text-white shadow-md'
                 : 'text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 hover:text-[#EE4D2D]'
             }`}
           >
@@ -379,17 +404,18 @@ const exportarCSV = () => {
         ))}
       </div>
 
+      {/* CONTEÚDO DOS DASHBOARDS */}
       <div className="flex-1 overflow-y-auto print:overflow-visible">
-        <Visualizations 
+        <Visualizations
           activeCategory={activeCategory}
-          data={dadosFiltrados} 
-          rawData={rawData} 
-          dashData={dashData} 
-          atPisoData={atPisoData} 
-          baseData={baseData} 
+          data={dadosFiltrados}
+          rawData={rawData}
+          dashData={dashData}
+          atPisoData={atPisoData}
+          baseData={baseData}
           firstTripsData={firstTripsData}
-          historicoFrotaData={historicoFrotaData} 
-          ofertasModalData={ofertasModalData} 
+          historicoFrotaData={historicoFrotaData}
+          ofertasModalData={ofertasModalData}
           filtrosGlobais={filtros}
         />
       </div>

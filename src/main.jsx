@@ -11,6 +11,7 @@ import Dashboard from './components/Dashboard.jsx';
 import Validacao from './components/Validacao.jsx'; 
 import ReportsProntos from './pages/ReportsProntos.jsx'; 
 import SelecionarRegional from './components/RegionalSelection.jsx'; 
+import Premissas from './pages/Premissas.jsx';
 
 import './index.css';
 
@@ -37,9 +38,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           
           {/* Rotas Internas Protegidas (Com a Sidebar) */}
           <Route path="/app" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
-            <Route index element={<Navigate to="tabela" />} /> 
+            <Route index element={<Navigate to="premissas" />} /> 
             
             <Route path="tabela" element={<DataTable />} />
+
+            <Route path="premissas" element={<Premissas />} />
             
             <Route path="rodizio" element={
               <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 h-full flex flex-col">

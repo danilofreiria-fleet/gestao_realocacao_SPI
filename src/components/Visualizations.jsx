@@ -12,6 +12,7 @@ import StatusEvolutionChart from './charts/StatusEvolutionChart';
 import FleetHealthCharts from './charts/FleetHealthCharts';
 import PackagesAndReallocation from './charts/PackagesAndReallocation'; 
 import RotationTable from './charts/RotationTable';
+import TimeAnalysisCharts from './charts/TimeAnalysisCharts';
 
 const Visualizations = ({ 
   activeCategory, 
@@ -113,7 +114,14 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 7. LOGBOOK DE OCORRÊNCIAS (Aba Exclusiva) */}
+      {/* 7. TEMPO DE EXPEDIÇÃO */}
+      {activeCategory === 'tempo' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <TimeAnalysisCharts data={data} />
+        </div>
+      )}
+
+      {/* 8. LOGBOOK DE OCORRÊNCIAS (Aba Exclusiva) */}
       {activeCategory === 'ocorrencias' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <AttentionPointsFeed rawData={rawData} filtrosGlobais={filtrosGlobais} />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { X, Save, Trash2, AlertTriangle, CalendarDays } from 'lucide-react';
 
 // 🔥 IMPORTANDO A FONTE ÚNICA DE VERDADE
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
@@ -102,7 +102,15 @@ const FormSection = ({
           onChange(field.idx, 0);
         }
       });
+      
       onChange(41, "Sem Expedição no turno");
+      onChange(42, "Sem Expedição no turno");
+
+      const setupIni = formData[8] ? String(formData[8]).substring(0, 5) : "";
+      const setupFim = formData[9] ? String(formData[9]).substring(0, 5) : "";
+      
+      if (setupIni) onChange(6, setupIni);
+      if (setupFim) onChange(7, setupFim);
     }
   };
 
@@ -144,14 +152,14 @@ const FormSection = ({
 
         {/* SEM OPERAÇÃO */}
         <div className="px-6 pt-4 pb-2">
-          <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-[#15171e] dark:hover:bg-gray-800 p-3 rounded-lg border border-slate-200 dark:border-gray-700 w-max transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-[#15171e] dark:hover:bg-gray-800 p-3 rounded-lg border border-slate-200 dark:border-gray-700 w-max transition-colors shadow-sm">
             <input
               type="checkbox"
               checked={semOperacao}
               onChange={handleSemOperacaoToggle}
               className="w-4 h-4 text-blue-600 rounded border-gray-300"
             />
-            <span className="text-sm font-bold text-slate-700 dark:text-gray-300 uppercase tracking-wide">
+            <span className="text-sm font-bold text-[#EE4D2D] dark:text-[#ff6b4a] uppercase tracking-wide">
               Sem operação neste turno
             </span>
           </label>
@@ -202,14 +210,31 @@ const FormSection = ({
                   {isObrigatorio && <span className="text-red-500 ml-1 text-xs">*</span>}
                 </label>
 
-                {field.type === 'select' ? (
+                {field.type === 'date' ? (
+                  <div className="relative w-full">
+                    <input
+                      type="date"
+                      value={fieldValue}
+                      onChange={(e) => onChange(field.idx, e.target.value)}
+                      disabled={isFieldDisabled}
+                      onKeyDown={(e) => e.preventDefault()}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className={`w-full bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm flex items-center justify-between transition-colors`}>
+                      <span className={fieldValue ? 'font-medium' : 'text-slate-400'}>
+                        {fieldValue ? new Date(fieldValue + 'T12:00:00').toLocaleDateString('pt-BR') : 'Selecionar data'}
+                      </span>
+                      <CalendarDays size={16} className="text-[#113366] dark:text-blue-400" />
+                    </div>
+                  </div>
+                ) : field.type === 'select' ? (
                   <select
                     value={fieldValue}
                     onChange={(e) => onChange(field.idx, e.target.value)}
                     disabled={isFieldDisabled}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2 text-sm focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2 text-sm focus:border-blue-500 outline-none focus:ring-2 focus:ring-blue-500/20 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <option value="">{field.idx === 5 && !formData[4] ? "Selecione a Station..." : "Selecione..."}</option>
                     {fieldOptions?.map(opt => (
@@ -224,13 +249,28 @@ const FormSection = ({
                     maxLength={3000}
                     onFocus={() => setFocusedField(field.idx)}
                     onBlur={() => setFocusedField(null)}
-                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none h-20`}
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 resize-none h-20`}
                   />
                 ) : (
                   <input
                     type={field.type}
                     value={fieldValue}
+                    onKeyDown={(e) => {
+                      // 🔥 BLINDA O TECLADO PARA CAMPOS DE NÚMERO
+                      if (field.type === 'number') {
+                        // Veta espaço, vírgula, ponto, letras e sinais matemáticos
+                        if (['e', 'E', '+', '-', '.', ',', ' '].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }
+                    }}
                     onInput={(e) => {
+                      // 🔥 CASO O USUÁRIO DE "CTRL+V" COM LIXO, LIMPA TUDO QUE NÃO É DÍGITO
+                      if (field.type === 'number') {
+                        e.target.value = e.target.value.replace(/\D/g, ''); 
+                      }
+                      
+                      // Regra de 3 dígitos pro limite do AT Roteirizado
                       if (field.idx === 11 && e.target.value.length > 3) {
                         e.target.value = e.target.value.slice(0, 3);
                       }
@@ -241,7 +281,7 @@ const FormSection = ({
                     onBlur={() => setFocusedField(null)}
                     min="0"
                     max={field.idx === 11 ? "999" : undefined}
-                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    className={`bg-slate-50 dark:bg-[#15171e] text-slate-800 dark:text-gray-200 border ${isObrigatorio && valorVazio ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-gray-700'} rounded-lg p-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${isFieldDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                   />
                 )}
 
@@ -308,7 +348,7 @@ const FormSection = ({
                 onSave();
               }}
               disabled={isSaving || bloqueiaSalvamento}
-              className={`text-white px-6 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all ${isSaving || bloqueiaSalvamento ? 'bg-slate-400 cursor-not-allowed opacity-70' : 'bg-blue-600 hover:bg-blue-700'}`}
+              className={`text-white px-6 py-2 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all ${isSaving || bloqueiaSalvamento ? 'bg-slate-400 cursor-not-allowed opacity-70' : 'bg-[#113366] hover:bg-blue-800'}`}
             >
               <Save size={18}/>
               {isSaving ? "Salvando..." : "Salvar Dados Unificados"}
