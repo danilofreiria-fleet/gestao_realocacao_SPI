@@ -236,7 +236,7 @@ ${r[41] || 'Sem pontos de atenção'}
               <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#f97316]"></div> No Show</span>
               <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#ef4444]"></div> Carregado</span>
               <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#3b82f6]"></div> Programado</span>
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#1e3a8a]"></div> Ofertado Pelo 3PL</span>
+              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#1e3a8a]"></div> Ofertado Pelo OwnFleet</span>
             </div>
 
             <div className="flex-1 w-full max-w-md mx-auto">
