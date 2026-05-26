@@ -8,10 +8,8 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
   const [periodo, setPeriodo] = useState('semana');
   const [fullscreenChart, setFullscreenChart] = useState(null);
 
-  // 🔥 Agora pegamos explicitamente dataInicio e dataFim também
   const { regional = [], station = [], turno = [], semana = "", mes = "", dataInicio = "", dataFim = "" } = filtrosGlobais;
 
-  // Extrator robusto de números
   const parseNum = (val) => {
     if (val === undefined || val === null || val === '') return 0;
     let s = String(val).trim().replace(/%/g, '');
@@ -22,14 +20,10 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
   const fInt = (val) => new Intl.NumberFormat('pt-BR').format(Math.round(val));
   const fPct = (val) => `${Number(val).toFixed(1).replace('.', ',')}%`;
 
-  // =========================================================
-  // 1. MOTOR DE DADOS DOS GRÁFICOS
-  // =========================================================
   const chartData = useMemo(() => {
     const aggs = {};
 
     (rawData || []).forEach(row => {
-      // 1. Filtros de Local e Turno
       if (regional.length > 0 && !regional.includes(row[1])) return;
       if (station.length > 0 && !station.includes(row[4])) return;
       if (turno.length > 0 && !turno.includes(row[5])) return;
@@ -37,7 +31,6 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
       const semRow = String(row[2] || "");
       const dataStr = String(row[3] || "");
       
-      // Padroniza a data para YYYY-MM-DD
       let dataPeso = "";
       if (dataStr.includes('-')) {
         dataPeso = dataStr.split('T')[0]; 
@@ -48,13 +41,11 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
 
       let mesRow = dataPeso ? dataPeso.split('-')[1] : "";
 
-      // 🔥 2. FILTROS DE TEMPO GLOBAIS (Aplicam independente da visão do gráfico)
       if (semana && semRow !== semana) return;
       if (mes && mesRow !== mes) return;
       if (dataInicio && dataPeso < dataInicio) return;
       if (dataFim && dataPeso > dataFim) return;
 
-      // 3. Montagem do Eixo X dependendo da seleção "Dia/Sem/Mes" do botão
       let chave = semRow;
       let sortWeight = semRow;
 
@@ -72,8 +63,7 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
 
       if (!aggs[chave]) {
         aggs[chave] = { 
-          name: chave, 
-          sortDate: dataPeso || sortWeight, 
+          name: chave, sortDate: dataPeso || sortWeight, 
           realocPre: 0, realocDur: 0, realocTotal: 0,
           naoExpCoube: 0, naoExpOutros: 0, naoExpTotal: 0,
           ofertaCap: 0, carregadoCap: 0,
@@ -102,7 +92,6 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
       d.count++;
     });
 
-    // Ordenação Cronológica Blindada
     const result = Object.values(aggs).sort((a, b) => a.sortDate.localeCompare(b.sortDate));
 
     let prevRealoc = null;
@@ -125,17 +114,13 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
     });
   }, [rawData, periodo, regional, station, turno, semana, mes, dataInicio, dataFim]);
 
-  // =========================================================
-  // 2. MOTOR DO FEED DE JUSTIFICATIVAS
-  // =========================================================
   const feedJustificativas = useMemo(() => {
     if (!rawData) return [];
 
     let filtrados = rawData.filter(row => {
-      const texto = String(row[42] || "").trim(); // Coluna AQ
+      const texto = String(row[42] || "").trim(); 
       if (texto.length < 5 || texto.toLowerCase() === "ok" || texto.toLowerCase() === "na" || texto.toLowerCase().includes("sem justificativa")) return false;
 
-      // Filtros
       if (regional.length > 0 && !regional.includes(row[1])) return false;
       if (station.length > 0 && !station.includes(row[4])) return false;
       if (turno.length > 0 && !turno.includes(row[5])) return false;
@@ -165,13 +150,9 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
       station: String(row[4]).replace('LM Hub_SP_', ''),
       turno: row[5],
       texto: String(row[42]).trim()
-    })).reverse(); // Mais recentes primeiro
-
+    })).reverse().slice(0, 50); 
   }, [rawData, regional, station, turno, semana, mes, dataInicio, dataFim]);
 
-  // =========================================================
-  // TOOLTIP INTELIGENTE
-  // =========================================================
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -192,10 +173,8 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
     return null;
   };
 
-  // 🔥 LÓGICA DO SCROLL HORIZONTAL DINÂMICO
   const renderChartCard = (id, title, subtitle, icon, content) => {
     const isFullscreen = fullscreenChart === id;
-    // Se o gráfico tiver mais de 12 itens no X-Axis, ativamos o scroll horizontal com uma largura mínima (60px por barra)
     const minChartWidth = chartData.length > 12 ? `${chartData.length * 60}px` : '100%';
 
     return (
@@ -213,7 +192,6 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
           </button>
         </div>
         <div className="flex-1 w-full overflow-hidden">
-          {/* 🔥 WRAPPER DO SCROLL */}
           <div className="w-full h-full overflow-x-auto overflow-y-hidden custom-scrollbar pb-2">
             <div style={{ minWidth: minChartWidth, height: '100%' }}>
               {content}
@@ -223,6 +201,8 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
       </div>
     );
   };
+
+  const showLabels = chartData.length <= 15;
 
   return (
     <div className="space-y-6 mt-6 pb-12">
@@ -246,15 +226,16 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
               <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold'}} axisLine={false} />
               <YAxis yAxisId="left" tick={{fontSize: 10}} axisLine={false} />
               <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#D0011B'}} axisLine={false} tickFormatter={(v) => `${v}%`} />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-              <Bar yAxisId="left" dataKey="realocPre" name="Realoc. Pré" fill="#113366" stackId="a" barSize={35}>
-                 <LabelList dataKey="realocPre" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />
+              
+              <Bar yAxisId="left" dataKey="realocPre" name="Realoc. Pré" fill="#113366" stackId="a" barSize={35} isAnimationActive={true}>
+                 {showLabels && <LabelList dataKey="realocPre" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />}
               </Bar>
-              <Bar yAxisId="left" dataKey="realocDur" name="Realoc. Durante" fill="#EE4D2D" stackId="a" barSize={35} radius={[4, 4, 0, 0]}>
-                 <LabelList dataKey="realocDur" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />
+              <Bar yAxisId="left" dataKey="realocDur" name="Realoc. Durante" fill="#EE4D2D" stackId="a" barSize={35} radius={[4, 4, 0, 0]} isAnimationActive={true}>
+                 {showLabels && <LabelList dataKey="realocDur" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />}
               </Bar>
-              <Line yAxisId="right" type="monotone" dataKey="varRealoc" name="% Variação (vs Ant.)" stroke="#D0011B" strokeWidth={3} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} />
+              <Line yAxisId="right" type="monotone" dataKey="varRealoc" name="% Variação (vs Ant.)" stroke="#D0011B" strokeWidth={3} dot={{ r: 4, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} isAnimationActive={true} />
             </ComposedChart>
           </ResponsiveContainer>
         ))}
@@ -266,15 +247,16 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
               <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold'}} axisLine={false} />
               <YAxis yAxisId="left" tick={{fontSize: 10}} axisLine={false} />
               <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#D0011B'}} axisLine={false} tickFormatter={(v) => `${v}%`} />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-              <Bar yAxisId="left" dataKey="naoExpCoube" name="Não Coube" fill="#D0011B" barSize={35} stackId="a">
-                <LabelList dataKey="naoExpCoube" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />
+              
+              <Bar yAxisId="left" dataKey="naoExpCoube" name="Não Coube" fill="#D0011B" barSize={35} stackId="a" isAnimationActive={true}>
+                {showLabels && <LabelList dataKey="naoExpCoube" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />}
               </Bar>
-              <Bar yAxisId="left" dataKey="naoExpOutros" name="Outros Motivos" fill="#113366" barSize={35} stackId="a" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="naoExpOutros" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />
+              <Bar yAxisId="left" dataKey="naoExpOutros" name="Outros Motivos" fill="#113366" barSize={35} stackId="a" radius={[4, 4, 0, 0]} isAnimationActive={true}>
+                {showLabels && <LabelList dataKey="naoExpOutros" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />}
               </Bar>
-              <Line yAxisId="right" type="monotone" dataKey="varNaoExp" name="% Variação (vs Ant.)" stroke="#EE4D2D" strokeWidth={3} dot={{ r: 5, fill: '#fff', stroke: '#EE4D2D', strokeWidth: 2 }} />
+              <Line yAxisId="right" type="monotone" dataKey="varNaoExp" name="% Variação (vs Ant.)" stroke="#EE4D2D" strokeWidth={3} dot={{ r: 4, fill: '#fff', stroke: '#EE4D2D', strokeWidth: 2 }} isAnimationActive={true} />
             </ComposedChart>
           </ResponsiveContainer>
         ))}
@@ -285,37 +267,37 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold'}} />
               <YAxis tick={{fontSize: 10}} />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-              <Area type="monotone" dataKey="vagasOciosas" name="Veículos Ociosos (Sobrou Carro)" fill="#113366" stroke="#113366" fillOpacity={0.1} strokeWidth={2}>
-                 <LabelList dataKey="vagasOciosas" position="top" fill="#113366" fontSize={10} fontWeight="bold" formatter={fInt} />
+              
+              <Area type="monotone" dataKey="vagasOciosas" name="Veículos Ociosos (Sobrou Carro)" fill="#113366" stroke="#113366" fillOpacity={0.1} strokeWidth={2} isAnimationActive={true}>
+                 {showLabels && <LabelList dataKey="vagasOciosas" position="top" fill="#113366" fontSize={10} fontWeight="bold" formatter={fInt} />}
               </Area>
-              <Bar dataKey="naoExpCoube" name="Pacotes que Não Couberam" fill="#D0011B" barSize={40} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="naoExpCoube" position="top" fill="#D0011B" fontSize={10} fontWeight="bold" formatter={fInt} />
+              <Bar dataKey="naoExpCoube" name="Pacotes que Não Couberam" fill="#D0011B" barSize={40} radius={[4, 4, 0, 0]} isAnimationActive={true}>
+                {showLabels && <LabelList dataKey="naoExpCoube" position="top" fill="#D0011B" fontSize={10} fontWeight="bold" formatter={fInt} />}
               </Bar>
             </ComposedChart>
           </ResponsiveContainer>
         ))}
 
-{renderChartCard('desvios', 'Qualidade Operacional', 'Taxa de Correção vs Desvios de Piso', <Percent />, (
+        {renderChartCard('desvios', 'Qualidade Operacional', 'Taxa de Correção vs Desvios de Piso', <Percent />, (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold'}} />
               <YAxis yAxisId="left" tick={{fontSize: 10}} tickFormatter={(v) => `${v}%`} />
               <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#113366'}} tickFormatter={(v) => `${v}%`} />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
               
-              <Bar yAxisId="right" dataKey="desvioFleet" name="Desvio Piso Fleet" fill="#113366" barSize={25} radius={[2, 2, 0, 0]}>
-                <LabelList dataKey="desvioFleet" position="top" fill="#113366" fontSize={10} fontWeight="bold" formatter={fPct} />
+              <Bar yAxisId="right" dataKey="desvioFleet" name="Desvio Piso Fleet" fill="#113366" barSize={25} radius={[2, 2, 0, 0]} isAnimationActive={true}>
+                {showLabels && <LabelList dataKey="desvioFleet" position="top" fill="#113366" fontSize={10} fontWeight="bold" formatter={fPct} />}
               </Bar>
-              <Bar yAxisId="right" dataKey="desvioHub" name="Desvio Piso HUB" fill="#EE4D2D" barSize={25} radius={[2, 2, 0, 0]}>
-                <LabelList dataKey="desvioHub" position="top" fill="#EE4D2D" fontSize={10} fontWeight="bold" formatter={fPct} />
+              <Bar yAxisId="right" dataKey="desvioHub" name="Desvio Piso HUB" fill="#EE4D2D" barSize={25} radius={[2, 2, 0, 0]} isAnimationActive={true}>
+                {showLabels && <LabelList dataKey="desvioHub" position="top" fill="#EE4D2D" fontSize={10} fontWeight="bold" formatter={fPct} />}
               </Bar>
-              
-              <Line yAxisId="left" type="monotone" dataKey="taxaCorrecao" name="Taxa Correção Fleet" stroke="#D0011B" strokeWidth={4} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }}>
-                <LabelList dataKey="taxaCorrecao" position="top" fill="#D0011B" fontSize={10} fontWeight="bold" formatter={fPct} />
+              <Line yAxisId="left" type="monotone" dataKey="taxaCorrecao" name="Taxa Correção Fleet" stroke="#D0011B" strokeWidth={4} dot={{ r: 4, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} isAnimationActive={true}>
+                {showLabels && <LabelList dataKey="taxaCorrecao" position="top" fill="#D0011B" fontSize={10} fontWeight="bold" formatter={fPct} />}
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
@@ -334,9 +316,9 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold'}} />
                 <YAxis domain={['auto', 'auto']} tick={{fontSize: 10}} tickFormatter={(v) => `${v}%`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="eficiencia" name="Eficiência de Expedição" stroke="#113366" strokeWidth={4} fill="url(#colorEficiencia)" connectNulls>
-                  <LabelList dataKey="eficiencia" position="top" fill="#113366" fontSize={11} fontWeight="900" formatter={fPct} />
+                <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
+                <Area type="monotone" dataKey="eficiencia" name="Eficiência de Expedição" stroke="#113366" strokeWidth={4} fill="url(#colorEficiencia)" connectNulls isAnimationActive={true}>
+                  {showLabels && <LabelList dataKey="eficiencia" position="top" fill="#113366" fontSize={11} fontWeight="900" formatter={fPct} />}
                 </Area>
               </AreaChart>
             </ResponsiveContainer>
@@ -348,10 +330,10 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
             <div className="p-2 bg-[#113366] rounded-lg text-white"><MessageSquare size={24} /></div>
             <div>
               <h3 className="font-black text-[#113366] dark:text-white uppercase text-lg leading-tight">Logbook de Desvios (Pacotes)</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Justificativas operacionais de pacotes não expedidos</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Últimas justificativas operacionais de pacotes não expedidos</p>
             </div>
             <div className="ml-auto bg-[#EE4D2D] text-white text-xs font-black px-3 py-1 rounded-full">
-              {feedJustificativas.length} Relatos
+              Exibindo max 50
             </div>
           </div>
           

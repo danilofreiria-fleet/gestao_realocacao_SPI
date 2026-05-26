@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList, LineChart, Line, AreaChart, Area } from 'recharts';
-import { Clock, TimerReset, CheckCircle, AlertTriangle, Timer, Activity, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
+import { Timer, CheckCircle, AlertTriangle, AlertCircle, Clock, CalendarDays, ChevronDown, ChevronRight, X, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
 export default function TimeAnalysisCharts({ data }) {
-  // Estado para controlar quais linhas da tabela de atraso estão expandidas
-  const [expandedRows, setExpandedRows] = useState({});
+  const [expandedReg, setExpandedReg] = useState({});
+  const [activePizzaDetails, setActivePizzaDetails] = useState(null); // Estado do Banner flutuante da Pizza
 
-  const toggleRow = (index) => {
-    setExpandedRows(prev => ({ ...prev, [index]: !prev[index] }));
+  const toggleExpandReg = (reg) => {
+    setExpandedReg(prev => ({ ...prev, [reg]: !prev[reg] }));
   };
 
   // =======================================================================
@@ -25,8 +26,9 @@ export default function TimeAnalysisCharts({ data }) {
 
   const minutesToTime = (totalMinutes) => {
     if (totalMinutes === null || isNaN(totalMinutes)) return '--:--';
-    const h = Math.floor(Math.abs(totalMinutes) / 60);
-    const m = Math.floor(Math.abs(totalMinutes) % 60);
+    const absMin = Math.abs(totalMinutes);
+    const h = Math.floor(absMin / 60);
+    const m = Math.floor(absMin % 60);
     const sign = totalMinutes < 0 ? '-' : '';
     return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
@@ -48,17 +50,27 @@ export default function TimeAnalysisCharts({ data }) {
     let pontualFim = 0;
     let atrasoFim = 0;
 
+    let somaMinutosAtrasoInicio = 0;
+    let registrosComInicioValido = 0;
+    
+    let somaMinutosAtrasoFim = 0;
+    let registrosComFimValido = 0;
+
     let totalMinutosDelivering = 0;
     let qtdRegistrosDelivering = 0;
-    let totalCarregados = 0;
 
-    const serieTemporal = {};
-    const analiseRegional = {};
-    
     const listaAtrasos = [];
+    const detalhesAtrasoInicio = [];
+    const detalhesAtrasoFim = [];
+
+    // Estrutura para o Gráfico Expansível de Frota Ofertada (Regional -> Hub)
+    const frotaOfertadaMap = {};
 
     data.forEach((row, index) => {
-      const reg = row[1] || 'N/A';
+      const regBruta = row[1] || 'N/A';
+      const hubRow = String(row[4] || "").trim();
+      const reg = MAPA_REGIONAL_COMPLETO[hubRow] || regBruta;
+      
       const dataStr = row[3] || 'N/A';
       
       const inicioReal = timeToMinutes(row[6]);   
@@ -67,123 +79,129 @@ export default function TimeAnalysisCharts({ data }) {
       const fimSetup = timeToMinutes(row[9]);     
       const tempoTotalOp = timeToMinutes(row[10]); 
       
-      const carregados = parseNum(row[29]);       
+      // Coluna Y da aba CONSOLIDADO (Oferta Total) = índice 24
+      const veiculosOfertados = parseNum(row[24]); 
 
-      let isAtrasado = false;
+      let isAtrasadoGeral = false;
 
+      // ==========================================
       // CÁLCULO INÍCIO
+      // ==========================================
       if (inicioReal !== null && inicioSetup !== null) {
-        if (inicioReal > (inicioSetup + 15)) {
+        const difInicio = inicioReal - inicioSetup; // Positivo = Atraso, Negativo = Adiantado
+        somaMinutosAtrasoInicio += difInicio;
+        registrosComInicioValido++;
+
+        if (difInicio > 15) {
           atrasoInicio++;
-          isAtrasado = true;
+          isAtrasadoGeral = true;
+          detalhesAtrasoInicio.push({ hub: hubRow, data: dataStr, difMin: difInicio, setup: row[8], real: row[6] });
         } else {
           pontualInicio++;
         }
       }
 
+      // ==========================================
       // CÁLCULO FIM
+      // ==========================================
       if (fimReal !== null && fimSetup !== null) {
-        if (fimReal > (fimSetup + 15)) {
+        const difFim = fimReal - fimSetup;
+        somaMinutosAtrasoFim += difFim;
+        registrosComFimValido++;
+
+        if (difFim > 15) {
           atrasoFim++;
-          isAtrasado = true;
+          isAtrasadoGeral = true;
+          detalhesAtrasoFim.push({ hub: hubRow, data: dataStr, difMin: difFim, setup: row[9], real: row[7] });
         } else {
           pontualFim++;
         }
       }
 
-      if (isAtrasado) {
+      // ==========================================
+      // LISTA PARA A TABELA
+      // ==========================================
+      if (isAtrasadoGeral) {
         listaAtrasos.push({
           originalIndex: index,
-          hub: row[4] || 'N/A',
-          data: row[3] || 'N/A',
-          inicio: row[6] || '--:--',
-          fim: row[7] || '--:--',
-          tempoOp: row[10] || '--:--',
-          justificativa: row[41] || 'Sem justificativa informada'
+          hub: hubRow || 'N/A',
+          data: dataStr,
+          setupInicio: row[8] || '--:--', // Puxado da base
+          inicio: row[6] || '--:--',      // Real
+          setupFim: row[9] || '--:--',    // Puxado da base
+          fim: row[7] || '--:--',         // Real
+          tempoOp: row[10] || '--:--'
         });
       }
 
-      // MÉDIAS GERAIS
+      // ==========================================
+      // MÉDIAS GERAIS DE TEMPO (Duração)
+      // ==========================================
       if (tempoTotalOp !== null && tempoTotalOp > 0) {
         totalMinutosDelivering += tempoTotalOp;
         qtdRegistrosDelivering++;
-        
-        if (carregados > 0) {
-          totalCarregados += carregados;
-        }
-
-        if (!analiseRegional[reg]) {
-          analiseRegional[reg] = { regional: reg, totalTempo: 0, count: 0, totalCarregado: 0 };
-        }
-        analiseRegional[reg].totalTempo += tempoTotalOp;
-        analiseRegional[reg].count++;
-        analiseRegional[reg].totalCarregado += carregados;
       }
 
-      // SÉRIE TEMPORAL
-      const shortDate = dataStr.includes('/') ? dataStr.split('/').slice(0,2).join('/') : dataStr;
-      
-      if (tempoTotalOp !== null && tempoTotalOp > 0) {
-        if (!serieTemporal[shortDate]) {
-          serieTemporal[shortDate] = { name: shortDate, somaTempo: 0, count: 0, somaCarregado: 0 };
-        }
-        serieTemporal[shortDate].somaTempo += tempoTotalOp;
-        serieTemporal[shortDate].count++;
-        serieTemporal[shortDate].somaCarregado += carregados;
+      // ==========================================
+      // GRÁFICO DE FROTA OFERTADA (Expansível)
+      // ==========================================
+      if (!frotaOfertadaMap[reg]) {
+        frotaOfertadaMap[reg] = { regional: reg, totalVeiculos: 0, hubs: {} };
       }
+      frotaOfertadaMap[reg].totalVeiculos += veiculosOfertados;
+
+      if (!frotaOfertadaMap[reg].hubs[hubRow]) {
+        frotaOfertadaMap[reg].hubs[hubRow] = 0;
+      }
+      frotaOfertadaMap[reg].hubs[hubRow] += veiculosOfertados;
     });
 
-const tempoMedioTotalStr = qtdRegistrosDelivering > 0 
+    const tempoMedioTotalStr = qtdRegistrosDelivering > 0 
       ? minutesToTime(totalMinutosDelivering / qtdRegistrosDelivering) 
       : '--:--';
 
-    // 🔥 NOVO CÁLCULO: Convertendo decimal para Minutos e Segundos
-    let mediaMinPorVeiculoStr = '0min 0seg';
-    if (totalMinutosDelivering > 0 && totalCarregados > 0) {
-      const totalSegundos = (totalMinutosDelivering * 60) / totalCarregados;
-      const m = Math.floor(totalSegundos / 60);
-      const s = Math.round(totalSegundos % 60);
-      mediaMinPorVeiculoStr = `${m}min ${s.toString().padStart(2, '0')}seg`;
-    }
+    // Média de Atraso Início (Em minutos puros)
+    const mediaAtrasoInicioMin = registrosComInicioValido > 0 
+      ? Math.round(somaMinutosAtrasoInicio / registrosComInicioValido) 
+      : 0;
+
+    // Média de Atraso Fim (Em minutos puros)
+    const mediaAtrasoFimMin = registrosComFimValido > 0 
+      ? Math.round(somaMinutosAtrasoFim / registrosComFimValido) 
+      : 0;
 
     const chartInicio = [
-      { name: 'Pontual', value: pontualInicio, fill: '#113366' },
-      { name: 'Atrasado', value: atrasoInicio, fill: '#EE4D2D' }
+      { name: 'Pontual', value: pontualInicio, fill: '#113366', details: [] },
+      { name: 'Atrasado', value: atrasoInicio, fill: '#EE4D2D', details: detalhesAtrasoInicio }
     ];
 
     const chartFim = [
-      { name: 'Pontual', value: pontualFim, fill: '#113366' },
-      { name: 'Atrasado', value: atrasoFim, fill: '#D0011B' }
+      { name: 'Pontual', value: pontualFim, fill: '#113366', details: [] },
+      { name: 'Atrasado', value: atrasoFim, fill: '#D0011B', details: detalhesAtrasoFim }
     ];
 
-    const chartRegional = Object.values(analiseRegional).map(r => ({
-      name: r.regional,
-      tempoMedioMin: Math.round(r.totalTempo / r.count),
-      tempoStr: minutesToTime(r.totalTempo / r.count)
-    })).sort((a, b) => b.tempoMedioMin - a.tempoMedioMin);
-
-    const chartVelocidadeData = Object.values(serieTemporal).map(d => ({
-      name: d.name,
-      velPorHora: d.somaTempo > 0 ? Math.round((d.somaCarregado / (d.somaTempo / 60))) : 0,
-      tempoMedioMin: Math.round(d.somaTempo / d.count)
-    })).sort((a,b) => {
-        const [da, ma] = a.name.split('/');
-        const [db, mb] = b.name.split('/');
-        if(ma !== mb) return parseInt(ma) - parseInt(mb);
-        return parseInt(da) - parseInt(db);
-    });
+    // Formatação da Frota Ofertada
+    const chartFrotaOfertada = Object.values(frotaOfertadaMap).map(r => {
+      const hubsList = Object.keys(r.hubs).map(hName => ({ name: hName, value: r.hubs[hName] })).sort((a,b) => b.value - a.value);
+      return {
+        id: r.regional,
+        name: r.regional,
+        total: r.totalVeiculos,
+        hubs: hubsList
+      };
+    }).sort((a, b) => b.total - a.total);
 
     return {
       kpis: {
         tempoMedioTotalStr,
-        mediaMinPorVeiculo: mediaMinPorVeiculoStr, 
+        mediaAtrasoInicioMin,
+        mediaAtrasoFimMin,
         pctPontualInicio: (pontualInicio + atrasoInicio) > 0 ? Math.round((pontualInicio / (pontualInicio + atrasoInicio)) * 100) : 0,
         pctPontualFim: (pontualFim + atrasoFim) > 0 ? Math.round((pontualFim / (pontualFim + atrasoFim)) * 100) : 0,
       },
       chartInicio,
       chartFim,
-      chartRegional,
-      chartVelocidadeData,
+      chartFrotaOfertada,
       listaAtrasos 
     };
   }, [data]);
@@ -192,71 +210,95 @@ const tempoMedioTotalStr = qtdRegistrosDelivering > 0
     return <div className="p-10 text-center font-bold text-slate-400">Nenhum dado de horário encontrado.</div>;
   }
 
-  const { kpis, chartInicio, chartFim, chartRegional, chartVelocidadeData, listaAtrasos } = processedData;
+  const { kpis, chartInicio, chartFim, chartFrotaOfertada, listaAtrasos } = processedData;
 
-  const CustomTooltipLine = ({ active, payload, label }) => {
-    if (active && payload && payload.length > 0) {
-      const vel = payload[0] ? payload[0].value : 0;
-      const tempo = payload[1] ? payload[1].value : 0;
-      
-      return (
-        <div className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-800 p-3 rounded-lg shadow-xl z-50">
-          <p className="font-bold text-slate-800 dark:text-white mb-1">{label}</p>
-          <p className="text-[#113366] text-xs font-black">Velocidade: {vel} Veículos/Hora</p>
-          <p className="text-slate-500 text-xs font-bold mt-1">T. Médio: {minutesToTime(tempo)}</p>
+  // Componente Reutilizável de Card de KPI de Atraso
+  const DelayKPICard = ({ title, mediaMin, icon }) => {
+    const isLate = mediaMin > 0;
+    const colorClass = isLate ? 'text-[#EE4D2D]' : 'text-green-500';
+    const signal = isLate ? '+' : '';
+
+    return (
+      <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm flex flex-col justify-center print:border-gray-300 relative overflow-hidden group">
+        <div className={`absolute top-0 right-0 w-16 h-16 ${isLate ? 'bg-red-50 dark:bg-red-900/10' : 'bg-green-50 dark:bg-green-900/10'} rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110`}></div>
+        <div className="flex items-center gap-2 mb-2 relative z-10">
+          {icon} 
+          <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">{title}</h4>
         </div>
-      );
+        <div className="flex items-end gap-1 relative z-10">
+           <span className={`text-3xl font-black ${colorClass}`}>{signal}{mediaMin}</span>
+           <span className="text-sm font-bold text-slate-400 mb-1">min</span>
+        </div>
+        <div className="flex items-center gap-1 mt-2 relative z-10">
+          {isLate ? <TrendingDown size={14} className="text-[#EE4D2D]"/> : <TrendingUp size={14} className="text-green-500"/>}
+          <p className="text-[10px] text-slate-400 font-bold uppercase">
+             {isLate ? 'Atrasado em relação ao Plano' : 'Adiantado em relação ao Plano'}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const handlePizzaClick = (entry, tipo) => {
+    if (entry.name === 'Atrasado' && entry.details.length > 0) {
+      setActivePizzaDetails({ tipo: tipo, data: entry.details });
     }
-    return null;
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       
       {/* 1. TOPO: KPIs Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 print:grid-cols-4 print:gap-2">
         <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm flex flex-col justify-center print:border-gray-300">
-          <div className="flex items-center gap-2 mb-2"><Timer className="text-[#EE4D2D]" size={20}/><h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Tempo Médio Ops</h4></div>
+          <div className="flex items-center gap-2 mb-2"><Timer className="text-[#113366]" size={20}/><h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Tempo Médio Ops</h4></div>
           <span className="text-3xl font-black text-[#113366] dark:text-white">{kpis.tempoMedioTotalStr}</span>
           <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Duração da Expedição</p>
         </div>
 
+        {/* 🔥 NOVOS CARDS DE ATRASO */}
+        <DelayKPICard title="Desvio Médio Inicial" mediaMin={kpis.mediaAtrasoInicioMin} icon={<Clock size={20} className="text-slate-400" />} />
+        <DelayKPICard title="Desvio Médio Final" mediaMin={kpis.mediaAtrasoFimMin} icon={<Clock size={20} className="text-slate-400" />} />
+
         <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm flex flex-col justify-center print:border-gray-300">
-          <div className="flex items-center gap-2 mb-2"><Activity className="text-[#113366]" size={20}/><h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Ritmo Médio</h4></div>
-          <div className="flex items-end gap-1">
-             <span className="text-3xl font-black text-[#EE4D2D]">{kpis.mediaMinPorVeiculo}</span>
-             <span className="text-sm font-bold text-slate-400 mb-1">min</span>
+          <div className="flex justify-between items-start mb-2">
+             <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Aderência Geral (Pontualidade)</h4>
           </div>
-          <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Por Veículo Expedido</p>
-        </div>
-
-        <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm flex flex-col justify-center print:border-gray-300">
-          <div className="flex items-center gap-2 mb-2"><CheckCircle className="text-[#113366]" size={20}/><h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Aderência Inicial</h4></div>
-          <span className="text-3xl font-black text-[#113366] dark:text-white">{kpis.pctPontualInicio}%</span>
-          <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Tolerância de 15 min </p>
-        </div>
-
-        <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm flex flex-col justify-center print:border-gray-300">
-          <div className="flex items-center gap-2 mb-2"><AlertTriangle className="text-[#EE4D2D]" size={20}/><h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Aderência Final</h4></div>
-          <span className="text-3xl font-black text-[#EE4D2D] dark:text-white">{kpis.pctPontualFim}%</span>
-          <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Fechamento no Horário</p>
+          <div className="flex flex-col gap-2 mt-2">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-gray-700 pb-1">
+              <span className="text-xs font-bold text-slate-400 flex items-center gap-1"><CheckCircle size={12}/> Início:</span>
+              <span className="text-sm font-black text-[#113366] dark:text-white">{kpis.pctPontualInicio}%</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-400 flex items-center gap-1"><AlertTriangle size={12}/> Final:</span>
+              <span className="text-sm font-black text-[#EE4D2D] dark:text-white">{kpis.pctPontualFim}%</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* 2. MEIO: Gráficos de Pontualidade Pizza */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:grid-cols-3 print:gap-4">
+      {/* 2. MEIO: Gráficos de Pontualidade (Pizza Interativa) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4">
         
         {/* Gráfico Pizza Início */}
         <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid print:border-gray-300">
-          <h3 className="font-black text-sm text-slate-700 dark:text-gray-200 uppercase mb-4 text-center">Pontualidade (Início)</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-black text-sm text-slate-700 dark:text-gray-200 uppercase text-center w-full">Pontualidade (Início)</h3>
+          </div>
+          <p className="text-xs text-center text-slate-400 font-bold mb-2">💡 Clique na fatia de Atrasos para investigar</p>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartInicio} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" stroke="none" label={{fontSize: 11, fontWeight: 'bold'}}>
-                  {chartInicio.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                <Pie 
+                  data={chartInicio} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" stroke="none" 
+                  label={{fontSize: 12, fontWeight: 'bold'}}
+                  className="cursor-pointer"
+                  onClick={(entry) => handlePizzaClick(entry, 'INÍCIO')}
+                >
+                  {chartInicio.map((entry, index) => <Cell key={`cell-ini-${index}`} fill={entry.fill} className="hover:opacity-80 transition-opacity" />)}
                 </Pie>
-                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                <Legend wrapperStyle={{fontSize: '11px', fontWeight: 'bold'}} />
+                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', fontWeight: 'bold' }} />
+                <Legend wrapperStyle={{fontSize: '12px', fontWeight: 'bold'}} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -264,83 +306,80 @@ const tempoMedioTotalStr = qtdRegistrosDelivering > 0
 
         {/* Gráfico Pizza Fim */}
         <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid print:border-gray-300">
-          <h3 className="font-black text-sm text-slate-700 dark:text-gray-200 uppercase mb-4 text-center">Pontualidade (Término)</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-black text-sm text-slate-700 dark:text-gray-200 uppercase text-center w-full">Pontualidade (Término)</h3>
+          </div>
+          <p className="text-xs text-center text-slate-400 font-bold mb-2">💡 Clique na fatia de Atrasos para investigar</p>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartFim} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" stroke="none" label={{fontSize: 11, fontWeight: 'bold'}}>
-                  {chartFim.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                <Pie 
+                  data={chartFim} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" stroke="none" 
+                  label={{fontSize: 12, fontWeight: 'bold'}}
+                  className="cursor-pointer"
+                  onClick={(entry) => handlePizzaClick(entry, 'FIM')}
+                >
+                  {chartFim.map((entry, index) => <Cell key={`cell-fim-${index}`} fill={entry.fill} className="hover:opacity-80 transition-opacity" />)}
                 </Pie>
-                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                <Legend wrapperStyle={{fontSize: '11px', fontWeight: 'bold'}} />
+                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', fontWeight: 'bold' }} />
+                <Legend wrapperStyle={{fontSize: '12px', fontWeight: 'bold'}} />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Gráfico Barra Horizontal: Tempo Médio Regional */}
-        <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid print:border-gray-300">
-          <h3 className="font-black text-sm text-slate-700 dark:text-gray-200 uppercase mb-4">Tempo Médio Ops (Regional)</h3>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartRegional} layout="vertical" margin={{top: 0, right: 30, left: -20, bottom: 0}}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 10, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                <Bar dataKey="tempoMedioMin" fill="#113366" barSize={16} radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey="tempoStr" position="right" fontSize={10} fontWeight="bold" fill="#EE4D2D" />
-                  {chartRegional.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? '#D0011B' : '#113366'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
       </div>
 
-      {/* 3. BASE: Gráfico de Evolução (Área + Linha) */}
-      <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 print:break-inside-avoid print:border-gray-300">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h3 className="font-black text-lg text-[#113366] dark:text-white uppercase">Evolução do Ritmo Operacional</h3>
-            <p className="text-xs font-bold text-slate-400">Veículos processados por hora vs Tempo médio de expedição.</p>
-          </div>
+      {/* 3. 🔥 NOVO GRÁFICO: VEÍCULOS EXPEDIDOS (EXPANSÍVEL) */}
+      <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid overflow-hidden">
+        <div className="p-6 border-b border-slate-100 dark:border-gray-800 bg-slate-50/50 dark:bg-[#15171e]">
+          <h3 className="font-black text-lg text-[#113366] dark:text-white uppercase flex items-center gap-2">
+            <Users size={20} className="text-[#EE4D2D]"/> Veículos Ofertados / Expedidos
+          </h3>
+          <p className="text-xs font-bold text-slate-400 mt-1">Volume bruto de operação no período filtrado (Agrupado por Regional / Hub)</p>
         </div>
-
-        <div className="h-80 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartVelocidadeData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorVelocidade" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#113366" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#113366" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold'}} axisLine={false} tickLine={false}/>
-              <YAxis yAxisId="left" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="right" orientation="right" hide />
-              <Tooltip content={<CustomTooltipLine />} />
-              <Legend wrapperStyle={{fontSize: '11px', fontWeight: 'bold'}} />
-              
-              <Area yAxisId="left" type="monotone" dataKey="velPorHora" name="Veículos / Hora" stroke="#113366" fillOpacity={1} fill="url(#colorVelocidade)" strokeWidth={3} />
-              <Line yAxisId="right" type="monotone" dataKey="tempoMedioMin" name="Tempo Médio (Minutos)" stroke="#EE4D2D" strokeWidth={3} dot={{r: 4, strokeWidth: 2}} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* 4. 🔥 TABELA DE ATRASOS CRÍTICOS (AGORA COM CABEÇALHO FIXO) 🔥 */}
-      <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col mt-6 print:break-inside-avoid" style={{ maxHeight: '600px' }}>
         
-        {/* BARRA VERMELHA (FIXA NO TOPO DA TABELA) */}
+        <div className="p-6">
+          <table className="w-full text-sm whitespace-nowrap text-left">
+             <thead className="bg-[#113366] text-white text-[10px] uppercase font-bold tracking-widest">
+               <tr>
+                 <th className="px-4 py-3 rounded-tl-lg">Regional / Station</th>
+                 <th className="px-4 py-3 text-right rounded-tr-lg">Qtd. Veículos (Vol Bruto)</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-bold">
+               {chartFrotaOfertada.map(reg => (
+                 <React.Fragment key={reg.id}>
+                   <tr onClick={() => toggleExpandReg(reg.id)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors">
+                     <td className="px-4 py-4 text-[#EE4D2D] flex items-center gap-2 text-base">
+                       {expandedReg[reg.id] ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {reg.name}
+                     </td>
+                     <td className="px-4 py-4 text-right text-lg text-[#113366] dark:text-blue-400">
+                       {new Intl.NumberFormat('pt-BR').format(reg.total)}
+                     </td>
+                   </tr>
+                   {expandedReg[reg.id] && reg.hubs.map(hub => (
+                     <tr key={hub.name} className="bg-slate-50/50 dark:bg-[#15171e] text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700 transition-colors">
+                       <td className="px-4 py-2 pl-10 font-medium border-l-[3px] border-[#113366]">↳ {hub.name}</td>
+                       <td className="px-4 py-2 text-right">{new Intl.NumberFormat('pt-BR').format(hub.value)}</td>
+                     </tr>
+                   ))}
+                 </React.Fragment>
+               ))}
+             </tbody>
+          </table>
+        </div>
+      </div>
+
+
+      {/* 4. 🔥 TABELA DE ATRASOS CRÍTICOS (COM SETUP INICIAL E FINAL) 🔥 */}
+      <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid" style={{ maxHeight: '600px' }}>
+        
+        {/* BARRA VERMELHA */}
         <div className="bg-[#D0011B] p-4 flex items-center justify-between shrink-0 rounded-t-2xl z-20">
           <div className="flex items-center gap-2 text-white">
             <AlertCircle size={20} />
-            <h3 className="font-black text-sm uppercase tracking-widest">Ocorrências de Atraso (Tolerância 15 min)</h3>
+            <h3 className="font-black text-sm uppercase tracking-widest">Ocorrências de Atraso (&gt;15 min)</h3>
           </div>
           <div className="bg-white text-[#D0011B] text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-sm">
             {listaAtrasos.length} Registros
@@ -354,50 +393,85 @@ const tempoMedioTotalStr = qtdRegistrosDelivering > 0
           </div>
         ) : (
           <div className="overflow-auto custom-scrollbar flex-1 relative rounded-b-2xl">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+            <table className="w-full text-center text-sm whitespace-nowrap">
               
-              {/* CABEÇALHO DAS COLUNAS (FIXO LOGO ABAIXO DA BARRA VERMELHA) */}
+              {/* CABEÇALHO DAS COLUNAS FIXO */}
               <thead className="bg-slate-50 dark:bg-gray-800 text-slate-500 dark:text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-slate-200 dark:border-gray-700 sticky top-0 z-10 shadow-sm">
                 <tr>
-                  <th className="px-4 py-3">Hub (Station)</th>
-                  <th className="px-4 py-3 text-center">Data</th>
-                  <th className="px-4 py-3 text-center">Início</th>
-                  <th className="px-4 py-3 text-center">Fim</th>
-                  <th className="px-4 py-3 text-center">Tempo de Op.</th>
-                  <th className="px-4 py-3 min-w-[250px]">Justificativa / Pontos de Atenção</th>
+                  <th className="px-4 py-3 text-left">Hub (Station)</th>
+                  <th className="px-4 py-3">Data</th>
+                  <th className="px-4 py-3 bg-red-50/50 dark:bg-red-900/10">Setup Início</th>
+                  <th className="px-4 py-3 bg-red-50/50 dark:bg-red-900/10">Real Início</th>
+                  <th className="px-4 py-3 border-l border-slate-200 dark:border-gray-700">Setup Fim</th>
+                  <th className="px-4 py-3">Real Fim</th>
+                  <th className="px-4 py-3 text-[#113366] dark:text-blue-400">Tempo de Op.</th>
                 </tr>
               </thead>
 
               {/* CORPO DA TABELA */}
               <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-bold">
-                {listaAtrasos.map((item) => {
-                  const isExpanded = expandedRows[item.originalIndex];
-                  return (
-                    <tr key={item.originalIndex} className="hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-                      <td className="px-4 py-3 text-[#113366] dark:text-blue-400">{item.hub}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-gray-300 text-center">{item.data}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-gray-300 text-center">{item.inicio}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-gray-300 text-center">{item.fim}</td>
-                      <td className="px-4 py-3 text-[#EE4D2D] text-center">{item.tempoOp}</td>
-                      
-                      <td className="px-4 py-3 text-slate-600 dark:text-gray-400 max-w-xs relative group cursor-pointer" onClick={() => toggleRow(item.originalIndex)}>
-                        <div className="flex items-start gap-2">
-                          <button className="mt-0.5 text-slate-400 hover:text-[#EE4D2D] transition-colors shrink-0">
-                            {isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
-                          </button>
-                          <div className={`transition-all duration-300 ${isExpanded ? 'whitespace-normal' : 'truncate'}`}>
-                            {item.justificativa}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {listaAtrasos.map((item) => (
+                  <tr key={item.originalIndex} className="hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+                    <td className="px-4 py-3 text-[#113366] dark:text-blue-400 text-left">{item.hub}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-gray-300 flex items-center justify-center gap-1.5"><CalendarDays size={14}/> {item.data}</td>
+                    <td className="px-4 py-3 text-slate-400 bg-red-50/20 dark:bg-red-900/5">{item.setupInicio}</td>
+                    <td className="px-4 py-3 text-[#EE4D2D] bg-red-50/20 dark:bg-red-900/5">{item.inicio}</td>
+                    <td className="px-4 py-3 text-slate-400 border-l border-slate-100 dark:border-gray-800">{item.setupFim}</td>
+                    <td className="px-4 py-3 text-[#EE4D2D]">{item.fim}</td>
+                    <td className="px-4 py-3 text-[#113366] dark:text-white bg-slate-50/50 dark:bg-[#15171e]">{item.tempoOp}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* ========================================================
+          MODAL FLUTUANTE DA PIZZA (INVESTIGAÇÃO)
+      ======================================================== */}
+      {activePizzaDetails && (
+        <div className="fixed inset-0 z-[99999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1f232d] w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden animate-in fade-in zoom-in duration-300">
+            
+            <div className="bg-[#D0011B] p-5 flex justify-between items-center shrink-0">
+              <div className="text-white">
+                <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                  <AlertCircle size={24} /> Investigação: Atrasos no {activePizzaDetails.tipo}
+                </h2>
+                <p className="text-xs font-bold opacity-80 mt-1">Detalhamento dos {activePizzaDetails.data.length} registros que estouraram o prazo.</p>
+              </div>
+              <button onClick={() => setActivePizzaDetails(null)} className="text-white hover:bg-white/20 p-2 rounded-full transition-colors"><X size={24}/></button>
+            </div>
+
+            <div className="overflow-auto custom-scrollbar flex-1 p-6">
+               <table className="w-full text-center text-sm whitespace-nowrap">
+                 <thead className="text-[10px] uppercase font-black text-slate-400 border-b border-slate-200 dark:border-gray-700">
+                   <tr>
+                     <th className="pb-3 text-left">Hub</th>
+                     <th className="pb-3">Data</th>
+                     <th className="pb-3 text-slate-300">Planejado</th>
+                     <th className="pb-3 text-[#EE4D2D]">Realizado</th>
+                     <th className="pb-3 text-[#D0011B]">Minutos Estourados</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-bold text-slate-600 dark:text-gray-300">
+                   {activePizzaDetails.data.sort((a,b) => b.difMin - a.difMin).map((d, i) => (
+                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors">
+                       <td className="py-3 text-left text-[#113366] dark:text-blue-400">{d.hub}</td>
+                       <td className="py-3">{d.data}</td>
+                       <td className="py-3 text-slate-400">{d.setup}</td>
+                       <td className="py-3 text-[#EE4D2D]">{d.real}</td>
+                       <td className="py-3 text-[#D0011B]">+{d.difMin} min</td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
