@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin } from 'lucide-react';
+import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin, ChevronDown } from 'lucide-react';
 import { getRodagemData } from '../../api/googleSheets';
 
 // 🔥 IMPORTAMOS A CATRACA PARA O RODÍZIO TAMBÉM RESPEITAR O BOTÃO DO TOPO
@@ -29,9 +29,14 @@ export default function RotationTable() {
   const [loading, setLoading] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedHub, setSelectedHub] = useState('ALL'); // 🔥 NOVO ESTADO: SELETOR DE HUB
+  // 🔄 MUDANÇA: Agora controlamos múltiplos hubs em um array (começa vazio para não pesar)
+  const [selectedHubs, setSelectedHubs] = useState([]); 
+  const [hubDropdownOpen, setHubDropdownOpen] = useState(false);
+  const [hubSearchTerm, setHubSearchTerm] = useState('');
+
   const [selectedModal, setSelectedModal] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [selectedTrips, setSelectedTrips] = useState('ALL'); // 🔥 NOVO ESTADO: QUANTIDADE DE VIAGENS
   
   const [targetMonth, setTargetMonth] = useState(new Date().getMonth() + 1); 
   const [targetYear] = useState(new Date().getFullYear());
@@ -116,7 +121,7 @@ export default function RotationTable() {
     rawData.slice(1).forEach(row => {
       const rowHub = padronizarHubLocal(row[4]);
       if (!rowHub) return;
-      if (permitidos && !permitidos.includes(rowHub)) return; // Trava da Catraca
+      if (permitidos && !permitidos.includes(rowHub)) return; 
       hubs.add(rowHub);
     });
     return Array.from(hubs).sort();
@@ -135,15 +140,21 @@ export default function RotationTable() {
     return Array.from(modais).sort();
   }, [rawData, regEscolhida]);
 
-  // Se a regional mudou e o hub selecionado não pertence a ela, reseta para TODOS
+  // Se a regional mudou e os hubs selecionados anteriormente sumiram dela, limpa-os
   useEffect(() => {
-    if (selectedHub !== 'ALL' && !hubsDisponiveis.includes(selectedHub)) {
-      setSelectedHub('ALL');
-    }
+    setSelectedHubs(prev => prev.filter(hub => hubsDisponiveis.includes(hub)));
   }, [hubsDisponiveis]);
 
+  // =========================================================
+  // PROCESSAMENTO DA MATRIZ + NOVOS FILTROS DINÂMICOS
+  // =========================================================
   const matrix = useMemo(() => {
-    if (!rawData || rawData.length < 1) return { headers: [], rows: [] };
+    if (!rawData || rawData.length < 1) return { headers: [], rows: [], availableTrips: [] };
+
+    // 🏎️ VACINA DE PERFORMANCE: Se nenhum hub estiver selecionado, para aqui mesmo!
+    if (selectedHubs.length === 0) {
+      return { headers: [], rows: [], availableTrips: [] };
+    }
 
     const headers = rawData[0];
     const dataColsStart = 5; 
@@ -163,15 +174,15 @@ export default function RotationTable() {
 
     const permitidos = regEscolhida && regEscolhida !== "TODOS" ? getHubsPermitidos(regEscolhida) : null;
 
-    let rows = rawData.slice(1).filter(row => {
+    // 1. Mapeamento base e filtros fixos de cabeçalho
+    const initialRows = rawData.slice(1).filter(row => {
       const rowHub = padronizarHubLocal(row[4]); 
       const rowModal = String(row[1] || "").trim().toUpperCase(); 
 
-      // 1. Filtro Global (SPI vs SPM)
       if (permitidos && !permitidos.includes(rowHub)) return false;
 
-      // 2. Filtros da Tela
-      const matchesHub = selectedHub === 'ALL' ? true : rowHub === selectedHub;
+      // 🔄 FILTRO MULTI-SELECÇÃO DE HUBS
+      const matchesHub = selectedHubs.includes(rowHub);
       const matchesSearch = String(row[0] || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesModal = selectedModal === 'ALL' ? true : rowModal === selectedModal;
       
@@ -193,23 +204,48 @@ export default function RotationTable() {
         days,
         total: countRodou
       };
-    }).filter(row => {
+    });
+
+    // 2. Filtro cirúrgico por Status (Checa as ocorrências reais de cada linha)
+    const statusFilteredRows = initialRows.filter(row => {
       if (selectedStatus === 'ALL') return true;
       return Object.values(row.days).includes(selectedStatus);
     });
 
-    rows.sort((a, b) => {
+    // 3. Coleta opções de números únicos de viagens para popular o novo Dropdown
+    const uniqueTrips = new Set();
+    statusFilteredRows.forEach(row => uniqueTrips.add(row.total));
+    const availableTripsList = Array.from(uniqueTrips).sort((a, b) => a - b);
+
+    // 4. Filtro por quantidade de viagens executadas
+    const finalRows = statusFilteredRows.filter(row => {
+      if (selectedTrips === 'ALL') return true;
+      return row.total === Number(selectedTrips);
+    });
+
+    // Ordenação final
+    finalRows.sort((a, b) => {
       if (sortConfig.direction === 'desc') return b.total - a.total;
       return a.total - b.total;
     });
 
-    return { headers: activeDateCols, rows };
-  }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedHub, selectedModal, selectedStatus, sortConfig, regEscolhida]);
+    return { headers: activeDateCols, rows: finalRows, availableTrips: availableTripsList };
+  }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedHubs, selectedModal, selectedStatus, selectedTrips, sortConfig, regEscolhida]);
+
+  // Reseta o filtro de viagens caso os números disponíveis mudem e o valor atual suma
+  useEffect(() => {
+    if (selectedTrips !== 'ALL' && !matrix.availableTrips.includes(Number(selectedTrips))) {
+      setSelectedTrips('ALL');
+    }
+  }, [matrix.availableTrips]);
 
   const totalPages = Math.max(1, Math.ceil(matrix.rows.length / itemsPerPage));
   const paginatedRows = matrix.rows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedHub, selectedModal, selectedStatus, itemsPerPage, viewMode, targetWeek]);
+  // Reseta página ativa ao mudar filtros
+  useEffect(() => { 
+    setCurrentPage(1); 
+  }, [searchTerm, selectedHubs, selectedModal, selectedStatus, selectedTrips, itemsPerPage, viewMode, targetWeek]);
 
   const formatDateHeader = (d) => {
     if (!d || !d.includes('-')) return d;
@@ -223,9 +259,11 @@ export default function RotationTable() {
   return (
     <div className="flex flex-col space-y-4 mt-6">
       
+      {/* PAINEL DE CONTROLE DE FILTROS */}
       <div className="bg-white dark:bg-[#1f232d] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 p-4 shrink-0">
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           
+          {/* BUSCA POR ID */}
           <div className="flex flex-col flex-1 min-w-[120px] max-w-[180px]">
             <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Buscar ID</label>
             <div className="relative">
@@ -240,19 +278,84 @@ export default function RotationTable() {
             </div>
           </div>
 
-          {/* 🔥 NOVO SELETOR DE HUB (STATION) AQUI */}
-          <div className="flex flex-col flex-1 min-w-[150px] max-w-[200px]">
-            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1 flex items-center gap-1"><MapPin size={10}/> Station / Hub</label>
-            <select 
-              className="w-full bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-xs font-bold text-[#113366] dark:text-white outline-none cursor-pointer hover:border-[#113366] transition-colors truncate"
-              value={selectedHub}
-              onChange={(e) => setSelectedHub(e.target.value)}
+          {/* 🔄 FILTRO DE MULTI-SELECÇÃO DE HUBS COM PESQUISA INLINE */}
+          <div className="flex flex-col flex-1 min-w-[160px] max-w-[220px] relative">
+            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1 flex items-center gap-1">
+              <MapPin size={10}/> Hub / Station ({selectedHubs.length})
+            </label>
+            
+            <div 
+              className="w-full bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-xs font-bold text-[#113366] dark:text-white cursor-pointer hover:border-[#113366] transition-colors flex justify-between items-center"
+              onClick={() => setHubDropdownOpen(!hubDropdownOpen)}
             >
-              <option value="ALL">Todas as Stations</option>
-              {hubsDisponiveis.map(hub => <option key={hub} value={hub}>{hub}</option>)}
-            </select>
+              <span className="truncate select-none">
+                {selectedHubs.length === 0 
+                  ? "Selecione os Hubs..." 
+                  : selectedHubs.length === hubsDisponiveis.length 
+                  ? "Todos os Hubs" 
+                  : `${selectedHubs.length} selecionado(s)`}
+              </span>
+              <ChevronDown size={14} className={`text-slate-400 transition-transform ${hubDropdownOpen ? 'rotate-180' : ''}`} />
+            </div>
+
+            {/* Backdrop invisível para fechar ao clicar fora */}
+            {hubDropdownOpen && (
+              <div className="fixed inset-0 z-[90]" onClick={() => setHubDropdownOpen(false)} />
+            )}
+
+            {/* Painel do Dropdown */}
+            {hubDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-[100] p-2 flex flex-col space-y-2 max-h-[260px]">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
+                  <input 
+                    type="text"
+                    className="w-full bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded text-[11px] py-1 pl-6 pr-2 font-medium outline-none text-slate-700 dark:text-white"
+                    placeholder="Pesquisar hub..."
+                    value={hubSearchTerm}
+                    onChange={(e) => setHubSearchTerm(e.target.value)}
+                    onClick={(e) => e.stopPropagation()} 
+                  />
+                </div>
+                
+                <div className="flex justify-between text-[10px] font-black border-b border-slate-100 dark:border-gray-800 pb-1.5 px-1">
+                  <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline" onClick={(e) => { e.stopPropagation(); setSelectedHubs(hubsDisponiveis); }}>Todos</button>
+                  <button type="button" className="text-red-500 hover:underline" onClick={(e) => { e.stopPropagation(); setSelectedHubs([]); }}>Limpar</button>
+                </div>
+
+                <div className="overflow-y-auto custom-scrollbar flex-1 space-y-0.5 pr-1 max-h-[160px]">
+                  {hubsDisponiveis.filter(h => h.toLowerCase().includes(hubSearchTerm.toLowerCase())).length === 0 ? (
+                    <div className="text-[10px] text-slate-400 text-center py-2 font-medium">Nenhum hub encontrado</div>
+                  ) : (
+                    hubsDisponiveis
+                      .filter(hub => hub.toLowerCase().includes(hubSearchTerm.toLowerCase()))
+                      .map(hub => {
+                        const isChecked = selectedHubs.includes(hub);
+                        return (
+                          <label key={hub} className="flex items-center space-x-2 px-1.5 py-1 rounded hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-300 select-none" onClick={(e) => e.stopPropagation()}>
+                            <input 
+                              type="checkbox"
+                              className="rounded border-slate-300 dark:border-gray-600 text-[#113366] focus:ring-[#113366] h-3.5 w-3.5 cursor-pointer"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedHubs(selectedHubs.filter(h => h !== hub));
+                                } else {
+                                  setSelectedHubs([...selectedHubs, hub]);
+                                }
+                              }}
+                            />
+                            <span className="truncate">{hub}</span>
+                          </label>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* MODAL */}
           <div className="flex flex-col">
             <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Modal</label>
             <select 
@@ -265,6 +368,7 @@ export default function RotationTable() {
             </select>
           </div>
 
+          {/* STATUS */}
           <div className="flex flex-col">
             <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1 flex items-center gap-1"><Filter size={10}/> Status</label>
             <select 
@@ -273,12 +377,29 @@ export default function RotationTable() {
               onChange={(e) => setSelectedStatus(e.target.value)}
             >
               <option value="ALL">Qualquer Status</option>
-              <option value="RODOU">Rodaram ao menos 1x</option>
-              <option value="RECUSOU">Recusaram ao menos 1x</option>
-              <option value="DISPO">Ficaram Disponíveis 1x</option>
+              <option value="RODOU">RODARAM</option>
+              <option value="DISPO">DISPONÍVEIS</option>
+              <option value="RECUSOU">RECUSARAM</option>
+              <option value="INDISP">INDISPONIVEIS</option>
             </select>
           </div>
 
+          {/* QUANTIDADE DE VIAGENS REALIZADAS */}
+          <div className="flex flex-col">
+            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1 flex items-center gap-1"><ArrowUpDown size={10}/> Viagens</label>
+            <select 
+              className="bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-xs font-bold text-[#113366] dark:text-white outline-none cursor-pointer hover:border-[#113366] transition-colors"
+              value={selectedTrips}
+              onChange={(e) => setSelectedTrips(e.target.value)}
+            >
+              <option value="ALL">Qualquer Qtd</option>
+              {matrix.availableTrips.map(num => (
+                <option key={`trip-opt-${num}`} value={num}>{num} {num === 1 ? 'viagem' : 'viagens'}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* NAVEGAÇÃO DE MÊS BASE */}
           <div className="flex flex-col border-l border-slate-200 dark:border-gray-700 pl-4 ml-2">
             <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Mês Base</label>
             <div className="flex items-center bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-lg p-0.5 h-[30px]">
@@ -290,6 +411,7 @@ export default function RotationTable() {
             </div>
           </div>
 
+          {/* NAVEGAÇÃO DE SEMANA (SE ACTIVE) */}
           {viewMode === 'semana' && availableWeeks.length > 0 && (
             <div className="flex flex-col animate-in fade-in slide-in-from-left-2">
               <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1 text-center">Filtro Semana</label>
@@ -309,6 +431,7 @@ export default function RotationTable() {
             </div>
           )}
 
+          {/* MODOS DE VISUALIZAÇÃO */}
           <div className="flex bg-slate-100 dark:bg-gray-800 p-1 rounded-lg ml-auto border border-slate-200 dark:border-gray-700">
             <button onClick={() => setViewMode('semana')} className={`flex items-center gap-1.5 px-4 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'semana' ? 'bg-[#113366] text-white shadow-sm' : 'text-slate-500 hover:text-[#113366]'}`}><CalendarDays size={12}/>Semana</button>
             <button onClick={() => setViewMode('month')} className={`flex items-center gap-1.5 px-4 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'month' ? 'bg-[#113366] text-white shadow-sm' : 'text-slate-500 hover:text-[#113366]'}`}><Calendar size={12}/>Mês</button>
@@ -316,6 +439,7 @@ export default function RotationTable() {
           </div>
         </div>
 
+        {/* DATA MANUAL SE ACTIVE */}
         {viewMode === 'range' && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-gray-800 animate-in fade-in slide-in-from-top-2">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-2">Data Customizada:</span>
@@ -326,6 +450,7 @@ export default function RotationTable() {
         )}
       </div>
 
+      {/* TABELA DE CALOR / MATRIZ */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden flex flex-col relative">
         <div className="overflow-auto custom-scrollbar w-full max-h-[55vh] min-h-[300px]">
           <table className="w-full border-collapse text-center">
@@ -356,7 +481,20 @@ export default function RotationTable() {
             </thead>
             
             <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
-              {loading ? (
+              {/* 🔄 CONDICIONAL PARA ESTADO INICIAL SEM HUBS SELECIONADOS */}
+              {selectedHubs.length === 0 ? (
+                <tr>
+                  <td colSpan={matrix.headers.length + 3} className="p-16 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-2 text-slate-400">
+                      <MapPin size={32} className="text-[#EE4D2D] animate-bounce" />
+                      <span className="font-black text-sm text-slate-600 dark:text-slate-200">Selecione seu Hub</span>
+                      <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 max-w-xs mx-auto">
+                        Escolha um ou mais hubs no menu superior para processar os motoristas.
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ) : loading ? (
                 <tr><td colSpan={matrix.headers.length + 3} className="p-10 text-center animate-pulse font-black text-slate-400 text-xs">Processando matriz de calor...</td></tr>
               ) : matrix.rows.length === 0 ? (
                 <tr><td colSpan={matrix.headers.length + 3} className="p-10 text-center font-black text-slate-400 text-xs">Nenhum motorista encontrado.</td></tr>
@@ -391,6 +529,7 @@ export default function RotationTable() {
           </table>
         </div>
 
+        {/* FOOTER / PAGINAÇÃO */}
         <div className="px-4 py-2 border-t border-[#113366] flex justify-between items-center bg-slate-50 dark:bg-[#1f232d] shrink-0 z-50">
           <div className="flex items-center gap-3">
             <div className="text-[9px] font-black text-[#113366] dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-gray-800 px-2 py-1 rounded border border-slate-200 dark:border-gray-700 shadow-sm">
