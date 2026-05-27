@@ -12,6 +12,7 @@ import Validacao from './components/Validacao.jsx';
 import ReportsProntos from './pages/ReportsProntos.jsx'; 
 import SelecionarRegional from './components/RegionalSelection.jsx'; 
 import Premissas from './pages/Premissas.jsx';
+import DeliverySuccess from './pages/DeliverySuccess.jsx';
 
 import './index.css';
 
@@ -38,10 +39,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           
           {/* Rotas Internas Protegidas (Com a Sidebar) */}
           <Route path="/app" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
-            <Route index element={<Navigate to="premissas" />} /> 
-            
+            {/* 🔥 FORÇA PREMISSAS COMO A PÁGINA INICIAL DO APP */}
+            <Route index element={<Navigate to="premissas" replace />} /> 
             <Route path="tabela" element={<DataTable />} />
-
             <Route path="premissas" element={<Premissas />} />
             
             <Route path="rodizio" element={
@@ -51,10 +51,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <RotationTable />
               </div>
             } />
-            
-            
+
+            <Route path="ds" element={<DeliverySuccess />} /> 
             <Route path="reports" element={<ReportsProntos />} />
-            
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="validacao" element={<Validacao />} />
           </Route>

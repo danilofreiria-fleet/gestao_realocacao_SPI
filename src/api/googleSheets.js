@@ -714,3 +714,58 @@ export const buscarPermissoesUsuario = async (email, token) => {
     return null;
   }
 };
+
+
+// =================================================================
+// GET DELIVERY SUCCESS DATA (COM CACHE DE 15 MINUTOS)
+// =================================================================
+export const getDeliverySuccessData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    // 🔥 OTIMIZAÇÃO: Verifica se já baixamos essa base gigantesca há menos de 15 minutos
+    const cacheStr = sessionStorage.getItem('cacheDeliverySuccess');
+    const cacheTime = sessionStorage.getItem('cacheDeliverySuccessTime');
+    
+    if (cacheStr && cacheTime) {
+      const agora = new Date().getTime();
+      const diferencaMinutos = (agora - parseInt(cacheTime)) / (1000 * 60);
+      if (diferencaMinutos < 15) {
+        console.log("⚡ Puxando DS da Memória Cache (Ultra-rápido)!");
+        return JSON.parse(cacheStr);
+      }
+    }
+
+    const idSopSpi = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${idSopSpi}/values/DS_SPM_SPI!A:ZZ`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+    
+    const data = await response.json();
+    const result = data.values || [];
+
+    // 🔥 Guarda o resultado na memória do navegador para a próxima vez
+    if (result.length > 0) {
+      try {
+        sessionStorage.setItem('cacheDeliverySuccess', JSON.stringify(result));
+        sessionStorage.setItem('cacheDeliverySuccessTime', new Date().getTime().toString());
+      } catch (e) {
+        console.warn("Base excedeu o limite do SessionStorage, ignorando cache.");
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Erro ao buscar dados de DS:", error);
+    return [];
+  }
+};

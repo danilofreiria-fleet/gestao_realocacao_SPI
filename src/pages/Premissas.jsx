@@ -54,6 +54,17 @@ export default function Premissas() {
             <ShieldAlert size={20} /> Travas de Segurança
           </h2>
           
+          {/* AVISO */}
+          <div className="bg-red-600 text-white p-5 rounded-xl flex items-start gap-4 border-2 border-red-700 shadow-md animate-pulse">
+            <ShieldAlert size={28} className="shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-black text-sm uppercase tracking-wider mb-1">Diretriz Crítica de Segurança</h4>
+              <p className="text-[11px] font-black uppercase leading-relaxed tracking-wide">
+                TODO ACESSO E ALTERAÇÃO DE DADOS DEVEM SER REALIZADOS EXCLUSIVAMENTE PELO SISTEMA. O USO DIRETO DAS PLANILHAS “GESTÃO_SPI” E “REALOCAÇÃO_SOP” É PROIBIDO. TODAS AS ALTERAÇÕES SÃO REGISTRADAS EM LOG, MONITORADAS AUTOMATICAMENTE E ENVIADAS AOS RESPECTIVOS SUPERVISORES REGIONAIS.
+              </p>
+            </div>
+          </div>
+
           <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 p-4 rounded-xl">
             <h4 className="font-black text-orange-700 dark:text-orange-400 text-xs uppercase mb-1">AT no Piso (&gt; 0)</h4>
             <p className="text-xs text-slate-600 dark:text-gray-400 font-medium">Se houver AT's sobrando no piso ao final da expedição, o sistema exigirá que você marque uma caixa confirmando que está ciente e que a carga será expedida no D+1.</p>
@@ -77,7 +88,7 @@ export default function Premissas() {
               <div className="flex items-center gap-2"><LayoutDashboard size={16} className="text-[#EE4D2D]"/><h3 className="font-black text-slate-800 dark:text-white text-sm uppercase">Resumo (Overview)</h3></div>
               <p className="text-xs text-slate-500 font-medium mb-2">Tabela matriz com todos os KPIs.</p>
               <div className="flex-1 text-xs text-slate-700 dark:text-gray-300 font-medium bg-slate-50 dark:bg-[#15171e] p-3 rounded-lg border border-slate-100 dark:border-gray-700 leading-relaxed">
-                Cruza e consolida o status da malha. Clique no título de qualquer coluna (ex: <em>Vol Exp</em>) para ordenar os Hubs do maior para o menor e encontrar os ofensores instantaneamente.
+                Cruza e consolida o status da malha. Clique no título de any coluna (ex: <em>Vol Exp</em>) para ordenar os Hubs do maior para o menor e encontrar os ofensores instantaneamente.
               </div>
             </div>
 
@@ -157,7 +168,7 @@ export default function Premissas() {
               <div className="flex items-center gap-2"><MessageSquareWarning size={16} className="text-[#EE4D2D]"/><h3 className="font-black text-slate-800 dark:text-white text-sm uppercase">Logbook (Relatos)</h3></div>
               <p className="text-xs text-slate-500 font-medium mb-2">Ocorrências descritivas da base.</p>
               <div className="flex-1 text-xs text-slate-700 dark:text-gray-300 font-medium bg-slate-50 dark:bg-[#15171e] p-3 rounded-lg border border-slate-100 dark:border-gray-700 leading-relaxed">
-                Um feed de "notícias" apenas com os relatos textuais de problemas na operação. Possui um filtro de ruído inteligente que oculta automaticamente preenchimentos vazios como "ok", "sem novidades" ou "sem pontos de atenção".
+                Um feed de "notícias" apenas com os relatos textuais de problemas na operation. Possui um filtro de ruído inteligente que oculta automaticamente preenchimentos vazios como "ok", "sem novidades" ou "sem pontos de atenção".
               </div>
             </div>
 

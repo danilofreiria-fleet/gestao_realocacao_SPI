@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays, ClipboardList } from 'lucide-react';
+import { Award, LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays, ClipboardList, BookOpen } from 'lucide-react';
 import logoImg from '../assets/logo.png';
-import { BookOpen } from 'lucide-react'; 
 
 export default function MainLayout() {
   const navigate = useNavigate();
@@ -87,14 +86,16 @@ export default function MainLayout() {
     window.location.reload(); 
   };
 
-const menuItems = [
-  { path: '/app/premissas', name: 'Manual do Sistema', icon: <BookOpen size={20} /> }, 
-  { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
-  { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
-  { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> },
-  ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
-  { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
-];
+  // 🔥 MANUAL DO SISTEMA EM PRIMEIRO LUGAR
+  const menuItems = [
+    { path: '/app/premissas', name: 'Manual do Sistema', icon: <BookOpen size={20} /> }, 
+    { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
+    { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
+    { path: '/app/ds', name: 'Delivery Success', icon: <Award size={20} /> },
+    { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> },
+    ...(isGestor ? [{ path: '/app/dashboard', name: 'Dashboard KPIs', icon: <LayoutDashboard size={20} /> }] : []),
+    { path: '/app/validacao', name: 'Validação', icon: <ShieldCheck size={20} /> },
+  ];
 
   const formatarTempo = (ms) => {
     if (ms === null) return "--:--";
@@ -158,7 +159,6 @@ const menuItems = [
           </nav>
         </div>
 
-        {/* RODAPÉ DO MENU COM ASSINATURA */}
         <div className={`p-4 border-t border-gray-100 dark:border-gray-800 space-y-2 shrink-0 ${isCollapsed ? 'px-2' : ''}`}>
           <div 
             title={isCollapsed ? `Sessão expira em: ${formatarTempo(tempoRestante)}` : ""}
@@ -188,7 +188,6 @@ const menuItems = [
             {!isCollapsed && <span className="truncate">Sair do Sistema</span>}
           </button>
 
-          {/*ASSINATURA*/}
           {!isCollapsed && (
             <div className="pt-4 mt-2 border-t border-gray-100 dark:border-gray-800 text-center animate-in fade-in">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
@@ -203,7 +202,6 @@ const menuItems = [
       </aside>
 
       <main className="flex-1 overflow-hidden flex flex-col print:overflow-visible relative">
-        
         {userRegional === 'BOTH' && (
           <div className="w-full bg-white dark:bg-[#1f232d] border-b border-gray-200 dark:border-gray-800 p-4 flex justify-end shrink-0 print:hidden z-10 shadow-sm">
             <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#15171e] p-1.5 rounded-lg border border-slate-200 dark:border-gray-700">

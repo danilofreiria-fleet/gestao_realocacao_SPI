@@ -10,7 +10,7 @@ export default function RegionalSelection() {
   // Quando clica, salva 'SPI' ou 'SPM' para o resto do sistema entender qual "metade" carregar
   const selecionar = (reg) => {
     localStorage.setItem("selectedRegional", reg); 
-    navigate("/app/tabela");
+    navigate("/app/premissas");
   };
 
   // 🔥 AS REGRINHAS MÁGICAS: Verifica qual botão deve acender
