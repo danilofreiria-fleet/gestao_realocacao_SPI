@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { getConsolidadoData, getBaseReferenceData } from '../api/googleSheets';
 import { getHubsPermitidos } from '../constants/regionais';
 import { Copy, Check, Layout, MessageSquare, ClipboardList, MapPin, CalendarDays, Clock, Maximize2, X, Printer, Package, AlertCircle } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
 
 export default function ReportsProntos() {
   const [loading, setLoading] = useState(true);
@@ -46,7 +46,6 @@ export default function ReportsProntos() {
 
   const availableHubs = useMemo(() => [...new Set(rawData.map(r => String(r[4]).trim()))].sort(), [rawData]);
   
-  // 🔥 FILTRO DE DATA ORDENADO Z -> A (Mais recente primeiro)
   const availableDatas = useMemo(() => {
     if (!selectedHub) return [];
     const datas = rawData.filter(r => String(r[4]).trim() === selectedHub).map(r => r[3]);
@@ -82,22 +81,18 @@ export default function ReportsProntos() {
     return rawData.find(row => String(row[4]).trim() === selectedHub && row[3] === selectedData && row[5] === selectedTurno);
   }, [rawData, selectedHub, selectedData, selectedTurno]);
 
-  // =======================================================================
-  // 1. REPORT TEXTUAL (WHATSAPP)
-  // =======================================================================
   const reportText = useMemo(() => {
     if (!r) return "";
     
     const sprRefRow = baseData.find(b => String(b[0]).trim() === String(r[4]).trim() && String(b[1]).trim() === String(r[5]).trim());
-    const sprReferencial = sprRefRow ? sprRefRow[6] : 'N/A'; // BASE: Coluna G
+    const sprReferencial = sprRefRow ? sprRefRow[6] : 'N/A';
 
-    const pacotesRoteirizados = Number(r[12]) || 0;    // CONSOL: Coluna M
-    const pacotesExpedidos = Number(r[14]) || 0;       // CONSOL: Coluna O
-    const totalRotasRoteirizadas = Number(r[11]) || 0; // CONSOL: Coluna L
-    const totalRotasCarregadas = Number(r[29]) || 0;   // CONSOL: Coluna AD
-    const volProc = Number(r[13]) || 0;                // CONSOL: Coluna N
+    const pacotesRoteirizados = Number(r[12]) || 0;    
+    const pacotesExpedidos = Number(r[14]) || 0;       
+    const totalRotasRoteirizadas = Number(r[11]) || 0; 
+    const totalRotasCarregadas = Number(r[29]) || 0;   
+    const volProc = Number(r[13]) || 0;                
 
-    // Cálculo do desvio percentual e absoluto
     const desvioAbsoluto = pacotesExpedidos - pacotesRoteirizados;
     const desvioPctVal = pacotesRoteirizados > 0 ? (desvioAbsoluto / pacotesRoteirizados) * 100 : 0;
     const sinal = desvioPctVal > 0 ? '+' : '';
@@ -133,57 +128,51 @@ ${r[41] || 'Sem pontos de atenção'}
 \u200B`;
   }, [r, baseData]);
 
-  // =======================================================================
-  // 2. REPORT VISUAL (RÉPLICA DO SEU DASHBOARD FLEET)
-  // =======================================================================
   const visualData = useMemo(() => {
     if (!r) return null;
 
-    const noShow = Number(r[19]) || 0;               // Col T: AT no Piso (No Show)
-    const totalCarregado = Number(r[29]) || 0;       // Col AD: Total Carregado / Rotas Exp
-    const totalProgramado = Number(r[11]) || 0;      // Col L: Total AT Roteirizado / Programado
-    const ofertaTotal = Number(r[24]) || 0;          // Col Y: Oferta Total
+    const noShow = Number(r[19]) || 0;               
+    const totalCarregado = Number(r[29]) || 0;       
+    const totalProgramado = Number(r[11]) || 0;      
+    const ofertaTotal = Number(r[24]) || 0;          
 
-    const pacotesRoteirizados = Number(r[12]) || 0;  // Col M
-    const pacotesExpedidos = Number(r[14]) || 0;     // Col O
-    const motosExpedidas = Number(r[38]) || 0;       // 🔥 NOVO: Col AM (Pacotes Expedidos Motos)
+    const pacotesRoteirizados = Number(r[12]) || 0;  
+    const pacotesExpedidos = Number(r[14]) || 0;     
+    const motosExpedidas = Number(r[38]) || 0;       
 
-    const sprRoteirizadoValue = Number(r[15]) || 0;  // 🔥 NOVO: Col P
-    const sprExpedidoValue = Number(r[16]) || 0;     // 🔥 NOVO: Col Q
+    const sprRoteirizadoValue = Number(r[15]) || 0;  
+    const sprExpedidoValue = Number(r[16]) || 0;     
 
-    const motosCarr = Number(r[27]) || 0;            // Col AB
-    const passeioCarr = Number(r[26]) || 0;          // Col AA
-    const fiorinosCarr = Number(r[25]) || 0;         // Col Z
-    const vansCarr = Number(r[28]) || 0;             // Col AC
+    const motosCarr = Number(r[27]) || 0;            
+    const passeioCarr = Number(r[26]) || 0;          
+    const fiorinosCarr = Number(r[25]) || 0;         
+    const vansCarr = Number(r[28]) || 0;             
     
-    // Tempos de Operação
     const timeRefRow = baseData.find(b => String(b[0]).trim() === String(r[4]).trim() && String(b[1]).trim() === String(r[5]).trim());
 
     return {
       stacked: [{ name: 'OWNFLEET', ofertado: ofertaTotal, programado: totalProgramado, carregado: totalCarregado, noshow: noShow }],
       progXcarr: [
-        { name: 'PROGRAMADO', val: totalProgramado, fill: '#14b8a6' },
-        { name: 'CARREGADO', val: totalCarregado, fill: '#f97316' }
+        { name: 'PROG.', val: totalProgramado, fill: '#14b8a6' },
+        { name: 'CARR.', val: totalCarregado, fill: '#f97316' }
       ],
       pacotesComp: [
-        { name: 'ROTEIRIZADOS', val: pacotesRoteirizados, fill: '#3b82f6' },
-        { name: 'CARREGADOS', val: pacotesExpedidos, fill: '#ef4444' }
+        { name: 'ROT.', val: pacotesRoteirizados, fill: '#3b82f6' },
+        { name: 'CARR.', val: pacotesExpedidos, fill: '#ef4444' }
       ],
       modal: [
         { name: 'MOTOS', value: motosCarr, fill: '#3b82f6' },
-        { name: 'PASSEIOS', value: passeioCarr, fill: '#ef4444' },
-        { name: 'FIORINOS', value: fiorinosCarr, fill: '#facc15' },
+        { name: 'PASSEIO', value: passeioCarr, fill: '#ef4444' },
+        { name: 'FIORINO', value: fiorinosCarr, fill: '#facc15' },
         { name: 'VANS', value: vansCarr, fill: '#60a5fa' }
       ],
-      // 🔥 NOVO: Share comparando Expedidos (O) vs Motos Expedidas (AM)
       share: [
         { name: 'MOTOS', value: motosExpedidas, fill: '#facc15' },
         { name: 'OUTROS', value: Math.max(0, pacotesExpedidos - motosExpedidas), fill: '#3b82f6' }
       ],
-      // 🔥 NOVO: Comparação de SPR Roteirizado vs Expedido
       sprComp: [
-        { name: 'ROTEIR.', val: sprRoteirizadoValue, fill: '#3b82f6' },
-        { name: 'EXPED.', val: sprExpedidoValue, fill: '#14b8a6' }
+        { name: 'ROT.', val: sprRoteirizadoValue, fill: '#3b82f6' },
+        { name: 'EXP.', val: sprExpedidoValue, fill: '#14b8a6' }
       ],
       tabelaObs: { 
         totalRotas: totalProgramado, pacotesRot: pacotesRoteirizados, pacotesExp: pacotesExpedidos, 
@@ -210,193 +199,230 @@ ${r[41] || 'Sem pontos de atenção'}
 
   if (loading) return <div className="p-10 text-center animate-pulse font-black text-slate-400">CARREGANDO MODELOS...</div>;
 
-  const renderVisualReport = (isExpanded = false) => (
-    <div className="w-full h-full bg-[#fff0ed] p-6 text-slate-800 font-sans border border-slate-300">
+  const renderVisualReport = () => (
+    // min-w-[1024px] garante que o print nunca achate os graficos ideais mesmo abrindo em telas mini
+    <div className="w-full bg-[#fff0ed] p-5 text-slate-800 font-sans border border-slate-300 min-w-[1000px] overflow-hidden rounded-xl">
       
       {/* CABEÇALHO */}
-      <div className="flex justify-between items-center border-b-2 border-red-200 pb-3 mb-6">
+      <div className="flex justify-between items-center border-b-2 border-red-200 pb-3 mb-4">
         <div className="text-[#EE4D2D] font-black italic text-2xl tracking-tighter">ShopeeXPRESS</div>
-        <div className="text-xl font-black uppercase tracking-widest text-slate-900">REPORT FLEET - {r[4]}</div>
-        <div className="flex gap-6 text-[10px] font-black uppercase text-center bg-white p-2 rounded shadow-sm border border-slate-200">
-          <div><div className="text-slate-500 mb-1">Data</div><div className="text-sm">{r[3]}</div></div>
-          <div><div className="text-slate-500 mb-1">Ciclo</div><div className="text-sm">{r[5]}</div></div>
-          <div><div className="text-slate-500 mb-1">Performance</div><div className="text-green-600 text-sm">100%</div></div>
+        <div className="text-lg font-black uppercase tracking-wider text-slate-900">REPORT FLEET - {r[4]}</div>
+        <div className="flex gap-4 text-[10px] font-black uppercase text-center bg-white p-2 rounded shadow-sm border border-slate-200">
+          <div><div className="text-slate-500 mb-0.5">Data</div><div className="text-xs text-slate-800">{r[3]}</div></div>
+          <div><div className="text-slate-500 mb-0.5">Ciclo</div><div className="text-xs text-slate-800">{r[5]}</div></div>
+          <div><div className="text-slate-500 mb-0.5">Status</div><div className="text-green-600 text-xs">CONCLUÍDO</div></div>
         </div>
       </div>
 
       {/* CORPO DO DASHBOARD */}
-      <div className="grid grid-cols-12 gap-6 h-full">
+      <div className="grid grid-cols-12 gap-5">
         
-        {/* LADO ESQUERDO */}
+        {/* LADO ESQUERDO (COL 8) */}
         <div className="col-span-8 flex flex-col gap-4">
-          <div className="bg-white p-4 border border-slate-300 shadow-sm flex-1 flex flex-col">
-            <h3 className="text-center font-black uppercase text-sm mb-4">Performance Por Ownfleet</h3>
+          <div className="bg-white p-4 border border-slate-200 shadow-sm rounded-xl flex flex-col">
+            <h3 className="text-center font-black uppercase text-xs mb-3 text-slate-700 tracking-wide">Performance Por Ownfleet</h3>
             
-            <div className="flex justify-center gap-4 text-[9px] font-bold uppercase mb-6 text-slate-600">
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#f97316]"></div> No Show</span>
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#ef4444]"></div> Carregado</span>
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#3b82f6]"></div> Programado</span>
-              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-[#1e3a8a]"></div> Ofertado Pelo OwnFleet</span>
+            <div className="flex justify-center gap-4 text-[9px] font-black uppercase mb-4 text-slate-500">
+              <span className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-[#f97316] rounded-sm"></div> No Show</span>
+              <span className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-[#ef4444] rounded-sm"></div> Carregado</span>
+              <span className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-[#3b82f6] rounded-sm"></div> Programado</span>
+              <span className="flex items-center gap-1"><div className="w-2.5 h-2.5 bg-[#1e3a8a] rounded-sm"></div> Ofertado</span>
             </div>
 
-            <div className="flex-1 w-full max-w-md mx-auto">
+            {/* Altura fixa controlada para o container de gráficos */}
+            <div className="w-full h-44 max-w-lg mx-auto">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={visualData.stacked} margin={{top: 20, right: 30, left: 0, bottom: 0}}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold'}} />
-                  <YAxis tickFormatter={(val) => `${val}`} tick={{fontSize: 10}} />
+                <BarChart data={visualData.stacked} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9"/>
+                  <XAxis dataKey="name" tick={{fontSize: 9, fontWeight: 'bold'}} />
+                  <YAxis tick={{fontSize: 9}} />
                   <Tooltip cursor={{fill: 'transparent'}} />
-                  <Bar dataKey="noshow" stackId="a" fill="#f97316"><LabelList dataKey="noshow" position="center" fill="#fff" fontSize={12} fontWeight="bold"/></Bar>
-                  <Bar dataKey="carregado" stackId="a" fill="#ef4444"><LabelList dataKey="carregado" position="center" fill="#fff" fontSize={12} fontWeight="bold"/></Bar>
-                  <Bar dataKey="programado" stackId="a" fill="#3b82f6"><LabelList dataKey="programado" position="center" fill="#fff" fontSize={12} fontWeight="bold"/></Bar>
-                  <Bar dataKey="ofertado" stackId="a" fill="#1e3a8a"><LabelList dataKey="ofertado" position="center" fill="#fff" fontSize={12} fontWeight="bold"/></Bar>
+                  <Bar dataKey="noshow" stackId="a" fill="#f97316"><LabelList dataKey="noshow" position="center" fill="#fff" fontSize={10} fontWeight="bold"/></Bar>
+                  <Bar dataKey="carregado" stackId="a" fill="#ef4444"><LabelList dataKey="carregado" position="center" fill="#fff" fontSize={10} fontWeight="bold"/></Bar>
+                  <Bar dataKey="programado" stackId="a" fill="#3b82f6"><LabelList dataKey="programado" position="center" fill="#fff" fontSize={10} fontWeight="bold"/></Bar>
+                  <Bar dataKey="ofertado" stackId="a" fill="#1e3a8a"><LabelList dataKey="ofertado" position="center" fill="#fff" fontSize={10} fontWeight="bold"/></Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* TABELAS DO RODAPÉ ESQUERDO */}
-          <div className="flex gap-4 items-start">
-            <table className="flex-1 text-[10px] border-collapse border border-slate-400 bg-white">
+          {/* TABELAS DO RODAPÉ */}
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <table className="w-full text-[10px] border-collapse border border-slate-300 bg-white shadow-sm rounded-lg overflow-hidden">
               <tbody>
-                <tr><td colSpan="4" className="border border-slate-400 font-black text-left p-1 bg-slate-200">OBSERVAÇÃO</td></tr>
-                <tr>
-                  <td className="border border-slate-400 p-1 font-bold">Total de Rotas:</td><td className="border border-slate-400 p-1 font-black text-center">{visualData.tabelaObs.totalRotas}</td>
-                  <td className="border border-slate-400 p-1 font-bold">Noshow:</td><td className="border border-slate-400 p-1 font-black text-center">{visualData.tabelaObs.noShow}</td>
+                <tr><td colSpan="4" className="border-b border-slate-300 font-black text-left p-1.5 bg-slate-100 text-slate-700">OBSERVAÇÃO</td></tr>
+                <tr className="border-b border-slate-200">
+                  <td className="p-1.5 font-bold text-slate-500">Total Rotas:</td><td className="p-1.5 font-black text-center text-slate-800">{visualData.tabelaObs.totalRotas}</td>
+                  <td className="p-1.5 font-bold text-slate-500">No Show:</td><td className="p-1.5 font-black text-center text-[#f97316]">{visualData.tabelaObs.noShow}</td>
+                </tr>
+                <tr className="border-b border-slate-200">
+                  <td className="p-1.5 font-bold text-slate-500">Pcts Rot.:</td><td className="p-1.5 font-black text-center text-slate-800">{visualData.tabelaObs.pacotesRot}</td>
+                  <td className="p-1.5 font-bold text-slate-500">Rotas Exp:</td><td className="p-1.5 font-black text-center text-slate-800">{visualData.tabelaObs.rotasExp}</td>
                 </tr>
                 <tr>
-                  <td className="border border-slate-400 p-1 font-bold">Pacotes Roteirizado:</td><td className="border border-slate-400 p-1 font-black text-center">{visualData.tabelaObs.pacotesRot}</td>
-                  <td className="border border-slate-400 p-1 font-bold">Rotas Expedidas:</td><td className="border border-slate-400 p-1 font-black text-center">{visualData.tabelaObs.rotasExp}</td>
-                </tr>
-                <tr>
-                  <td className="border border-slate-400 p-1 font-bold">Pacotes Expedidos:</td><td className="border border-slate-400 p-1 font-black text-center">{visualData.tabelaObs.pacotesExp}</td>
-                  <td className="border border-slate-400 p-1 font-bold">SPR Expedido:</td><td className="border border-slate-400 p-1 font-black text-center">{visualData.tabelaObs.sprExpedido}</td>
+                  <td className="p-1.5 font-bold text-slate-500">Pcts Exp:</td><td className="p-1.5 font-black text-center text-slate-800">{visualData.tabelaObs.pacotesExp}</td>
+                  <td className="p-1.5 font-bold text-slate-500">SPR Exp:</td><td className="p-1.5 font-black text-center text-[#EE4D2D]">{visualData.tabelaObs.sprExpedido}</td>
                 </tr>
               </tbody>
             </table>
 
-            <table className="text-[10px] border-collapse border border-slate-400 bg-white text-center">
-              <thead>
-                <tr className="bg-slate-200">
-                  <th className="border border-slate-400 p-1">MOTOS</th>
-                  <th className="border border-slate-400 p-1">PASSEIO</th>
-                  <th className="border border-slate-400 p-1">FIORINO</th>
-                  <th className="border border-slate-400 p-1">VANS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="border border-slate-400 p-1 font-black">{visualData.tabelaModal.motos}</td>
-                  <td className="border border-slate-400 p-1 font-black">{visualData.tabelaModal.passeio}</td>
-                  <td className="border border-slate-400 p-1 font-black">{visualData.tabelaModal.fiorino}</td>
-                  <td className="border border-slate-400 p-1 font-black">{visualData.tabelaModal.vans}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="flex flex-col gap-3">
+              <table className="w-full text-[10px] border-collapse border border-slate-300 bg-white text-center shadow-sm rounded-lg overflow-hidden">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-black">
+                    <th className="p-1.5 border-r border-slate-200">MOTOS</th>
+                    <th className="p-1.5 border-r border-slate-200">PASSEIO</th>
+                    <th className="p-1.5 border-r border-slate-200">FIORINO</th>
+                    <th className="p-1.5">VANS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="text-slate-800 font-black">
+                    <td className="p-1.5 border-r border-slate-200 bg-blue-50/30">{visualData.tabelaModal.motos}</td>
+                    <td className="p-1.5 border-r border-slate-200 bg-red-50/30">{visualData.tabelaModal.passeio}</td>
+                    <td className="p-1.5 border-r border-slate-200 bg-yellow-50/30">{visualData.tabelaModal.fiorino}</td>
+                    <td className="p-1.5 bg-sky-50/30">{visualData.tabelaModal.vans}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <table className="w-full text-[9px] border-collapse border border-slate-300 bg-white text-center font-bold shadow-sm rounded-lg overflow-hidden">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-black">
+                    <th className="p-1 text-left pl-2">MÉTRICA</th>
+                    <th className="p-1">CLOCK</th>
+                    <th className="p-1">HUB</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-slate-200 text-slate-600">
+                    <td className="p-1 text-left pl-2 font-bold">Início</td>
+                    <td className="p-1 font-black">{visualData.clock.opsIni}</td>
+                    <td className="p-1 font-black text-slate-800">{visualData.clock.hubIni}</td>
+                  </tr>
+                  <tr className="border-b border-slate-200 text-slate-600">
+                    <td className="p-1 text-left pl-2 font-bold">Fim</td>
+                    <td className="p-1 font-black">{visualData.clock.opsFim}</td>
+                    <td className="p-1 font-black text-slate-800">{visualData.clock.hubFim}</td>
+                  </tr>
+                  <tr className="bg-orange-50/20">
+                    <td className="p-1 text-left pl-2 text-slate-700 font-black">Tempo Op.</td>
+                    <td className="p-1 text-slate-400">-</td>
+                    <td className="p-1 text-[#EE4D2D] font-black">{visualData.clock.tempoOp}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          
-          <table className="w-64 text-[10px] border-collapse border border-slate-400 bg-white text-center font-bold">
-            <thead>
-              <tr className="bg-slate-200">
-                <th className="border border-slate-400 p-1 text-left">MÉTRICA</th>
-                <th className="border border-slate-400 p-1 text-left">OPS CLOCK</th>
-                <th className="border border-slate-400 p-1 text-left">OPS HUB</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="border border-slate-400 p-1 text-left">Início</td>
-                <td className="border border-slate-400 p-1">{visualData.clock.opsIni}</td>
-                <td className="border border-slate-400 p-1">{visualData.clock.hubIni}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-400 p-1 text-left">Fim</td>
-                <td className="border border-slate-400 p-1">{visualData.clock.opsFim}</td>
-                <td className="border border-slate-400 p-1">{visualData.clock.hubFim}</td>
-              </tr>
-              <tr>
-                <td className="border border-slate-400 p-1 text-left">Tempo de Op.</td>
-                <td className="border border-slate-400 p-1 bg-slate-100">-</td>
-                <td className="border border-slate-400 p-1 text-[#EE4D2D]">{visualData.clock.tempoOp}</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
 
-        {/* LADO DIREITO */}
-        <div className="col-span-4 flex flex-col gap-4">
+        {/* LADO DIREITO (COL 4) */}
+        <div className="col-span-4 flex flex-col gap-3">
           
           {/* Prog x Carregado */}
-          <div className="bg-white p-2 border border-slate-300 shadow-sm h-32 flex flex-col">
-            <h3 className="text-center font-black uppercase text-[10px] mb-2">Programado X Carregado</h3>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart layout="vertical" data={visualData.progXcarr} margin={{top: 0, right: 30, left: 0, bottom: 0}}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 8, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                <Bar dataKey="val" barSize={16}>
-                  <LabelList dataKey="val" position="right" fontSize={10} fontWeight="bold" />
-                  {visualData.progXcarr.map((e, i) => <Cell key={i} fill={e.fill}/>)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Modal Pie & Pacotes Comp */}
-          <div className="flex gap-4 h-40">
-            <div className="bg-white p-2 border border-slate-300 shadow-sm flex-1 flex flex-col">
-              <h3 className="text-center font-black uppercase text-[10px]">Modal</h3>
+          <div className="bg-white p-2 border border-slate-200 shadow-sm rounded-xl h-24 flex flex-col">
+            <h3 className="text-center font-black uppercase text-[9px] text-slate-500 mb-1">Programado X Carregado</h3>
+            <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={visualData.modal} cx="50%" cy="50%" innerRadius={20} outerRadius={35} dataKey="value" label={{fontSize: 8, fontWeight: 'bold'}} labelLine={false}>
-                    {visualData.modal.map((e, i) => <Cell key={i} fill={e.fill}/>)}
-                  </Pie>
-                  <Legend wrapperStyle={{fontSize: '7px', fontWeight: 'bold'}}/>
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="bg-white p-2 border border-slate-300 shadow-sm flex-1 flex flex-col justify-center items-center">
-               <h3 className="text-center font-black uppercase text-[8px] mb-2 text-slate-400">Roteirizado x Carregado</h3>
-               <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={visualData.pacotesComp} margin={{top: 15, right: 5, left: -20, bottom: 0}}>
-                    <XAxis dataKey="name" tick={{fontSize: 8, fontWeight: 'bold'}} axisLine={false} tickLine={false}/>
-                    <YAxis hide />
-                    <Tooltip />
-                    <Bar dataKey="val" barSize={30} radius={[4,4,0,0]}>
-                      <LabelList dataKey="val" position="top" fontSize={10} fontWeight="bold"/>
-                      {visualData.pacotesComp.map((e, i) => <Cell key={`cell-${i}`} fill={e.fill}/>)}
-                    </Bar>
-                 </BarChart>
-               </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* 🔥 SHARE PACOTES & SPR (MODIFICADOS AQUI) 🔥 */}
-          <div className="flex gap-4 h-40">
-            <div className="bg-white p-2 border border-slate-300 shadow-sm flex-1 flex flex-col">
-              <h3 className="text-center font-black uppercase text-[10px]">Share - Expedidos</h3>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={visualData.share} cx="50%" cy="50%" innerRadius={20} outerRadius={35} dataKey="value" label={{fontSize: 8, fontWeight: 'bold'}} labelLine={false}>
-                    {visualData.share.map((e, i) => <Cell key={i} fill={e.fill}/>)}
-                  </Pie>
-                  <Legend wrapperStyle={{fontSize: '8px', fontWeight: 'bold'}}/>
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="bg-white p-2 border border-slate-300 shadow-sm flex-1 flex flex-col">
-              <h3 className="text-center font-black uppercase text-[9px] mb-2">SPR (Rot. vs Exp.)</h3>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={visualData.sprComp} margin={{top: 15, right: 5, left: -20, bottom: 0}}>
-                  <XAxis dataKey="name" tick={{fontSize: 8, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                  <YAxis hide domain={[0, 'dataMax + 10']} />
-                  <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} />
-                  <Bar dataKey="val" barSize={30} radius={[4,4,0,0]}>
-                     <LabelList dataKey="val" position="top" fontSize={10} fontWeight="bold"/>
-                     {visualData.sprComp.map((e, i) => <Cell key={`cell-${i}`} fill={e.fill}/>)}
+                <BarChart layout="vertical" data={visualData.progXcarr} margin={{top: 5, right: 35, left: -15, bottom: 5}}>
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" width={45} tick={{fontSize: 8, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                  <Bar dataKey="val" barSize={12} radius={[0, 3, 3, 0]}>
+                    <LabelList dataKey="val" position="right" fontSize={9} fontWeight="bold" fill="#475569" offset={5} />
+                    {visualData.progXcarr.map((e, i) => <Cell key={i} fill={e.fill}/>)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </div>
+
+          {/* Modal Pie & Pacotes Comp */}
+          <div className="grid grid-cols-2 gap-3 h-36">
+            <div className="bg-white p-2 border border-slate-200 shadow-sm rounded-xl flex flex-col">
+              <h3 className="text-center font-black uppercase text-[9px] text-slate-500 mb-1">Modal</h3>
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie 
+                      data={visualData.modal} 
+                      cx="50%" 
+                      cy="45%" 
+                      innerRadius={14} 
+                      outerRadius={24} 
+                      dataKey="value" 
+                      label={false}
+                    >
+                      {visualData.modal.map((e, i) => <Cell key={i} fill={e.fill}/>)}
+                    </Pie>
+                    <Legend iconSize={5} layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{fontSize: '7px', fontWeight: 'bold', paddingTop: '4px'}}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            
+            <div className="bg-white p-2 border border-slate-200 shadow-sm rounded-xl flex flex-col">
+               <h3 className="text-center font-black uppercase text-[9px] text-slate-500 mb-1">Pcts (Rot x Carr)</h3>
+               <div className="flex-1 min-h-0">
+                 <ResponsiveContainer width="100%" height="100%">
+<BarChart data={visualData.pacotesComp} margin={{top: 18, right: 8, left: 0, bottom: 15}}>
+   <XAxis 
+     dataKey="name" 
+     interval={0} 
+     tick={{fontSize: 8, fontWeight: 'bold'}} 
+     axisLine={false} 
+     tickLine={false}
+   />
+   <YAxis hide />
+   <Bar dataKey="val" barSize={18} radius={[3,3,0,0]}>
+     <LabelList dataKey="val" position="top" fontSize={8} fontWeight="bold" fill="#475569" offset={4}/>
+     {visualData.pacotesComp.map((e, i) => <Cell key={`cell-${i}`} fill={e.fill}/>)}
+   </Bar>
+</BarChart>
+                 </ResponsiveContainer>
+               </div>
+            </div>
+          </div>
+
+          {/* SHARE PACOTES & SPR */}
+          <div className="grid grid-cols-2 gap-3 h-36">
+            <div className="bg-white p-2 border border-slate-200 shadow-sm rounded-xl flex flex-col">
+              <h3 className="text-center font-black uppercase text-[9px] text-slate-500 mb-1">Share Expedidos</h3>
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie 
+                      data={visualData.share} 
+                      cx="50%" 
+                      cy="45%" 
+                      innerRadius={14} 
+                      outerRadius={24} 
+                      dataKey="value" 
+                      label={false}
+                    >
+                      {visualData.share.map((e, i) => <Cell key={i} fill={e.fill}/>)}
+                    </Pie>
+                    <Legend iconSize={5} layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{fontSize: '7px', fontWeight: 'bold', paddingTop: '4px'}}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+<div className="bg-white p-2 border border-slate-200 shadow-sm rounded-xl flex flex-col">
+  <h3 className="text-center font-black uppercase text-[9px] text-slate-500 mb-1">SPR (Rot vs Exp)</h3>
+  <div className="flex-1 min-h-0">
+    <ResponsiveContainer width="100%" height="100%">
+      {/* 🛠️ Mudança aqui: left mudou de -25 para 0 para centralizar */}
+      <BarChart data={visualData.sprComp} margin={{top: 18, right: 8, left: 0, bottom: 15}}>
+        <XAxis dataKey="name" tick={{fontSize: 8, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+        <YAxis hide domain={[0, 'dataMax + 5']} />
+        <Bar dataKey="val" barSize={18} radius={[3,3,0,0]}>
+           <LabelList dataKey="val" position="top" fontSize={8} fontWeight="bold" fill="#475569" offset={4}/>
+           {visualData.sprComp.map((e, i) => <Cell key={`cell-${i}`} fill={e.fill}/>)}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+</div>
           </div>
 
         </div>
@@ -419,7 +445,7 @@ ${r[41] || 'Sem pontos de atenção'}
           <div className="flex flex-col">
             <label className="text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Station / Hub</label>
             <select 
-              className="w-full bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-xl p-2.5 text-sm font-bold text-[#113366] dark:text-white outline-none focus:ring-2 focus:ring-[#EE4D2D] cursor-pointer disabled:opacity-50"
+              className="w-full bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded-xl p-2.5 text-sm font-bold text-[#113366] dark:text-white outline-none focus:ring-2 focus:ring-[#EE4D2D] cursor-pointer"
               value={selectedHub} onChange={(e) => setSelectedHub(e.target.value)}
             >
               <option value="">1. Selecione o Hub...</option>
@@ -457,7 +483,7 @@ ${r[41] || 'Sem pontos de atenção'}
           </div>
 
           {activeTab === 'text' ? (
-            <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex-1 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+            <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex-1 flex flex-col overflow-hidden">
               <div className="p-4 bg-slate-50 dark:bg-gray-800/50 border-b border-slate-100 dark:border-gray-800 flex justify-between items-center shrink-0">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Preview da Mensagem</span>
                 <button onClick={handleCopy} className="flex items-center gap-2 bg-[#EE4D2D] text-white px-5 py-2 rounded-lg font-black text-xs hover:bg-[#D0011B] transition-all shadow-md">
@@ -470,13 +496,14 @@ ${r[41] || 'Sem pontos de atenção'}
               </div>
             </div>
           ) : (
-            <div className="flex flex-col flex-1 overflow-y-auto">
+            <div className="flex flex-col flex-1 min-h-0">
               <div className="flex justify-end mb-2 print:hidden">
                 <button onClick={() => setIsFullscreen(true)} className="flex items-center gap-2 bg-[#113366] hover:bg-blue-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm">
                   <Maximize2 size={14}/> Ampliar / Imprimir Gráficos
                 </button>
               </div>
-              <div className="relative border border-slate-300 shadow-md rounded-xl overflow-hidden" style={{ width: '100%', height: '500px', transform: 'scale(1)', transformOrigin: 'top left' }}>
+              
+              <div className="w-full border border-slate-300 shadow-md rounded-xl overflow-x-auto bg-[#fff0ed]">
                  {renderVisualReport()}
               </div>
             </div>
@@ -489,18 +516,17 @@ ${r[41] || 'Sem pontos de atenção'}
         </div>
       )}
 
-      {/* FULLSCREEN PARA O PRINT */}
       {isFullscreen && r && (
         <div className="fixed inset-0 z-[99999] bg-slate-900/95 flex flex-col print:bg-white print:block">
           <div className="h-16 flex items-center justify-between px-6 bg-[#1f232d] border-b border-gray-800 print:hidden shrink-0">
-            <span className="text-white font-black uppercase tracking-widest text-sm flex items-center gap-2"><Layout size={18} className="text-[#EE4D2D]"/> Visualização de Imagem</span>
+            <span className="text-white font-black uppercase tracking-widest text-sm flex items-center gap-2"><Layout size={18} className="text-[#EE4D2D]"/> Visualização de Imagem para Print</span>
             <div className="flex items-center gap-3">
               <button onClick={handlePrint} className="flex items-center gap-2 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2 rounded-lg font-bold text-xs transition-colors shadow-lg"><Printer size={16}/> Salvar PDF / Imprimir</button>
               <button onClick={() => setIsFullscreen(false)} className="bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white p-2 rounded-lg transition-colors"><X size={20}/></button>
             </div>
           </div>
-          <div className="flex-1 overflow-auto flex items-center justify-center p-8 print:p-0 print:overflow-visible">
-            <div className="w-full max-w-6xl shadow-2xl print:shadow-none bg-white">
+          <div className="flex-1 overflow-auto p-8 print:p-0 print:overflow-visible flex items-start justify-center">
+            <div className="shadow-xl bg-[#fff0ed] p-2 rounded-xl">
               {renderVisualReport()}
             </div>
           </div>
@@ -508,7 +534,7 @@ ${r[41] || 'Sem pontos de atenção'}
       )}
 
       {copied && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-[#113366] text-white px-6 py-3 rounded-full shadow-2xl z-[9999] flex items-center gap-2 font-bold animate-in zoom-in slide-in-from-bottom-8">
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-[#113366] text-white px-6 py-3 rounded-full shadow-2xl z-[9999] flex items-center gap-2 font-bold">
           <Check size={20} className="text-[#EE4D2D]"/> Report copiado para a área de transferência!
         </div>
       )}
