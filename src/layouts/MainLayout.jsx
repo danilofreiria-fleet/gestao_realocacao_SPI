@@ -86,7 +86,6 @@ export default function MainLayout() {
     window.location.reload(); 
   };
 
-  // 🔥 MANUAL DO SISTEMA EM PRIMEIRO LUGAR
   const menuItems = [
     { path: '/app/premissas', name: 'Manual do Sistema', icon: <BookOpen size={20} /> }, 
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
@@ -131,8 +130,27 @@ export default function MainLayout() {
             
             {!isCollapsed && (
               <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
-                <h1 className="text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">Control Nexus</h1>
-                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Operação Logística</p>
+                <h1 
+                  className="text-2xl font-black italic text-[#EE4D2D] uppercase drop-shadow-md" 
+                  style={{ 
+                    transform: 'skewX(-10deg)', 
+                    letterSpacing: '-1.5px', // Deixa as letras coladinhas
+                    // Oito sombras brancas criando um contorno 100% externo
+                    textShadow: `
+                      -2px -2px 0 #fff,  
+                       2px -2px 0 #fff,
+                      -2px  2px 0 #fff,
+                       2px  2px 0 #fff,
+                       0px -2px 0 #fff,
+                       0px  2px 0 #fff,
+                      -2px  0px 0 #fff,
+                       2px  0px 0 #fff
+                    `
+                  }}
+                >
+                  CONTROL FLEET
+                </h1>
+                <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-1">São Paulo</p>
               </div>
             )}
           </div>

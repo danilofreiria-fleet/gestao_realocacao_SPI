@@ -10,14 +10,11 @@ export default function Login() {
 
   const fazerLogin = useGoogleLogin({
     scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email",
-    // hosted_domain: "shopee.com", // Comentado para testar com outras contas, se precisar
     
     onSuccess: async (tokenResponse) => {
       try {
-        // 1. Extrai o Token do Google
         const token = tokenResponse.access_token;
 
-        // 2. Pega as informações do usuário logado
         const response = await axios.get(
           'https://www.googleapis.com/oauth2/v3/userinfo',
           { headers: { Authorization: `Bearer ${token}` } }
@@ -25,22 +22,18 @@ export default function Login() {
 
         const emailLogado = response.data.email;
 
-        // 3. Primeira Catraca: Verifica se é um e-mail Shopee
         if (emailLogado.endsWith("@shopee.com") || emailLogado.endsWith("@shopeemobile-external.com")) {
           
-          // 4. Salva as informações básicas
           localStorage.setItem("spiToken", token);
           localStorage.setItem("userEmail", emailLogado);
           localStorage.setItem("spiTokenTime", Date.now().toString()); 
           
-          // 5. Verifica Permissões na aba PERMISSOES
           const infoUsuario = await buscarPermissoesUsuario(emailLogado, token);
 
           if (infoUsuario) {
-            localStorage.setItem("userRegional", infoUsuario.regional); // SPI, SPM, SPC ou BOTH
+            localStorage.setItem("userRegional", infoUsuario.regional); 
             localStorage.setItem("userRole", infoUsuario.cargo);
             
-            // 6. Pergunta para a API se ele é Gestor
             const isGestor = await verificarAcessoGestor(emailLogado, token);
             if (isGestor) {
               localStorage.setItem("isGestor", "true");
@@ -48,12 +41,10 @@ export default function Login() {
               localStorage.removeItem("isGestor"); 
             }
             
-            // 7. Tudo certo! Manda para a tela de Seleção de Regional
             navigate("/selecionar-regional"); 
             
           } else {
             alert("Seu e-mail não está cadastrado na planilha de permissões.");
-            // localStorage.removeItem("spiToken"); // Descomente para forçar bloqueio duro
           }
 
         } else {
@@ -70,18 +61,21 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-8 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-[#EE4D2D]"></div>
 
         <div className="text-center mb-8 flex flex-col items-center">
-          <div className="mb-4 h-24 flex items-center justify-center">
+          <div className="mb-4 h-28 flex items-center justify-center">
             <img 
               src={logoImg} 
-              alt="Logo SPI Control" 
+              alt="Logo Control Fleet" 
               className="h-full w-auto object-contain drop-shadow-md"
             />
           </div>
-          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">CONTROL SPC/SPI/SPM/SPO</h1>
-          <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Acesso Restrito - Logística</p>
+          {/* 🔥 NOVA ESTÉTICA AQUI */}
+          <h1 className="text-4xl font-black italic text-[#EE4D2D] uppercase tracking-tighter drop-shadow-sm" style={{ transform: 'skewX(-5deg)' }}>
+            CONTROL FLEET
+          </h1>
+          <p className="text-[10px] font-black text-[#113366] mt-2 uppercase tracking-widest">Acesso Restrito - Logística</p>
         </div>
 
         <div className="space-y-5">
