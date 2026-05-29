@@ -1,8 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin, ChevronDown } from 'lucide-react';
+import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin, ChevronDown, Download } from 'lucide-react';
 import { getRodagemData } from '../../api/googleSheets';
-
-// 🔥 IMPORTAMOS A CATRACA PARA O RODÍZIO TAMBÉM RESPEITAR O BOTÃO DO TOPO
 import { getHubsPermitidos } from '../../constants/regionais';
 
 const STATUS_MAP = {
@@ -29,14 +27,16 @@ export default function RotationTable() {
   const [loading, setLoading] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
-  // 🔄 MUDANÇA: Agora controlamos múltiplos hubs em um array (começa vazio para não pesar)
   const [selectedHubs, setSelectedHubs] = useState([]); 
   const [hubDropdownOpen, setHubDropdownOpen] = useState(false);
   const [hubSearchTerm, setHubSearchTerm] = useState('');
 
+  // 🔥 NOVO ESTADO PARA DOWNLOAD DO HUB
+  const [hubDownload, setHubDownload] = useState('');
+
   const [selectedModal, setSelectedModal] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
-  const [selectedTrips, setSelectedTrips] = useState('ALL'); // 🔥 NOVO ESTADO: QUANTIDADE DE VIAGENS
+  const [selectedTrips, setSelectedTrips] = useState('ALL'); 
   
   const [targetMonth, setTargetMonth] = useState(new Date().getMonth() + 1); 
   const [targetYear] = useState(new Date().getFullYear());
@@ -49,7 +49,6 @@ export default function RotationTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50); 
 
-  // PEGA A REGIONAL ATIVA NO TOPO DA TELA
   const regEscolhida = localStorage.getItem("selectedRegional");
 
   useEffect(() => {
@@ -112,7 +111,6 @@ export default function RotationTable() {
     }
   }, [availableWeeks]);
 
-  // 🔥 LISTA DINÂMICA DE HUBS BASEADA NA REGIONAL ATIVA
   const hubsDisponiveis = useMemo(() => {
     if (!rawData || rawData.length < 2) return [];
     const hubs = new Set();
@@ -140,18 +138,13 @@ export default function RotationTable() {
     return Array.from(modais).sort();
   }, [rawData, regEscolhida]);
 
-  // Se a regional mudou e os hubs selecionados anteriormente sumiram dela, limpa-os
   useEffect(() => {
     setSelectedHubs(prev => prev.filter(hub => hubsDisponiveis.includes(hub)));
   }, [hubsDisponiveis]);
 
-  // =========================================================
-  // PROCESSAMENTO DA MATRIZ + NOVOS FILTROS DINÂMICOS
-  // =========================================================
   const matrix = useMemo(() => {
     if (!rawData || rawData.length < 1) return { headers: [], rows: [], availableTrips: [] };
 
-    // 🏎️ VACINA DE PERFORMANCE: Se nenhum hub estiver selecionado, para aqui mesmo!
     if (selectedHubs.length === 0) {
       return { headers: [], rows: [], availableTrips: [] };
     }
@@ -174,14 +167,12 @@ export default function RotationTable() {
 
     const permitidos = regEscolhida && regEscolhida !== "TODOS" ? getHubsPermitidos(regEscolhida) : null;
 
-    // 1. Mapeamento base e filtros fixos de cabeçalho
     const initialRows = rawData.slice(1).filter(row => {
       const rowHub = padronizarHubLocal(row[4]); 
       const rowModal = String(row[1] || "").trim().toUpperCase(); 
 
       if (permitidos && !permitidos.includes(rowHub)) return false;
 
-      // 🔄 FILTRO MULTI-SELECÇÃO DE HUBS
       const matchesHub = selectedHubs.includes(rowHub);
       const matchesSearch = String(row[0] || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesModal = selectedModal === 'ALL' ? true : rowModal === selectedModal;
@@ -206,24 +197,20 @@ export default function RotationTable() {
       };
     });
 
-    // 2. Filtro cirúrgico por Status (Checa as ocorrências reais de cada linha)
     const statusFilteredRows = initialRows.filter(row => {
       if (selectedStatus === 'ALL') return true;
       return Object.values(row.days).includes(selectedStatus);
     });
 
-    // 3. Coleta opções de números únicos de viagens para popular o novo Dropdown
     const uniqueTrips = new Set();
     statusFilteredRows.forEach(row => uniqueTrips.add(row.total));
     const availableTripsList = Array.from(uniqueTrips).sort((a, b) => a - b);
 
-    // 4. Filtro por quantidade de viagens executadas
     const finalRows = statusFilteredRows.filter(row => {
       if (selectedTrips === 'ALL') return true;
       return row.total === Number(selectedTrips);
     });
 
-    // Ordenação final
     finalRows.sort((a, b) => {
       if (sortConfig.direction === 'desc') return b.total - a.total;
       return a.total - b.total;
@@ -232,7 +219,6 @@ export default function RotationTable() {
     return { headers: activeDateCols, rows: finalRows, availableTrips: availableTripsList };
   }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedHubs, selectedModal, selectedStatus, selectedTrips, sortConfig, regEscolhida]);
 
-  // Reseta o filtro de viagens caso os números disponíveis mudem e o valor atual suma
   useEffect(() => {
     if (selectedTrips !== 'ALL' && !matrix.availableTrips.includes(Number(selectedTrips))) {
       setSelectedTrips('ALL');
@@ -242,7 +228,6 @@ export default function RotationTable() {
   const totalPages = Math.max(1, Math.ceil(matrix.rows.length / itemsPerPage));
   const paginatedRows = matrix.rows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Reseta página ativa ao mudar filtros
   useEffect(() => { 
     setCurrentPage(1); 
   }, [searchTerm, selectedHubs, selectedModal, selectedStatus, selectedTrips, itemsPerPage, viewMode, targetWeek]);
@@ -256,11 +241,84 @@ export default function RotationTable() {
     setSortConfig(prev => ({ direction: prev.direction === 'desc' ? 'asc' : 'desc' }));
   };
 
+  // 🔥 FUNÇÃO DE DOWNLOAD DO HUB EM CSV
+  const exportarHubCSV = () => {
+    if (!hubDownload) return alert("Por favor, selecione uma Station antes de baixar.");
+    if (rawData.length < 2) return alert("Nenhum dado base carregado ainda.");
+
+    const headers = rawData[0];
+    const dataColsStart = 5;
+
+    const dateCols = [];
+    for (let i = dataColsStart; i < headers.length; i++) {
+      dateCols.push({ label: String(headers[i]), idx: i });
+    }
+
+    const headersCSV = ["Driver ID", "Modal", "HUB", ...dateCols.map(c => {
+       const d = parseUniversalDate(c.label);
+       return d ? `${d.split('-')[2]}/${d.split('-')[1]}` : c.label;
+    }), "Total Dias Rodados"];
+
+    const linhasCSV = [];
+    rawData.slice(1).forEach(row => {
+      const rowHub = padronizarHubLocal(row[4]);
+      if (rowHub === hubDownload) {
+        const id = row[0] || "-";
+        const modal = row[1] || "-";
+        let totalRodou = 0;
+        
+        const dias = dateCols.map(col => {
+          const status = row[col.idx] ? String(row[col.idx]).toUpperCase() : 'INDISP';
+          if (status === 'RODOU') totalRodou++;
+          return status; 
+        });
+
+        linhasCSV.push([id, modal, rowHub, ...dias, totalRodou].join(","));
+      }
+    });
+
+    if (linhasCSV.length === 0) return alert("Nenhum dado encontrado para este Hub no mês selecionado.");
+
+    const csvContent = "\uFEFF" + [headersCSV.join(","), ...linhasCSV].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Rodizio_${hubDownload.replace(/\s+/g, '_')}_Mes${targetMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="flex flex-col space-y-4 mt-6">
       
-      {/* PAINEL DE CONTROLE DE FILTROS */}
-      <div className="bg-white dark:bg-[#1f232d] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 p-4 shrink-0">
+      {/* PAINEL DE CONTROLE DE FILTROS E DOWNLOAD */}
+      <div className="bg-white dark:bg-[#1f232d] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 p-4 shrink-0 flex flex-col gap-4">
+        
+        {/* BLOCO DE DOWNLOAD */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 dark:border-gray-800 pb-4">
+          <div className="text-xs font-black text-[#113366] dark:text-slate-400 uppercase flex items-center gap-2">
+             <Filter size={16} className="text-[#EE4D2D]" /> Central de Filtros
+          </div>
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#15171e] p-2 rounded-xl border border-slate-200 dark:border-gray-700 w-full md:w-auto">
+            <select 
+              value={hubDownload} 
+              onChange={(e) => setHubDownload(e.target.value)}
+              className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-slate-200 dark:border-gray-700 outline-none cursor-pointer flex-1 min-w-[200px]"
+            >
+              <option value="">Baixar Base Station (Mês)...</option>
+              {hubsDisponiveis.map(h => <option key={`dl-${h}`} value={h}>{h}</option>)}
+            </select>
+            <button 
+              onClick={exportarHubCSV}
+              className="flex items-center gap-1.5 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2.5 rounded-lg text-xs font-black uppercase transition-all shadow-sm shrink-0"
+            >
+              <Download size={14}/> Baixar CSV
+            </button>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           
           {/* BUSCA POR ID */}

@@ -13,6 +13,7 @@ import FleetHealthCharts from './charts/FleetHealthCharts';
 import PackagesAndReallocation from './charts/PackagesAndReallocation'; 
 import RotationTable from './charts/RotationTable';
 import TimeAnalysisCharts from './charts/TimeAnalysisCharts';
+import AtPisoClusterTable from './charts/AtPisoClusterTable';
 
 const Visualizations = ({ 
   activeCategory, 
@@ -24,13 +25,14 @@ const Visualizations = ({
   firstTripsData, 
   historicoFrotaData,
   ofertasModalData,
-  filtrosGlobais 
+  filtrosGlobais,
+  atPisoClusterData
 }) => {
 
   return (
     <div className="space-y-6">
       
-      {/* 1. RESUMO (Apenas o Overview) */}
+      {/* RESUMO (Apenas o Overview) */}
       {activeCategory === 'resumo' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <OverviewTable 
@@ -43,7 +45,7 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 2. ONE PAGE (OnePage Unificado + Tabela de Piso) */}
+      {/* ONE PAGE (OnePage Unificado + Tabela de Piso) */}
       {activeCategory === 'onePage' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <OnePageSPI 
@@ -62,7 +64,7 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 3. GESTÃO DE FROTA */}
+      {/* GESTÃO DE FROTA */}
       {activeCategory === 'frota' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <FleetGapCharts baseData={baseData} filtrosGlobais={filtrosGlobais} />
@@ -71,7 +73,7 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 3.1. SAÚDE DE FROTA */}
+      {/* SAÚDE DE FROTA */}
 {activeCategory === 'saude' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <FleetHealthCharts 
@@ -83,14 +85,21 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 4. VOLUMES & SPR */}
+      {/* VOLUMES & SPR */}
       {activeCategory === 'volumes' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <VolumeDispatchCharts data={data} />
         </div>
       )}
 
-      {/* 5. GARGALOS & CAP */}
+      {/* ESTUDOS DE CLUSTERS */}
+      {activeCategory === 'estudosCluster' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />
+        </div>
+      )}
+
+      {/* GARGALOS & CAP */}
       {activeCategory === 'gargalos' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <CapFleetCharts data={data} />
@@ -98,7 +107,7 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 6. PACOTES E REALOCAÇÃO (🔥 AGORA RENDEREZIANDO O COMPONENTE DE VERDADE) */}
+      {/* PACOTES E REALOCAÇÃO */}
       {activeCategory === 'pacotes' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <PackagesAndReallocation 
@@ -114,14 +123,14 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* 7. TEMPO DE EXPEDIÇÃO */}
+      {/* TEMPO DE EXPEDIÇÃO */}
       {activeCategory === 'tempo' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <TimeAnalysisCharts data={data} />
         </div>
       )}
 
-      {/* 8. LOGBOOK DE OCORRÊNCIAS (Aba Exclusiva) */}
+      {/* LOGBOOK DE OCORRÊNCIAS (Aba Exclusiva) */}
       {activeCategory === 'ocorrencias' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <AttentionPointsFeed rawData={rawData} filtrosGlobais={filtrosGlobais} />

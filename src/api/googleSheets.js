@@ -717,7 +717,7 @@ export const buscarPermissoesUsuario = async (email, token) => {
 
 
 // =================================================================
-// GET DELIVERY SUCCESS DATA (CACHE EM MEMÓRIA RAM - IGNORA LIMITE DE 5MB)
+// GET DELIVERY SUCCESS DATA 
 // =================================================================
 let dsMemoryCache = null;
 let dsMemoryCacheTime = null;
@@ -762,6 +762,46 @@ export const getDeliverySuccessData = async () => {
     return result;
   } catch (error) {
     console.error("Erro ao buscar dados de DS:", error);
+    return [];
+  }
+};
+
+
+
+// =================================================================
+// GET DADOS AT PISO POR CLUSTER
+// =================================================================
+let atPisoClusterMemoryCache = null;
+
+export const getAtPisoClusterData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    // Se já foi baixado nesta sessão, retorna instantaneamente da memória RAM
+    if (atPisoClusterMemoryCache) return atPisoClusterMemoryCache;
+
+    const idSpreadsheet = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${idSpreadsheet}/values/AT_PISO_CLUSTER!A:F`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+    const data = await response.json();
+    
+    const result = data.values || [];
+    if (result.length > 0) {
+      atPisoClusterMemoryCache = result;
+    }
+    return result;
+  } catch (error) {
+    console.error("Erro ao buscar dados de AT Piso Cluster:", error);
     return [];
   }
 };

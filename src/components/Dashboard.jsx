@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData } from '../api/googleSheets';
+import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
-import { CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning } from 'lucide-react';
+import { Layers, CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning } from 'lucide-react';
 
 // 🔥 IMPORTAÇÃO DA CATRACA DE REGIONAL
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [firstTripsData, setFirstTripsData] = useState([]);
   const [historicoFrotaData, setHistoricoFrotaData] = useState([]);
   const [ofertasModalData, setOfertasModalData] = useState([]);
+  const [atPisoClusterData, setAtPisoClusterData] = useState([]);
  
   // ESTADOS DE FILTROS GLOBAIS
   const [filtros, setFiltros] = useState({
@@ -87,50 +88,56 @@ export default function Dashboard() {
     };
   }, [loading]); // Executa após sumir o loading e o menu renderizar de fato
 
-  useEffect(() => {
-    const carregarDados = async () => {
-      setLoading(true);
-      try {
-        const [dataConsol, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota] = await Promise.all([
-          getConsolidadoData(),
-          getBaseReferenceData(),
-          getDadosAtPiso(),
-          getFirstTripsData(),
-          getHistoricoFrotaData()
-        ]);
-       
-        const regEscolhida = localStorage.getItem("selectedRegional");
-        const hubsPermitidos = getHubsPermitidos(regEscolhida);
+useEffect(() => {
+  const carregarDados = async () => {
+    setLoading(true);
+    try {
+      const [dataConsol, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataCluster] = await Promise.all([
+        getConsolidadoData(),
+        getBaseReferenceData(),
+        getDadosAtPiso(),
+        getFirstTripsData(),
+        getHistoricoFrotaData(),
+        getAtPisoClusterData() 
+      ]);
+     
+      const regEscolhida = localStorage.getItem("selectedRegional");
+      const hubsPermitidos = getHubsPermitidos(regEscolhida);
 
-        if (dataConsol && dataConsol.length > 1) {
-          setRawData(dataConsol.slice(1).filter(r => hubsPermitidos.includes(String(r[4]).trim())));
-        }
-       
-        if (dataBase && dataBase.length > 1) {
-          setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
-        }
-       
-        if (dataPiso && dataPiso.length > 1) {
-          setAtPisoData(dataPiso);
-        }
-
-        if (dataFirstTrips && dataFirstTrips.length > 1) {
-          setFirstTripsData([dataFirstTrips[0], ...dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))]);
-        }
-
-        if (dataHistoricoFrota && dataHistoricoFrota.length > 1) {
-          setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
-        }
-       
-      } catch (error) {
-        console.error("Erro ao carregar Dashboard", error);
-      } finally {
-        setLoading(false);
+      if (dataConsol && dataConsol.length > 1) {
+        setRawData(dataConsol.slice(1).filter(r => hubsPermitidos.includes(String(r[4]).trim())));
       }
-    };
-   
-    carregarDados();
-  }, []);
+     
+      if (dataBase && dataBase.length > 1) {
+        setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
+      }
+     
+      if (dataPiso && dataPiso.length > 1) {
+        setAtPisoData(dataPiso);
+      }
+
+      if (dataFirstTrips && dataFirstTrips.length > 1) {
+        setFirstTripsData([dataFirstTrips[0], ...dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))]);
+      }
+
+      if (dataHistoricoFrota && dataHistoricoFrota.length > 1) {
+        setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
+      }
+
+      // 🔥 CATRACA DE SEGURANÇA: Filtra os dados de Cluster na origem por Hub autorizado (Coluna D = Índice 3)
+      if (dataCluster && dataCluster.length > 1) {
+        setAtPisoClusterData([dataCluster[0], ...dataCluster.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
+      }
+     
+    } catch (error) {
+      console.error("Erro ao carregar Dashboard", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  carregarDados();
+}, []);
 
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
@@ -150,6 +157,7 @@ export default function Dashboard() {
     { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
     { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },
     { id: 'tempo', label: 'Tempo de Expedição', icon: <Clock size={16}/> },
+    { id: 'estudosCluster', label: 'Estudos de Cluster', icon: <Layers size={16}/> },
     { id: 'rodizio', label: 'Rodízio', icon: <CalendarDays size={16}/> },
     { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> },
   ];
@@ -412,6 +420,7 @@ export default function Dashboard() {
           rawData={rawData}
           dashData={dashData}
           atPisoData={atPisoData}
+          atPisoClusterData={atPisoClusterData}
           baseData={baseData}
           firstTripsData={firstTripsData}
           historicoFrotaData={historicoFrotaData}

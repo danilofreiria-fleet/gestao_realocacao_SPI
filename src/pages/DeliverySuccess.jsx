@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { getDeliverySuccessData } from '../api/googleSheets';
-import { getHubsPermitidos } from '../constants/regionais';
-import { Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check } from 'lucide-react';
+import { getHubsPermitidos, MAPA_REGIONAL_COMPLETO } from '../constants/regionais'; // 🔥 IMPORTAMOS O MAPA AQUI
+import { Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter } from 'lucide-react';
 
 export default function DeliverySuccess() {
   const [loading, setLoading] = useState(true);
@@ -10,19 +10,31 @@ export default function DeliverySuccess() {
   const [searchTerm, setSearchTerm] = useState('');
   const [hubDownload, setHubDownload] = useState('');
 
+  // Estados dos Filtros (Subregional e Hub)
+  const [selectedRegs, setSelectedRegs] = useState([]);
+  const [dropdownRegOpen, setDropdownRegOpen] = useState(false);
+  const [regSearchTerm, setRegSearchTerm] = useState('');
+
   const [selectedHubs, setSelectedHubs] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [hubSearchTerm, setHubSearchTerm] = useState('');
   
+  const dropdownRegRef = useRef(null);
   const dropdownRef = useRef(null);
+  
   const currentRegional = localStorage.getItem("selectedRegional");
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
+  // Fecha os dropdowns ao clicar fora
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
         setHubSearchTerm(''); 
+      }
+      if (dropdownRegRef.current && !dropdownRegRef.current.contains(event.target)) {
+        setDropdownRegOpen(false);
+        setRegSearchTerm(''); 
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -64,35 +76,50 @@ export default function DeliverySuccess() {
     );
   };
 
+  const toggleRegSelection = (reg) => {
+    setSelectedRegs(prev => prev.includes(reg) ? prev.filter(r => r !== reg) : [...prev, reg]);
+    setSelectedHubs([]); 
+  };
+
   const toggleHubSelection = (hub) => {
     setSelectedHubs(prev => prev.includes(hub) ? prev.filter(h => h !== hub) : [...prev, hub]);
   };
 
   // =========================================================
-  // 1. EXTRAIR HUBS ÚNICOS (LEITURA ULTRA RÁPIDA)
+  // 1. EXTRAIR HUBS E SUBREGIONAIS (USANDO O SEU MAPA OFICIAL)
   // =========================================================
-  const listHubs = useMemo(() => {
-    if (rawData.length < 2) return [];
+  const { listRegs, listHubs } = useMemo(() => {
+    if (rawData.length < 2) return { listRegs: [], listHubs: [] };
     const hubsPermitidos = new Set(getHubsPermitidos(currentRegional));
+    const setR = new Set();
     const setH = new Set();
     const len = rawData.length;
     
     for (let i = 1; i < len; i++) {
       const hub = String(rawData[i][3] || "").trim();
-      if (hub && hubsPermitidos.has(hub)) setH.add(hub);
+      
+      if (hub && hubsPermitidos.has(hub)) {
+        // 🔥 MAGIA AQUI: Pega a subregional direto do seu arquivo hubsSPI/hubsSPM
+        const subRegional = MAPA_REGIONAL_COMPLETO[hub]; 
+        
+        if (subRegional) setR.add(subRegional);
+        
+        if (selectedRegs.length === 0 || selectedRegs.includes(subRegional)) {
+          setH.add(hub);
+        }
+      }
     }
-    return Array.from(setH).sort();
-  }, [rawData, currentRegional]);
-
-  const handleSelectAllHubs = () => setSelectedHubs([...listHubs]);
-  const handleClearHubs = () => setSelectedHubs([]);
+    return { 
+      listRegs: Array.from(setR).sort(), 
+      listHubs: Array.from(setH).sort() 
+    };
+  }, [rawData, currentRegional, selectedRegs]);
 
   // =========================================================
   // 2. MOTOR DE PROCESSAMENTO (SÓ RODA SE TIVER FILTRO)
   // =========================================================
   const processed = useMemo(() => {
-    // 🔥 FILTER-FIRST: Se não tiver busca nem Hub, nem perde tempo calculando matriz!
-    if (rawData.length < 2 || (selectedHubs.length === 0 && !deferredSearchTerm)) {
+    if (rawData.length < 2 || (selectedRegs.length === 0 && selectedHubs.length === 0 && !deferredSearchTerm)) {
         return { colSemanas: [], hubsData: [], listaHubsUnicos: [] };
     }
 
@@ -101,6 +128,7 @@ export default function DeliverySuccess() {
     const weeksCount = colSemanas.length;
     const aggs = {};
     
+    const selectedRegsSet = new Set(selectedRegs);
     const selectedHubsSet = new Set(selectedHubs);
     const hubsPermitidos = new Set(getHubsPermitidos(currentRegional));
     const termLower = deferredSearchTerm.toLowerCase().trim();
@@ -119,8 +147,12 @@ export default function DeliverySuccess() {
       const row = rawData[i];
       const hub = String(row[3] || "").trim();
       
-      // Validações Rápidas
       if (!hub || !hubsPermitidos.has(hub)) continue;
+
+      // 🔥 Valida a Subregional cruzando com o MAPA
+      const subRegional = MAPA_REGIONAL_COMPLETO[hub];
+      if (selectedRegsSet.size > 0 && !selectedRegsSet.has(subRegional)) continue;
+      
       if (selectedHubsSet.size > 0 && !selectedHubsSet.has(hub)) continue;
 
       const driverId = String(row[0] || "").trim();
@@ -128,9 +160,7 @@ export default function DeliverySuccess() {
       if (termLower && !driverId.toLowerCase().includes(termLower)) continue;
 
       const veiculo = String(row[1] || "").trim() || "NÃO INFORMADO";
-      const regional = String(row[2] || "").trim();
 
-      // Agregação
       let hubAgg = aggs[hub];
       if (!hubAgg) {
         hubAgg = { name: hub, semanasSoma: {}, semanasContador: {}, driversMap: {} };
@@ -144,7 +174,8 @@ export default function DeliverySuccess() {
 
       let driverAgg = hubAgg.driversMap[driverId];
       if (!driverAgg) {
-        driverAgg = { id: driverId, veiculo, regional, notasPorSemana: {} };
+        // Agora armazenamos a Subregional no nível do motorista, fica mais bonito na exportação!
+        driverAgg = { id: driverId, veiculo, regional: subRegional || "S/ MAPA", notasPorSemana: {} };
         for (let w = 0; w < weeksCount; w++) {
           driverAgg.notasPorSemana[colSemanas[w].original] = { soma: 0, qtd: 0 };
         }
@@ -186,7 +217,7 @@ export default function DeliverySuccess() {
     }).sort((a, b) => a.name.localeCompare(b.name));
 
     return { colSemanas, hubsData, listaHubsUnicos: hubsData.map(h => h.name) };
-  }, [rawData, currentRegional, selectedHubs, deferredSearchTerm]);
+  }, [rawData, currentRegional, selectedRegs, selectedHubs, deferredSearchTerm]);
 
   const metrics = useMemo(() => {
     if (!processed.hubsData || processed.hubsData.length === 0) {
@@ -215,6 +246,22 @@ export default function DeliverySuccess() {
     };
   }, [processed]);
 
+  const allPermittedHubs = useMemo(() => {
+    if (rawData.length < 2) return [];
+    const hPermitidos = new Set(getHubsPermitidos(currentRegional));
+    const sH = new Set();
+    for (let i = 1; i < rawData.length; i++) {
+        const h = String(rawData[i][3] || "").trim();
+        if (h && hPermitidos.has(h)) sH.add(h);
+    }
+    return Array.from(sH).sort();
+  }, [rawData, currentRegional]);
+
+  const handleSelectAllRegs = () => { setSelectedRegs([...listRegs]); setSelectedHubs([]); };
+  const handleClearRegs = () => { setSelectedRegs([]); setSelectedHubs([]); };
+  const handleSelectAllHubs = () => setSelectedHubs([...listHubs]);
+  const handleClearHubs = () => setSelectedHubs([]);
+
   const toggleHub = (hubName) => setExpandedHubs(prev => ({ ...prev, [hubName]: !prev[hubName] }));
 
   const exportarHubCSV = () => {
@@ -238,7 +285,8 @@ export default function DeliverySuccess() {
             const driverId = String(row[0] || "").trim();
             if (!driverId) return;
             if (!driversToExport[driverId]) {
-                driversToExport[driverId] = { id: driverId, veiculo: String(row[1]||"").trim(), regional: String(row[2]||"").trim(), notasSoma: {}, notasQtd: {} };
+                const subRegBase = MAPA_REGIONAL_COMPLETO[hubDownload] || String(row[2]||"").trim();
+                driversToExport[driverId] = { id: driverId, veiculo: String(row[1]||"").trim(), regional: subRegBase, notasSoma: {}, notasQtd: {} };
                 headers.slice(4).forEach(h => { driversToExport[driverId].notasSoma[h] = 0; driversToExport[driverId].notasQtd[h] = 0; });
             }
             headers.slice(4).forEach((h, idx) => {
@@ -253,7 +301,7 @@ export default function DeliverySuccess() {
 
     if (Object.keys(driversToExport).length === 0) return alert("Nenhum dado encontrado para este Hub.");
 
-    const headersCSV = ["Driver ID", "Veículo", "Regional", "HUB", ...colSemanas];
+    const headersCSV = ["Driver ID", "Veículo", "Subregional", "HUB", ...colSemanas];
     const linhasCSV = Object.values(driversToExport).map(d => {
       const notas = headers.slice(4).map(h => d.notasQtd[h] > 0 ? `${Number((d.notasSoma[h] / d.notasQtd[h]).toFixed(2))}%` : "-");
       return [d.id, d.veiculo, d.regional, hubDownload, ...notas].join(",");
@@ -272,8 +320,10 @@ export default function DeliverySuccess() {
 
   if (loading) return <div className="p-10 text-center animate-pulse font-black text-[#113366] text-xl tracking-widest mt-20">CONSOLIDANDO DADOS DE DS...</div>;
 
+  const filteredRegsOptions = listRegs.filter(reg => reg.toLowerCase().includes(regSearchTerm.toLowerCase()));
   const filteredHubsOptions = listHubs.filter(hub => hub.toLowerCase().includes(hubSearchTerm.toLowerCase()));
-  const showsEmptyState = selectedHubs.length === 0 && !searchTerm;
+  
+  const showsEmptyState = selectedRegs.length === 0 && selectedHubs.length === 0 && !searchTerm;
 
   return (
     <div className="flex flex-col h-full gap-6">
@@ -296,7 +346,7 @@ export default function DeliverySuccess() {
               className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-slate-200 dark:border-gray-700 outline-none cursor-pointer flex-1 max-w-[200px]"
             >
               <option value="">Baixar Base Station...</option>
-              {listHubs.map(h => <option key={`dl-${h}`} value={h}>{h}</option>)}
+              {allPermittedHubs.map(h => <option key={`dl-${h}`} value={h}>{h}</option>)}
             </select>
             <button 
               onClick={exportarHubCSV}
@@ -307,11 +357,87 @@ export default function DeliverySuccess() {
           </div>
         </div>
 
-        {/* FILTROS */}
+        {/* FILTROS AVANÇADOS */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-6 flex flex-col gap-2 relative" ref={dropdownRef}>
+            
+            {/* DROPDOWN SUBREGIONAL */}
+            <div className="md:col-span-4 flex flex-col gap-2 relative" ref={dropdownRegRef}>
                 <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
-                    <MapPin size={12}/> 1. Escolha seu HUB (Selecione um ou mais)
+                    <Filter size={12}/> 1. Subregional
+                </label>
+                
+                <div 
+                  onClick={() => setDropdownRegOpen(!dropdownRegOpen)}
+                  className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold flex justify-between items-center cursor-pointer hover:border-slate-300 dark:hover:border-gray-600 transition-all select-none"
+                >
+                  <span className="truncate pr-4 text-slate-700 dark:text-gray-200">
+                    {selectedRegs.length === 0 
+                      ? "Todas as Subregionais" 
+                      : `${selectedRegs.length} reg(s): ${selectedRegs.join(', ')}`}
+                  </span>
+                  <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownRegOpen ? 'rotate-180' : ''}`} />
+                </div>
+
+                {dropdownRegOpen && (
+                  <div className="absolute top-[100%] left-0 w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-xl mt-1 shadow-xl z-50 max-h-64 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5">
+                    <div className="p-1 sticky top-0 bg-white dark:bg-[#1f232d] z-10 flex flex-col gap-1 border-b border-slate-100 dark:border-gray-800">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                        <input
+                          type="text"
+                          placeholder="Buscar subregional..."
+                          value={regSearchTerm}
+                          onChange={(e) => setRegSearchTerm(e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white text-xs font-bold pl-8 pr-2.5 py-2 rounded-lg border border-slate-200 dark:border-gray-700 outline-none focus:border-[#EE4D2D] transition-all"
+                        />
+                      </div>
+                      <div className="flex justify-between items-center px-1 py-1">
+                        <button 
+                          type="button" 
+                          onClick={handleSelectAllRegs} 
+                          className="text-[10px] font-black uppercase text-[#113366] dark:text-blue-400 hover:opacity-70 transition-colors"
+                        >
+                          Selecionar Todas
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={handleClearRegs} 
+                          className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors"
+                        >
+                          Limpar Filtro
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {filteredRegsOptions.length === 0 ? (
+                      <div className="text-center p-4 text-xs font-bold text-slate-400">Nenhuma subregional.</div>
+                    ) : (
+                      filteredRegsOptions.map(reg => {
+                        const isChecked = selectedRegs.includes(reg);
+                        return (
+                          <div
+                            key={`filter-reg-${reg}`}
+                            onClick={() => toggleRegSelection(reg)}
+                            className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                              isChecked 
+                                ? 'bg-blue-50 dark:bg-blue-900/20 text-[#113366] dark:text-blue-400' 
+                                : 'text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800'
+                            }`}
+                          >
+                            <span className="truncate">{reg}</span>
+                            {isChecked && <Check size={14} className="text-[#113366] dark:text-blue-400 shrink-0" />}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+            </div>
+
+            {/* DROPDOWN HUB */}
+            <div className="md:col-span-4 flex flex-col gap-2 relative" ref={dropdownRef}>
+                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+                    <MapPin size={12}/> 2. Station (HUB)
                 </label>
                 
                 <div 
@@ -320,8 +446,8 @@ export default function DeliverySuccess() {
                 >
                   <span className="truncate pr-4 text-slate-700 dark:text-gray-200">
                     {selectedHubs.length === 0 
-                      ? "Nenhum HUB selecionado" 
-                      : `${selectedHubs.length} HUB(s) selecionado(s): ${selectedHubs.join(', ')}`}
+                      ? "Todos os HUBs" 
+                      : `${selectedHubs.length} HUB(s): ${selectedHubs.join(', ')}`}
                   </span>
                   <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
                 </div>
@@ -333,7 +459,7 @@ export default function DeliverySuccess() {
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                         <input
                           type="text"
-                          placeholder="Digitar nome do hub..."
+                          placeholder="Buscar hub..."
                           value={hubSearchTerm}
                           onChange={(e) => setHubSearchTerm(e.target.value)}
                           className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white text-xs font-bold pl-8 pr-2.5 py-2 rounded-lg border border-slate-200 dark:border-gray-700 outline-none focus:border-[#EE4D2D] transition-all"
@@ -382,7 +508,8 @@ export default function DeliverySuccess() {
                 )}
             </div>
 
-            <div className="md:col-span-6 flex flex-col gap-2">
+            {/* BUSCA DRIVER ID */}
+            <div className="md:col-span-4 flex flex-col gap-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
                     <Search size={12}/> Ou busque direto
                 </label>
@@ -443,7 +570,7 @@ export default function DeliverySuccess() {
                     <AlertCircle size={48} className="text-[#EE4D2D] mb-4" />
                     <h3 className="text-xl font-black text-[#113366] dark:text-white uppercase mb-2">Aguardando Filtro</h3>
                     <p className="text-sm font-bold text-slate-500 dark:text-gray-400 leading-relaxed">
-                        A matriz completa de DS possui milhares de dados. Selecione as Stations no painel acima ou digite o ID do condutor para visualizar as métricas.
+                        A matriz completa de DS possui milhares de dados. Selecione uma Subregional, Station ou digite o ID do condutor para visualizar as métricas.
                     </p>
                 </div>
             </div>
@@ -462,7 +589,7 @@ export default function DeliverySuccess() {
 
                 <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-black text-sm relative z-0">
                 {processed.hubsData.length === 0 ? (
-                    <tr><td colSpan={processed.colSemanas.length + 2} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado para as Stations selecionadas.</td></tr>
+                    <tr><td colSpan={processed.colSemanas.length + 2} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado para os filtros selecionados.</td></tr>
                 ) : (
                     processed.hubsData.map(hub => {
                     const isOpen = !!expandedHubs[hub.name];
