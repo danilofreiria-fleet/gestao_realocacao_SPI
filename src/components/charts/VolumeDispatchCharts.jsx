@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine } from 'recharts';
+import { ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine } from 'recharts';
 import { Truck, Maximize2, Minimize2, X, Calendar, CalendarDays } from 'lucide-react';
 
 const NAMES_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -50,9 +50,9 @@ export default function VolumeDispatchCharts({ data }) {
       const dateObj = parseUniversalDate(row[3]); 
       const weekStr = row[2] || '';             
       
-      const volPlanned = parseNum(row[12]);     
-      const volProcessed = parseNum(row[13]);   
-      const volExpedited = parseNum(row[14]);   
+      const volPlanned = parseNum(row[12]);    
+      const volProcessed = parseNum(row[13]);  
+      const volExpedited = parseNum(row[14]);  
       const sprPlanned = parseNum(row[15]);  // SPR Roteirizado (Coluna P)
       const sprDelivering = parseNum(row[16]);  // SPR Expedido (Coluna Q)
 
@@ -151,6 +151,12 @@ export default function VolumeDispatchCharts({ data }) {
 
           const gapSpr = Number((sprAvg - sprPlannedAvg).toFixed(2));
 
+          // 🔥 CÁLCULO DE PROPORÇÃO (%) DOS MODAIS
+          const pctUtil = d.cargTotal > 0 ? Number(((d.cargUtil / d.cargTotal) * 100).toFixed(1)) : 0;
+          const pctPass = d.cargTotal > 0 ? Number(((d.cargPass / d.cargTotal) * 100).toFixed(1)) : 0;
+          const pctMoto = d.cargTotal > 0 ? Number(((d.cargMoto / d.cargTotal) * 100).toFixed(1)) : 0;
+          const pctVan  = d.cargTotal > 0 ? Number(((d.cargVan / d.cargTotal) * 100).toFixed(1)) : 0;
+
           let name = key;
           if (periodType === 'month') {
             const [year, month] = key.split('-');
@@ -196,6 +202,12 @@ export default function VolumeDispatchCharts({ data }) {
 
             cargTotal: d.cargTotal,
             varCargTotalPct: calculateVar(d.cargTotal, prev?.cargTotal),
+
+            // Novos campos para o gráfico de Stack
+            pctUtil,
+            pctPass,
+            pctMoto,
+            pctVan
           };
         });
     };
@@ -218,9 +230,36 @@ export default function VolumeDispatchCharts({ data }) {
     return tickItem.toString();
   };
 
-  const CustomTooltip = ({ active, payload, label, suffix = '', valueName = 'Valor', lineKey, isModal = false, isSprCompare = false, selectedModal = 'ALL' }) => {
+  const CustomTooltip = ({ active, payload, label, suffix = '', valueName = 'Valor', lineKey, isModal = false, isSprCompare = false, isProportion = false, selectedModal = 'ALL' }) => {
     if (active && payload && payload.length) {
       
+      // TOOLTIP DE PROPORÇÃO (%)
+      if (isProportion) {
+        const pUtil = payload.find(p => p.dataKey === 'pctUtil')?.value || 0;
+        const pPass = payload.find(p => p.dataKey === 'pctPass')?.value || 0;
+        const pMoto = payload.find(p => p.dataKey === 'pctMoto')?.value || 0;
+        const pVan = payload.find(p => p.dataKey === 'pctVan')?.value || 0;
+
+        const utilAbs = payload.find(p => p.dataKey === 'pctUtil')?.payload?.cargUtil || 0;
+        const passAbs = payload.find(p => p.dataKey === 'pctPass')?.payload?.cargPass || 0;
+        const motoAbs = payload.find(p => p.dataKey === 'pctMoto')?.payload?.cargMoto || 0;
+        const vanAbs = payload.find(p => p.dataKey === 'pctVan')?.payload?.cargVan || 0;
+        const totalAbs = payload.find(p => p.dataKey === 'pctUtil')?.payload?.cargTotal || 0;
+
+        return (
+          <div className="bg-white dark:bg-[#1f232d] p-3 rounded-lg shadow-xl border border-[#113366]">
+            <p className="font-black text-[#113366] dark:text-[#EE4D2D] border-b border-slate-200 pb-2 mb-2">{label}</p>
+            <p className="font-black text-slate-500 dark:text-white mb-2 text-xs uppercase tracking-wider">Total Expedido: {totalAbs.toLocaleString('pt-BR')} rotas</p>
+            <div className="text-sm font-bold space-y-1">
+              <p style={{ color: '#113366' }}>Utilitário: {pUtil}% <span className="text-[10px] text-slate-400">({utilAbs.toLocaleString('pt-BR')})</span></p>
+              <p style={{ color: '#EE4D2D' }}>Passeio: {pPass}% <span className="text-[10px] text-slate-400">({passAbs.toLocaleString('pt-BR')})</span></p>
+              <p style={{ color: '#D0011B' }}>Moto: {pMoto}% <span className="text-[10px] text-slate-400">({motoAbs.toLocaleString('pt-BR')})</span></p>
+              {pVan > 0 && <p style={{ color: '#F59E0B' }}>Van: {pVan}% <span className="text-[10px] text-slate-400">({vanAbs.toLocaleString('pt-BR')})</span></p>}
+            </div>
+          </div>
+        );
+      }
+
       if (isSprCompare) {
         const rot = payload.find(p => p.dataKey === 'sprPlannedAvg')?.value || 0;
         const exp = payload.find(p => p.dataKey === 'sprDeliveringAvg')?.value || 0;
@@ -373,7 +412,7 @@ export default function VolumeDispatchCharts({ data }) {
           {(selectedModal === 'ALL' || selectedModal === 'UTIL') && <Bar yAxisId="left" dataKey="cargUtil" name="Utilitário" fill="#113366" radius={[4, 4, 0, 0]} maxBarSize={40} />}
           {(selectedModal === 'ALL' || selectedModal === 'PASS') && <Bar yAxisId="left" dataKey="cargPass" name="Passeio" fill="#EE4D2D" radius={[4, 4, 0, 0]} maxBarSize={40} />}
           {(selectedModal === 'ALL' || selectedModal === 'MOTO') && <Bar yAxisId="left" dataKey="cargMoto" name="Moto" fill="#D0011B" radius={[4, 4, 0, 0]} maxBarSize={40} />}
-          {(selectedModal === 'ALL' || selectedModal === 'VAN') && <Bar yAxisId="left" dataKey="cargVan" name="Van" fill="#113366" fillOpacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={40} />}
+          {(selectedModal === 'ALL' || selectedModal === 'VAN') && <Bar yAxisId="left" dataKey="cargVan" name="Van" fill="#F59E0B" fillOpacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={40} />}
 
           <Line yAxisId="right" type="monotone" dataKey={lineKey} name={lineName} stroke="#D0011B" strokeWidth={3} dot={{ r: 5, strokeWidth: 2, fill: 'white', stroke: '#D0011B' }} activeDot={{ r: 6 }} >
             <LabelList dataKey={lineKey} position="top" formatter={(val) => `${val > 0 ? '+' : ''}${val}%`} style={{ fill: '#D0011B', fontSize: 10, fontWeight: '900', textShadow: '1px 1px 2px rgba(255,255,255,0.8)' }} />
@@ -383,10 +422,38 @@ export default function VolumeDispatchCharts({ data }) {
     );
   };
 
+  // 🔥 NOVO GRÁFICO: PROPORÇÃO DE MODAIS (100% STACKED BAR)
+  const ProportionModalChart = ({ data }) => (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 30, right: 20, left: -10, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 'bold', fill: '#113366' }} angle={-45} textAnchor="end" interval={0} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#113366' }} tickFormatter={(val) => `${val}%`} domain={[0, 100]} />
+        
+        <Tooltip content={<CustomTooltip isProportion={true} />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+        <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', color: '#113366' }} />
+
+        {/* StackId "a" empilha as barras. Usamos as variáveis pct já calculadas */}
+        <Bar dataKey="pctUtil" name="Utilitário" stackId="a" fill="#113366" maxBarSize={60}>
+          <LabelList dataKey="pctUtil" position="center" formatter={(val) => val > 5 ? `${val}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: '900' }} />
+        </Bar>
+        <Bar dataKey="pctPass" name="Passeio" stackId="a" fill="#EE4D2D" maxBarSize={60}>
+          <LabelList dataKey="pctPass" position="center" formatter={(val) => val > 5 ? `${val}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: '900' }} />
+        </Bar>
+        <Bar dataKey="pctMoto" name="Moto" stackId="a" fill="#D0011B" maxBarSize={60}>
+          <LabelList dataKey="pctMoto" position="center" formatter={(val) => val > 5 ? `${val}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: '900' }} />
+        </Bar>
+        <Bar dataKey="pctVan" name="Van" stackId="a" fill="#F59E0B" maxBarSize={60}>
+          <LabelList dataKey="pctVan" position="center" formatter={(val) => val > 5 ? `${val}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: '900' }} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+
   // ========================================================
   // CARD INTELIGENTE (COM TOGGLE DIA/SEMANA/MÊS E MODAL)
   // ========================================================
-  const ToggleableChartCard = ({ id, titleBase, valueName, barKeyBase, varKeyBase, barColor, isAverage = false, isModal = false, isSprCompare = false, colSpan = "col-span-1" }) => {
+  const ToggleableChartCard = ({ id, titleBase, valueName, barKeyBase, varKeyBase, barColor, isAverage = false, isModal = false, isSprCompare = false, isProportion = false, colSpan = "col-span-1" }) => {
     const [timeframe, setTimeframe] = useState('week'); 
     const [selectedModal, setSelectedModal] = useState('ALL'); 
     
@@ -409,7 +476,7 @@ export default function VolumeDispatchCharts({ data }) {
           </h3>
           
           <div className="flex items-center gap-3">
-            {isModal && (
+            {isModal && !isProportion && (
               <select 
                 value={selectedModal} 
                 onChange={(e) => setSelectedModal(e.target.value)}
@@ -423,7 +490,6 @@ export default function VolumeDispatchCharts({ data }) {
               </select>
             )}
 
-            {/* 🔥 NOVO: Botão de DIA incluso no Toggle de tempo */}
             <div className="flex items-center bg-slate-100 dark:bg-gray-800 p-1 rounded-lg">
               <button onClick={() => setTimeframe('day')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeframe === 'day' ? 'bg-[#113366] shadow text-white' : 'text-[#113366] opacity-50 hover:opacity-100'}`}><CalendarDays size={14}/> Dia</button>
               <button onClick={() => setTimeframe('week')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeframe === 'week' ? 'bg-[#113366] shadow text-white' : 'text-[#113366] opacity-50 hover:opacity-100'}`}><CalendarDays size={14}/> Sem</button>
@@ -438,7 +504,9 @@ export default function VolumeDispatchCharts({ data }) {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar print:overflow-hidden">
           <div className="w-full h-full min-h-[350px]">
-            {isSprCompare ? (
+            {isProportion ? (
+              <ProportionModalChart data={chartData} />
+            ) : isSprCompare ? (
               <SprCompareChart data={chartData} />
             ) : isModal ? (
               <ModalBarLineVariationChart 
@@ -497,7 +565,11 @@ export default function VolumeDispatchCharts({ data }) {
         
         <ToggleableChartCard id="sprCompare" titleBase="COMPARAÇÃO DE SPR (ROTEIRIZADO VS EXPEDIDO)" isSprCompare={true} colSpan="xl:col-span-2" />
         
+        {/* GRÁFICO ABSOLUTO DE MODAIS */}
         <ToggleableChartCard id="modais" titleBase="ROTAS CARREGADAS [POR MODAL]" isModal={true} colSpan="xl:col-span-2" />
+        
+        {/* 🔥 NOVO GRÁFICO DE PROPORÇÃO DE MODAIS */}
+        <ToggleableChartCard id="modaisProportion" titleBase="PROPORÇÃO DE MODAIS EXPEDIDOS (%)" isProportion={true} colSpan="xl:col-span-2" />
       </div>
     </div>
   );
