@@ -102,26 +102,26 @@ export default function ReportsProntos() {
     const sprProcessado = totalRotasCarregadas > 0 ? Math.round(volProc / totalRotasCarregadas) : 0;
     const sprExpedido = totalRotasCarregadas > 0 ? Math.round(pacotesExpedidos / totalRotasCarregadas) : 0;
 
-    return `📊 *Report SPR*
-📍 *${r[4]}*
-📅 *Data:* ${r[3]}
-🌤 *Ciclo:* ${r[5]}
+    return `📊 Report SPR
+📍 ${r[4]}
+📅 Data: ${r[3]}
+🌤 Ciclo: ${r[5]}
 \u200B
 \u200B
-🔹 *SPR Referencial:* ${sprReferencial}
-🔹 *SPR Roteirizado:* ${sprRoteirizado} | ${pacotesRoteirizados}
-🔹 *SPR Processado:* ${sprProcessado} | ${volProc}
-🔹 *SPR Expedido:* ${sprExpedido} | ${pacotesExpedidos}
-🔹 *Desvio:* ${desvioPctStr} | ${Math.abs(desvioAbsoluto)} PCTS
+🔹 SPR Referencial: ${sprReferencial}
+🔹 SPR Roteirizado: ${sprRoteirizado} | ${pacotesRoteirizados}
+🔹 SPR Processado: ${sprProcessado} | ${volProc}
+🔹 SPR Expedido: ${sprExpedido} | ${pacotesExpedidos}
+🔹 Desvio: ${desvioPctStr} | ${Math.abs(desvioAbsoluto)} PCTS
 \u200B
 \u200B
 \u200B
-📉 *Desvios (não expedidos):*
+📉 Desvios (não expedidos):
 \u200B
 ${r[42] || 'Sem justificativas'}
 \u200B
 \u200B
-➡ *Pontos de Atenção:*
+➡ Pontos de Atenção:
 \u200B
 ${r[41] || 'Sem pontos de atenção'}
 \u200B

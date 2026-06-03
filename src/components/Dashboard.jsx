@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData } from '../api/googleSheets';
+import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData, getRecusasData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
 import { Layers, CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning } from 'lucide-react';
 
@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [historicoFrotaData, setHistoricoFrotaData] = useState([]);
   const [ofertasModalData, setOfertasModalData] = useState([]);
   const [atPisoClusterData, setAtPisoClusterData] = useState([]);
+  const [recusasData, setRecusasData] = useState([]);
  
   // ESTADOS DE FILTROS GLOBAIS
   const [filtros, setFiltros] = useState({
@@ -88,56 +89,80 @@ export default function Dashboard() {
     };
   }, [loading]); // Executa após sumir o loading e o menu renderizar de fato
 
-useEffect(() => {
-  const carregarDados = async () => {
-    setLoading(true);
-    try {
-      const [dataConsol, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataCluster] = await Promise.all([
-        getConsolidadoData(),
-        getBaseReferenceData(),
-        getDadosAtPiso(),
-        getFirstTripsData(),
-        getHistoricoFrotaData(),
-        getAtPisoClusterData() 
-      ]);
-     
-      const regEscolhida = localStorage.getItem("selectedRegional");
-      const hubsPermitidos = getHubsPermitidos(regEscolhida);
 
-      if (dataConsol && dataConsol.length > 1) {
-        setRawData(dataConsol.slice(1).filter(r => hubsPermitidos.includes(String(r[4]).trim())));
-      }
-     
-      if (dataBase && dataBase.length > 1) {
-        setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
-      }
-     
-      if (dataPiso && dataPiso.length > 1) {
-        setAtPisoData(dataPiso);
-      }
 
-      if (dataFirstTrips && dataFirstTrips.length > 1) {
-        setFirstTripsData([dataFirstTrips[0], ...dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))]);
-      }
+// 🔥 MOTOR DE CARREGAMENTO INTELIGENTE (MULTI-ABA COMPLETO)
+  useEffect(() => {
+    const carregarDados = async () => {
+      setLoading(true);
+      try {
+        const regEscolhida = localStorage.getItem("selectedRegional");
+        const hubsPermitidos = getHubsPermitidos(regEscolhida);
 
-      if (dataHistoricoFrota && dataHistoricoFrota.length > 1) {
-        setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
-      }
+        // 1. CARREGA AS BASES PRINCIPAIS PRIMEIRO
+        const [dataConsol, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataCluster] = await Promise.all([
+          getConsolidadoData(),
+          getBaseReferenceData(),
+          getDadosAtPiso(),
+          getFirstTripsData(),
+          getHistoricoFrotaData(),
+          getAtPisoClusterData()
+        ]);
 
-      // 🔥 CATRACA DE SEGURANÇA: Filtra os dados de Cluster na origem por Hub autorizado (Coluna D = Índice 3)
-      if (dataCluster && dataCluster.length > 1) {
-        setAtPisoClusterData([dataCluster[0], ...dataCluster.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
+        let dadosConsolBrutos = [];
+        if (dataConsol && dataConsol.length > 1) {
+          dadosConsolBrutos = dataConsol.slice(1).filter(r => hubsPermitidos.includes(String(r[4]).trim()));
+          setRawData(dadosConsolBrutos);
+        }
+        
+        if (dataBase && dataBase.length > 1) setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
+        if (dataPiso && dataPiso.length > 1) setAtPisoData(dataPiso);
+        if (dataFirstTrips && dataFirstTrips.length > 1) setFirstTripsData([dataFirstTrips[0], ...dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))]);
+        if (dataHistoricoFrota && dataHistoricoFrota.length > 1) setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
+        if (dataCluster && dataCluster.length > 1) setAtPisoClusterData([dataCluster[0], ...dataCluster.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
+
+        // 🔥 2. MAPEAR O PANORAMA GLOBAL: Descobre todos os meses que já foram operados no ano inteiro
+        const mesesParaBuscar = new Set();
+        
+        dadosConsolBrutos.forEach(row => {
+          const dObj = parseDate(row[3]); // Coluna D: Data
+          if (dObj && !isNaN(dObj)) {
+             mesesParaBuscar.add(`${String(dObj.getMonth() + 1).padStart(2, '0')}-${dObj.getFullYear()}`);
+          }
+        });
+
+        // Prevenção: Se a base estiver totalmente vazia (ex: virada de ano), garante pelo menos a busca do mês atual
+        if (mesesParaBuscar.size === 0) {
+           mesesParaBuscar.add(`${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`);
+        }
+
+        // 🔥 3. BUSCA PARALELA HISTÓRICA: Baixa todas as abas de recusa de uma vez só!
+        const promessasRecusas = Array.from(mesesParaBuscar).map(mStr => {
+           const [m, y] = mStr.split('-');
+           return getRecusasData(parseInt(m, 10), parseInt(y, 10));
+        });
+
+        const resultadosRecusas = await Promise.all(promessasRecusas);
+        let bancoRecusasUnificado = [];
+        
+        resultadosRecusas.forEach(res => {
+           if (res && res.length > 1) {
+             if (bancoRecusasUnificado.length === 0) bancoRecusasUnificado.push(res[0]); // Pega o cabeçalho apenas na primeira aba
+             bancoRecusasUnificado.push(...res.slice(1)); // Injeta as milhares de linhas
+           }
+        });
+
+        setRecusasData(bancoRecusasUnificado);
+
+      } catch (error) {
+        console.error("Erro ao carregar Dashboard", error);
+      } finally {
+        setLoading(false);
       }
-     
-    } catch (error) {
-      console.error("Erro ao carregar Dashboard", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  carregarDados();
-}, []);
+    };
+    
+    carregarDados();
+  }, []); 
 
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
@@ -426,6 +451,7 @@ useEffect(() => {
           historicoFrotaData={historicoFrotaData}
           ofertasModalData={ofertasModalData}
           filtrosGlobais={filtros}
+          recusasData={recusasData}
         />
       </div>
 

@@ -805,3 +805,82 @@ export const getAtPisoClusterData = async () => {
     return [];
   }
 };
+
+
+
+
+// =================================================================
+// GET RECUSAS DATA (Buscando SPI e SPM simultaneamente)
+// =================================================================
+let recusasMemoryCache = {}; // Cache local para evitar bater na API toda hora
+
+export const getRecusasData = async (targetMonth = new Date().getMonth() + 1, targetYear = new Date().getFullYear()) => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    // Define o nome da aba (ex: FEV-2026)
+    const monthStr = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][targetMonth - 1];
+    const tabName = `${monthStr}-${targetYear}`;
+
+    // Se já baixou essa aba antes, devolve direto do cache
+    if (recusasMemoryCache[tabName]) {
+      return recusasMemoryCache[tabName];
+    }
+
+    // IDs das planilhas de recusa (Substitua pelos IDs reais)
+    const idSPI = import.meta.env.VITE_SPREADSHEET_ID_RECUSAS_SPI 
+    const idSPM = import.meta.env.VITE_SPREADSHEET_ID_RECUSAS_SPM 
+
+    const urlSPI = `https://sheets.googleapis.com/v4/spreadsheets/${idSPI}/values/${tabName}!A:Z`;
+    const urlSPM = `https://sheets.googleapis.com/v4/spreadsheets/${idSPM}/values/${tabName}!A:Z`;
+
+    const headers = { 
+      "Authorization": `Bearer ${token}`, 
+      "Accept": "application/json" 
+    };
+
+    // 🔥 PULO DO GATO: Dispara as duas buscas ao mesmo tempo!
+    const [respSPI, respSPM] = await Promise.all([
+      fetch(urlSPI, { method: "GET", headers }).catch(() => null),
+      fetch(urlSPM, { method: "GET", headers }).catch(() => null)
+    ]);
+
+    let dadosCombinados = [];
+    let cabecalho = null;
+
+    // Processa SPI
+    if (respSPI && respSPI.ok) {
+      const dataSPI = await respSPI.json();
+      if (dataSPI.values && dataSPI.values.length > 0) {
+        cabecalho = dataSPI.values[0]; 
+        dadosCombinados.push(...dataSPI.values.slice(1)); 
+      }
+    }
+
+    // Processa SPM
+    if (respSPM && respSPM.ok) {
+      const dataSPM = await respSPM.json();
+      if (dataSPM.values && dataSPM.values.length > 0) {
+        if (!cabecalho) cabecalho = dataSPM.values[0]; 
+        dadosCombinados.push(...dataSPM.values.slice(1)); 
+      }
+    }
+
+    if (!cabecalho) {
+      console.warn(`Aba de Recusas ${tabName} não encontrada em nenhuma das planilhas.`);
+      return [];
+    }
+
+    const resultadoFinal = [cabecalho, ...dadosCombinados];
+    
+    // Salva no cache para otimizar a navegação
+    recusasMemoryCache[tabName] = resultadoFinal;
+    
+    return resultadoFinal;
+
+  } catch (error) {
+    console.error(`Falha Crítica no getRecusasData (${tabName}):`, error);
+    return []; 
+  }
+};

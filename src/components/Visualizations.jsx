@@ -26,7 +26,8 @@ const Visualizations = ({
   historicoFrotaData,
   ofertasModalData,
   filtrosGlobais,
-  atPisoClusterData
+  atPisoClusterData,
+  recusasData // 🔥 1. RECEBEMOS A PROP AQUI
 }) => {
 
   return (
@@ -74,12 +75,13 @@ const Visualizations = ({
       )}
 
       {/* SAÚDE DE FROTA */}
-{activeCategory === 'saude' && (
+      {activeCategory === 'saude' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <FleetHealthCharts 
               rawData={rawData} 
               historicoFrotaData={historicoFrotaData} 
               firstTripsData={firstTripsData}          
+              recusasData={recusasData} // 🔥 2. PASSAMOS A PROP PARA O GRÁFICO AQUI
               filtrosGlobais={filtrosGlobais} 
            />
         </div>

@@ -1,11 +1,60 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { BarChart, Bar, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
-import { Activity, UserMinus, UserCheck, AlertTriangle, Truck, TrendingUp, Maximize2, Minimize2, X, Info, Filter, ChevronDown, CalendarDays, Calendar, UserPlus, TrendingDown, XOctagon } from 'lucide-react';
+import { Activity, UserMinus, UserCheck, AlertTriangle, Truck, TrendingUp, Maximize2, Minimize2, X, Info, Filter, ChevronDown, CalendarDays, Calendar, UserPlus, TrendingDown, XOctagon, Map, Database, Clock } from 'lucide-react';
 
 const TRADUZ_MES = { '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI', '06':'JUN', '07':'JUL', '08':'AGO', '09':'SET', '10':'OUT', '11':'NOV', '12':'DEZ' };
+const NAMES_MESES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const MODAL_OPTIONS = ['Passeio', 'Utilitário', 'Moto', 'Van'];
 
-export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTripsData, filtrosGlobais = {} }) {
+// 🔥 OTIMIZAÇÃO 1: CACHE GLOBAL DE DATAS (Evita calcular a mesma data milhares de vezes)
+const DATE_CACHE = {};
+const getCachedParsedDate = (rawDate) => {
+  if (!rawDate) return null;
+  if (DATE_CACHE[rawDate]) return DATE_CACHE[rawDate];
+  
+  let isoDate = null;
+  let s = String(rawDate).trim();
+  if (s.includes('T')) s = s.split('T')[0];
+  if (s.includes(' ')) s = s.split(' ')[0];
+  
+  if (s.includes('/')) {
+    const [dia, m, a] = s.split('/');
+    isoDate = `${a}-${m.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+  } else {
+    isoDate = s;
+  }
+
+  if (!isoDate) {
+    DATE_CACHE[rawDate] = null;
+    return null;
+  }
+
+  const d = new Date(isoDate + 'T12:00:00');
+  const dCopy = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = dCopy.getUTCDay() || 7;
+  dCopy.setUTCDate(dCopy.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(dCopy.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((dCopy - yearStart) / 86400000) + 1) / 7);
+  
+  const semRow = `W-${String(weekNo).padStart(2, '0')}`;
+  const mRow = isoDate.substring(0, 7);
+  const monthOnly = isoDate.split('-')[1];
+
+  const result = { isoDate, semRow, mRow, monthOnly };
+  DATE_CACHE[rawDate] = result;
+  return result;
+};
+
+// 🔥 OTIMIZAÇÃO 2: FAST-PATH DE NÚMEROS (Pula regex pesado se não houver vírgula)
+const parseNum = (val) => {
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  const s = String(val).trim();
+  if (s.indexOf(',') === -1) return Number(s) || 0;
+  return Number(s.replace(/\./g, '').replace(',', '.')) || 0;
+};
+
+export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTripsData, recusasData = [], filtrosGlobais = {} }) {
   const [periodo, setPeriodo] = useState('semana');
   const [fullscreenChart, setFullscreenChart] = useState(null); 
 
@@ -20,6 +69,13 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
 
   const { regional = [], station = [], turno = [], semana = "", mes = "", dataInicio = "", dataFim = "" } = filtrosGlobais;
 
+  // MAPEAMENTO DO BANCO DE DADOS DE RECUSAS
+  const COL_REC_REG = 2;    
+  const COL_REC_HUB = 4;    
+  const COL_REC_TURNO = 7;  
+  const COL_REC_DATA = 8;   
+  const COL_REC_MODAL = 10; 
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (evolMenuRef.current && !evolMenuRef.current.contains(event.target)) setIsEvolMenuOpen(false);
@@ -33,35 +89,6 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     stateSetter(prev => prev.includes(modal) ? prev.filter(m => m !== modal) : [...prev, modal]);
   };
 
-  const parseNum = (val) => {
-    let s = String(val || '0').trim();
-    if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.'));
-    return Number(s) || 0;
-  };
-
-  const parseUniversalDate = (dateStr) => {
-    if (!dateStr) return null;
-    let s = String(dateStr).trim().split('T')[0].split(' ')[0];
-    if (s.includes('/')) {
-      const [dia, m, a] = s.split('/');
-      return `${a}-${m.padStart(2, '0')}-${dia.padStart(2, '0')}`;
-    }
-    return s;
-  };
-
-  const getISOWeek = (dateStr) => {
-    if (!dateStr) return "";
-    const isoDate = parseUniversalDate(dateStr);
-    if (!isoDate) return "";
-    const d = new Date(isoDate + 'T12:00:00');
-    const dCopy = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const dayNum = dCopy.getUTCDay() || 7;
-    dCopy.setUTCDate(dCopy.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(dCopy.getUTCFullYear(),0,1));
-    const weekNo = Math.ceil((((dCopy - yearStart) / 86400000) + 1)/7);
-    return `W-${String(weekNo).padStart(2, '0')}`;
-  };
-
   const formatName = (isoKey, p) => {
     if (!isoKey) return "N/A";
     if (p === 'dia') return `${isoKey.split('-')[2]}/${isoKey.split('-')[1]}`;
@@ -70,193 +97,201 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
   };
 
   // =========================================================
-  // 1. MOTOR DE KPIs (Com Snapshot Lógico)
+  // 1. MOTOR DE KPIs (CONSOLIDAÇÃO E ACÚMULO SEGURO)
   // =========================================================
   const kpis = useMemo(() => {
-    const frotaAggs = {};
-    const recusasAggs = {};
-    let hasAnyValidFrota = false;
-    let hasAnyValidRecusa = false;
+    let isCurrent = (isoDate, semRow, mRow) => false;
+    let isPrevious = (isoDate, semRow, mRow) => false;
+    let refLabel = "Geral";
 
-    // A. LENDO HISTÓRICO DE FROTA (Snapshot)
-    if (historicoFrotaData && historicoFrotaData.length > 1) {
-      const tempAggs = {};
-
-      historicoFrotaData.slice(1).forEach(row => {
-        const rawDate = String(row[2] || "").trim(); 
-        const hubRow = String(row[3] || "").trim();
-
-        if (station.length > 0 && !station.includes(hubRow)) return;
-
-        const isoDate = parseUniversalDate(rawDate);
-        if (!isoDate) return;
-
-        const semRow = getISOWeek(isoDate);
-        const mesRow = isoDate.substring(0, 7);
-
-        let chavePeriodo = isoDate;
-        if (periodo === 'semana') chavePeriodo = semRow;
-        if (periodo === 'mes') chavePeriodo = mesRow;
-
-        let isValid = true;
-        if (dataInicio && isoDate < dataInicio) isValid = false;
-        if (dataFim && isoDate > dataFim) isValid = false;
-        if (semana && semRow !== semana) isValid = false;
-        if (mes && mesRow.split('-')[1] !== mes && TRADUZ_MES[mesRow.split('-')[1]] !== mes) isValid = false;
-
-        if (!tempAggs[chavePeriodo]) {
-          tempAggs[chavePeriodo] = { hubs: {}, isValid: false };
-        }
-        
-        if (isValid) {
-          tempAggs[chavePeriodo].isValid = true;
-          hasAnyValidFrota = true;
-        }
-
-        if (!tempAggs[chavePeriodo].hubs[hubRow] || isoDate >= tempAggs[chavePeriodo].hubs[hubRow].dataRef) {
-            tempAggs[chavePeriodo].hubs[hubRow] = {
-                dataRef: isoDate,
-                ativos: parseNum(row[4]),
-                dormentes: parseNum(row[5]),
-                risco: parseNum(row[6]),
-                churn: parseNum(row[7])
-            };
-        }
+    if (semana) {
+      isCurrent = (iso, sem, m) => sem === semana;
+      const prevWNum = parseInt(semana.replace('W-', ''), 10) - 1;
+      const prevSemana = `W-${String(prevWNum).padStart(2, '0')}`;
+      isPrevious = (iso, sem, m) => sem === prevSemana;
+      refLabel = semana;
+    } else if (mes) {
+      isCurrent = (iso, sem, m) => m === mes;
+      const prevMNum = parseInt(mes, 10) - 1;
+      const prevMes = String(prevMNum).padStart(2, '0');
+      isPrevious = (iso, sem, m) => m === prevMes;
+      refLabel = NAMES_MESES_FULL[parseInt(mes, 10) - 1] || mes;
+    } else if (dataInicio || dataFim) {
+      const start = dataInicio || dataFim;
+      const end = dataFim || dataInicio;
+      isCurrent = (iso, sem, m) => iso >= start && iso <= end;
+      
+      const dStart = new Date(start + 'T12:00:00');
+      const dEnd = new Date(end + 'T12:00:00');
+      const diffDays = Math.round((dEnd - dStart) / 86400000) + 1;
+      
+      const prevDStart = new Date(dStart); prevDStart.setDate(prevDStart.getDate() - diffDays);
+      const prevDEnd = new Date(dEnd); prevDEnd.setDate(prevDEnd.getDate() - diffDays);
+      
+      const prevStartStr = prevDStart.toISOString().split('T')[0];
+      const prevEndStr = prevDEnd.toISOString().split('T')[0];
+      
+      isPrevious = (iso, sem, m) => iso >= prevStartStr && iso <= prevEndStr;
+      refLabel = dataInicio === dataFim ? formatName(dataInicio, 'dia') : `${formatName(dataInicio, 'dia')} - ${formatName(dataFim, 'dia')}`;
+    } else {
+      let maxW = "W-01";
+      (rawData || []).slice(1).forEach(row => {
+        if (row[2] && row[2].toUpperCase().includes('W-') && row[2].localeCompare(maxW) > 0) maxW = row[2];
       });
+      isCurrent = (iso, sem, m) => sem === maxW;
+      const prevWNum = parseInt(maxW.replace('W-', ''), 10) - 1;
+      const prevSemana = `W-${String(prevWNum).padStart(2, '0')}`;
+      isPrevious = (iso, sem, m) => sem === prevSemana;
+      refLabel = maxW;
+    }
 
-      Object.keys(tempAggs).forEach(periodoKey => {
-         let sumAtivos = 0, sumDormentes = 0, sumRisco = 0, sumChurn = 0;
-         Object.values(tempAggs[periodoKey].hubs).forEach(h => {
-             sumAtivos += h.ativos;
-             sumDormentes += h.dormentes;
-             sumRisco += h.risco;
-             sumChurn += h.churn;
-         });
-         frotaAggs[periodoKey] = { ativos: sumAtivos, dormentes: sumDormentes, risco: sumRisco, churn: sumChurn, isValid: tempAggs[periodoKey].isValid };
+    const hasReg = regional.length > 0;
+    const hasSt = station.length > 0;
+    const hasTurn = turno.length > 0;
+
+    const currFrotaHubs = {};
+    const prevFrotaHubs = {};
+
+    if (historicoFrotaData && historicoFrotaData.length > 1) {
+      historicoFrotaData.slice(1).forEach(row => {
+        const hubRow = String(row[3] || "").trim();
+        if (hasSt && !station.includes(hubRow)) return;
+
+        const dInfo = getCachedParsedDate(row[2]);
+        if (!dInfo) return;
+
+        if (isCurrent(dInfo.isoDate, dInfo.semRow, dInfo.monthOnly)) {
+          if (!currFrotaHubs[hubRow] || dInfo.isoDate >= currFrotaHubs[hubRow].date) {
+            currFrotaHubs[hubRow] = {
+              date: dInfo.isoDate, ativos: parseNum(row[4]), dormentes: parseNum(row[5]),
+              risco: parseNum(row[6]), churn: parseNum(row[7])
+            };
+          }
+        }
+        if (isPrevious(dInfo.isoDate, dInfo.semRow, dInfo.monthOnly)) {
+          if (!prevFrotaHubs[hubRow] || dInfo.isoDate >= prevFrotaHubs[hubRow].date) {
+            prevFrotaHubs[hubRow] = {
+              date: dInfo.isoDate, ativos: parseNum(row[4]), dormentes: parseNum(row[5]),
+              risco: parseNum(row[6]), churn: parseNum(row[7])
+            };
+          }
+        }
       });
     }
 
-    // B. LENDO RECUSAS (Consolidado)
-    (rawData || []).forEach(row => {
-      if (regional.length > 0 && !regional.includes(row[1])) return;
-      if (station.length > 0 && !station.includes(row[4])) return;
-      if (turno.length > 0 && !turno.includes(row[5])) return;
+    let currAtivos = 0, currDormentes = 0, currRisco = 0, currChurn = 0;
+    Object.values(currFrotaHubs).forEach(h => {
+      currAtivos += h.ativos; currDormentes += h.dormentes; currRisco += h.risco; currChurn += h.churn;
+    });
 
-      const isoDate = parseUniversalDate(row[3]);
-      if (!isoDate) return;
+    let prevAtivos = 0, prevDormentes = 0, prevRisco = 0, prevChurn = 0;
+    Object.values(prevFrotaHubs).forEach(h => {
+      prevAtivos += h.ativos; prevDormentes += h.dormentes; prevRisco += h.risco; prevChurn += h.churn;
+    });
 
-      const semRow = getISOWeek(isoDate);
-      const mesRow = isoDate.substring(0, 7);
+    let currOfertas = 0, currRoteirizadas = 0;
+    let prevOfertas = 0, prevRoteirizadas = 0;
 
-      let chavePeriodo = isoDate;
-      if (periodo === 'semana') chavePeriodo = semRow;
-      if (periodo === 'mes') chavePeriodo = mesRow;
+    (rawData || []).slice(1).forEach(row => {
+      if (hasReg && !regional.includes(row[1])) return;
+      if (hasSt && !station.includes(row[4])) return;
+      if (hasTurn && !turno.includes(row[5])) return;
 
-      let isValid = true;
-      if (dataInicio && isoDate < dataInicio) isValid = false;
-      if (dataFim && isoDate > dataFim) isValid = false;
-      if (semana && semRow !== semana) isValid = false;
-      if (mes && mesRow.split('-')[1] !== mes && TRADUZ_MES[mesRow.split('-')[1]] !== mes) isValid = false;
+      const dInfo = getCachedParsedDate(row[3]);
+      if (!dInfo) return;
 
-      if (!recusasAggs[chavePeriodo]) {
-        recusasAggs[chavePeriodo] = { ofertas: 0, recusas: 0, isValid: false };
+      if (isCurrent(dInfo.isoDate, dInfo.semRow, dInfo.monthOnly)) {
+        currOfertas += parseNum(row[24]);
+        currRoteirizadas += parseNum(row[11]);
       }
-
-      recusasAggs[chavePeriodo].ofertas += parseNum(row[24]);
-      recusasAggs[chavePeriodo].recusas += parseNum(row[35]);
-      
-      if (isValid) {
-        recusasAggs[chavePeriodo].isValid = true;
-        hasAnyValidRecusa = true;
+      if (isPrevious(dInfo.isoDate, dInfo.semRow, dInfo.monthOnly)) {
+        prevOfertas += parseNum(row[24]);
+        prevRoteirizadas += parseNum(row[11]);
       }
     });
 
-    if (!hasAnyValidFrota && !hasAnyValidRecusa) {
-      return { hasData: false };
-    }
+    let currRecusas = 0;
+    let prevRecusas = 0;
 
-    // Processamento do Atual vs Anterior para Variação
-    const allFrotaKeys = Object.keys(frotaAggs).sort();
-    const validFrotaKeys = allFrotaKeys.filter(k => frotaAggs[k].isValid);
-    const currFrotaKey = validFrotaKeys[validFrotaKeys.length - 1];
-    const currFrotaIdx = allFrotaKeys.indexOf(currFrotaKey);
-    
-    const currFrota = currFrotaKey ? frotaAggs[currFrotaKey] : { ativos: 0, dormentes: 0, risco: 0, churn: 0 };
-    const prevFrota = currFrotaIdx > 0 ? frotaAggs[allFrotaKeys[currFrotaIdx - 1]] : { ativos: 0, dormentes: 0, risco: 0, churn: 0 };
+    (recusasData || []).slice(1).forEach(row => {
+      const hub = String(row[COL_REC_HUB] || "").trim();
+      const reg = String(row[COL_REC_REG] || "").trim();
+      const trn = String(row[COL_REC_TURNO] || "").trim();
+      
+      if (hasReg && !regional.includes(reg)) return;
+      if (hasSt && !station.includes(hub)) return;
+      if (hasTurn && !turno.includes(trn)) return;
 
-    const allRecKeys = Object.keys(recusasAggs).sort();
-    const validRecKeys = allRecKeys.filter(k => recusasAggs[k].isValid);
-    const currRecKey = validRecKeys[validRecKeys.length - 1];
-    const currRecIdx = allRecKeys.indexOf(currRecKey);
+      const dInfo = getCachedParsedDate(row[COL_REC_DATA]);
+      if (!dInfo) return;
 
-    const currRec = currRecKey ? recusasAggs[currRecKey] : { ofertas: 0, recusas: 0 };
-    const prevRec = currRecIdx > 0 ? recusasAggs[allRecKeys[currRecIdx - 1]] : { ofertas: 0, recusas: 0 };
+      if (isCurrent(dInfo.isoDate, dInfo.semRow, dInfo.monthOnly)) currRecusas += 1;
+      if (isPrevious(dInfo.isoDate, dInfo.semRow, dInfo.monthOnly)) prevRecusas += 1;
+    });
 
     const calcPct = (num, den) => den > 0 ? (num / den) * 100 : 0;
     const calcVarRate = (curr, prev) => curr - prev; 
     const calcVarAbs = (curr, prev) => prev !== 0 ? ((curr - prev) / prev) * 100 : (curr > 0 ? 100 : 0);
 
-    const refLabel = formatName(currRecKey || currFrotaKey, periodo);
-
     return {
-      hasData: true,
-      recusaPct: calcPct(currRec.recusas, currRec.ofertas),
-      varRecusa: calcVarRate(calcPct(currRec.recusas, currRec.ofertas), calcPct(prevRec.recusas, prevRec.ofertas)),
-      recusas: currRec.recusas,
+      hasData: (currOfertas > 0 || currRoteirizadas > 0 || currRecusas > 0 || currAtivos > 0),
+      recusaDispoPct: calcPct(currRecusas, currOfertas),
+      varRecusaDispo: calcVarRate(calcPct(currRecusas, currOfertas), calcPct(prevRecusas, prevOfertas)),
+      recusasGlobais: currRecusas,
+      ofertasGlobais: currOfertas,
       
-      churnPct: calcPct(currFrota.churn, currFrota.ativos),
-      varChurn: calcVarRate(calcPct(currFrota.churn, currFrota.ativos), calcPct(prevFrota.churn, prevFrota.ativos)),
-      churn: currFrota.churn,
+      recusaRotPct: calcPct(currRecusas, currRoteirizadas),
+      varRecusaRot: calcVarRate(calcPct(currRecusas, currRoteirizadas), calcPct(prevRecusas, prevRoteirizadas)),
+      roteirizadasGlobais: currRoteirizadas,
 
-      dormPct: calcPct(currFrota.dormentes, currFrota.ativos),
-      varDorm: calcVarRate(calcPct(currFrota.dormentes, currFrota.ativos), calcPct(prevFrota.dormentes, prevFrota.ativos)),
-      dormentes: currFrota.dormentes,
+      churnPct: calcPct(currChurn, currAtivos),
+      varChurn: calcVarRate(calcPct(currChurn, currAtivos), calcPct(prevChurn, prevAtivos)),
+      churn: currChurn,
 
-      ativos: currFrota.ativos,
-      varAtivos: calcVarAbs(currFrota.ativos, prevFrota.ativos),
+      dormPct: calcPct(currDormentes, currAtivos),
+      varDorm: calcVarRate(calcPct(currDormentes, currAtivos), calcPct(prevDormentes, prevAtivos)),
+      dormentes: currDormentes,
+
+      ativos: currAtivos,
+      varAtivos: calcVarAbs(currAtivos, prevAtivos),
       
       refLabel: refLabel
     };
-  }, [rawData, historicoFrotaData, periodo, regional, station, turno, semana, mes, dataInicio, dataFim]);
+  }, [rawData, historicoFrotaData, recusasData, periodo, regional, station, turno, semana, mes, dataInicio, dataFim]);
 
   // =========================================================
-  // 2. MOTOR TEMPORAL DOS GRÁFICOS (Evolução + Conversão + Recusas Absolutas)
+  // 2. MOTOR TEMPORAL (GRÁFICOS) - PANORAMA GLOBAL
   // =========================================================
   const temporalData = useMemo(() => {
     const aggs = {};
+    const hasReg = regional.length > 0;
+    const hasSt = station.length > 0;
+    const hasTurn = turno.length > 0;
 
-    (rawData || []).forEach(row => {
-      if (regional.length > 0 && !regional.includes(row[1])) return;
-      if (station.length > 0 && !station.includes(row[4])) return;
-      if (turno.length > 0 && !turno.includes(row[5])) return;
+    (rawData || []).slice(1).forEach(row => {
+      if (hasReg && !regional.includes(row[1])) return;
+      if (hasSt && !station.includes(row[4])) return;
+      if (hasTurn && !turno.includes(row[5])) return;
 
-      const isoDate = parseUniversalDate(row[3]);
-      if (!isoDate) return;
+      const dInfo = getCachedParsedDate(row[3]);
+      if (!dInfo) return;
 
-      const semRow = getISOWeek(isoDate);
-      const mesRow = isoDate.split('-')[1];
-
-      if (dataInicio && isoDate < dataInicio) return;
-      if (dataFim && isoDate > dataFim) return;
-      if (semana && semRow !== semana) return;
-      if (mes && mesRow !== mes && TRADUZ_MES[mesRow] !== mes) return;
-
-      let chavePeriodo = isoDate;
-      if (periodo === 'semana') chavePeriodo = semRow;
-      if (periodo === 'mes') chavePeriodo = isoDate.substring(0, 7);
+      let chavePeriodo = dInfo.isoDate;
+      if (periodo === 'semana') chavePeriodo = dInfo.semRow;
+      if (periodo === 'mes') chavePeriodo = dInfo.mRow;
 
       if (!aggs[chavePeriodo]) {
         aggs[chavePeriodo] = { 
           name: formatName(chavePeriodo, periodo), sortKey: chavePeriodo,
-          totalOfertasGlobais: 0, totalRecusasGlobais: 0,
+          totalOfertasGlobais: 0, totalRoteirizadasGlobais: 0, totalRecusasGlobais: 0,
           p_off: 0, u_off: 0, m_off: 0, v_off: 0,
           p_acc: 0, u_acc: 0, m_acc: 0, v_acc: 0,
-          p_rec: 0, u_rec: 0, m_rec: 0, v_rec: 0 // 🔥 Nova linha para capturar Recusas Absolutas
+          p_rec: 0, u_rec: 0, m_rec: 0, v_rec: 0 
         };
       }
 
       aggs[chavePeriodo].totalOfertasGlobais += parseNum(row[24]); 
-      aggs[chavePeriodo].totalRecusasGlobais += parseNum(row[35]); 
+      aggs[chavePeriodo].totalRoteirizadasGlobais += parseNum(row[11]); 
       
       aggs[chavePeriodo].u_off += parseNum(row[20]); 
       aggs[chavePeriodo].p_off += parseNum(row[21]); 
@@ -267,19 +302,50 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
       aggs[chavePeriodo].p_acc += parseNum(row[26]); 
       aggs[chavePeriodo].m_acc += parseNum(row[27]); 
       aggs[chavePeriodo].v_acc += parseNum(row[28]); 
+    });
 
-      // 🔥 Extração de Recusas (Considerando: Ofertas Realizadas - Aceites = Recusas/Abandonos na plataforma)
-      // Nota: Estamos calculando as recusas baseadas no funil por modal, já que o rawData não costuma quebrar a coluna principal de recusa (row[35]) por modal.
-      aggs[chavePeriodo].u_rec += Math.max(0, parseNum(row[20]) - parseNum(row[25])); 
-      aggs[chavePeriodo].p_rec += Math.max(0, parseNum(row[21]) - parseNum(row[26])); 
-      aggs[chavePeriodo].m_rec += Math.max(0, parseNum(row[22]) - parseNum(row[27])); 
-      aggs[chavePeriodo].v_rec += Math.max(0, parseNum(row[23]) - parseNum(row[28])); 
+    (recusasData || []).slice(1).forEach(row => {
+      const hub = String(row[COL_REC_HUB] || "").trim();
+      const reg = String(row[COL_REC_REG] || "").trim();
+      const trn = String(row[COL_REC_TURNO] || "").trim();
+      const modal = String(row[COL_REC_MODAL] || "").trim().toUpperCase();
+
+      if (hasReg && !regional.includes(reg)) return;
+      if (hasSt && !station.includes(hub)) return;
+      if (hasTurn && !turno.includes(trn)) return;
+
+      const dInfo = getCachedParsedDate(row[COL_REC_DATA]);
+      if (!dInfo) return;
+
+      let chavePeriodo = dInfo.isoDate;
+      if (periodo === 'semana') chavePeriodo = dInfo.semRow;
+      if (periodo === 'mes') chavePeriodo = dInfo.mRow;
+
+      if (!aggs[chavePeriodo]) {
+        aggs[chavePeriodo] = { 
+          name: formatName(chavePeriodo, periodo), sortKey: chavePeriodo,
+          totalOfertasGlobais: 0, totalRoteirizadasGlobais: 0, totalRecusasGlobais: 0,
+          p_off: 0, u_off: 0, m_off: 0, v_off: 0,
+          p_acc: 0, u_acc: 0, m_acc: 0, v_acc: 0,
+          p_rec: 0, u_rec: 0, m_rec: 0, v_rec: 0 
+        };
+      }
+
+      aggs[chavePeriodo].totalRecusasGlobais += 1;
+
+      if (modal.includes('PASS')) aggs[chavePeriodo].p_rec += 1;
+      else if (modal.includes('UTIL')) aggs[chavePeriodo].u_rec += 1;
+      else if (modal.includes('MOTO')) aggs[chavePeriodo].m_rec += 1;
+      else if (modal.includes('VAN')) aggs[chavePeriodo].v_rec += 1;
     });
 
     return Object.values(aggs)
-      .map(d => ({ ...d, recusaPctGeral: d.totalOfertasGlobais > 0 ? (d.totalRecusasGlobais / d.totalOfertasGlobais) * 100 : 0 }))
+      .map(d => ({ 
+        ...d, 
+        recusaDispoPctGeral: d.totalOfertasGlobais > 0 ? (d.totalRecusasGlobais / d.totalOfertasGlobais) * 100 : 0 
+      }))
       .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-  }, [rawData, periodo, regional, station, turno, semana, mes, dataInicio, dataFim]);
+  }, [rawData, recusasData, periodo, regional, station, turno]); 
 
   const chartConversaoData = useMemo(() => {
     return temporalData.map(d => {
@@ -289,37 +355,28 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     });
   }, [temporalData, modaisConv]);
 
-  // =========================================================
-  // 4. MOTOR DE FIRST TRIPS (Pivotada)
-  // =========================================================
   const firstTripsProcessed = useMemo(() => {
     if (!firstTripsData || firstTripsData.length < 2) return [];
     const headers = firstTripsData[0];
     const dateCols = headers.map((h, i) => ({ label: String(h).trim(), idx: i })).filter(col => col.label.match(/^\d{4}-\d{2}-\d{2}/));
     const aggs = {};
+    const hasReg = regional.length > 0;
+    const hasSt = station.length > 0;
 
     firstTripsData.slice(1).forEach(row => {
-      if (regional.length > 0 && !regional.includes(row[0])) return; 
-      if (station.length > 0 && !station.includes(row[2])) return; 
+      if (hasReg && !regional.includes(row[0])) return; 
+      if (hasSt && !station.includes(row[2])) return; 
 
       dateCols.forEach(col => {
         const val = parseNum(row[col.idx]);
         if (val === 0) return;
 
-        const isoDate = parseUniversalDate(col.label);
-        if (!isoDate) return;
+        const dInfo = getCachedParsedDate(col.label);
+        if (!dInfo) return;
 
-        const semRow = getISOWeek(isoDate);
-        const mesRow = isoDate.split('-')[1];
-
-        if (dataInicio && isoDate < dataInicio) return;
-        if (dataFim && isoDate > dataFim) return;
-        if (semana && semRow !== semana) return;
-        if (mes && mesRow !== mes && TRADUZ_MES[mesRow] !== mes) return;
-
-        let chavePeriodo = isoDate; 
-        if (periodo === 'mes') chavePeriodo = isoDate.substring(0, 7);
-        if (periodo === 'semana') chavePeriodo = semRow;
+        let chavePeriodo = dInfo.isoDate; 
+        if (periodo === 'mes') chavePeriodo = dInfo.mRow;
+        if (periodo === 'semana') chavePeriodo = dInfo.semRow;
 
         if (!aggs[chavePeriodo]) {
           aggs[chavePeriodo] = { name: formatName(chavePeriodo, periodo), sortKey: chavePeriodo, totalFirstTrips: 0 };
@@ -329,8 +386,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     });
 
     return Object.values(aggs).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-  }, [firstTripsData, periodo, regional, station, semana, mes, dataInicio, dataFim]);
-
+  }, [firstTripsData, periodo, regional, station]); 
 
   const fInt = (val) => val > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(val)) : '';
   const fIntTooltip = (val) => new Intl.NumberFormat('pt-BR').format(Math.round(val));
@@ -414,27 +470,84 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
   return (
     <div className="space-y-6 mt-6">
       
-      {/* 4 CARDS DE KPI (COM ESTADO DE "SEM DADOS") */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* 🔥 NOVO: BANNER DE DOCUMENTAÇÃO E ORIGEM DOS DADOS OPERACIONAIS */}
+      <div className="bg-slate-50 dark:bg-[#15171e] rounded-2xl border border-slate-200 dark:border-gray-800 p-5 flex flex-col md:flex-row items-start gap-4 shadow-sm">
+        <div className="bg-blue-100 dark:bg-blue-950/40 p-2.5 rounded-xl text-[#113366] dark:text-blue-400 shrink-0">
+          <Database size={20} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-xs">
+          <div className="space-y-1">
+            <h4 className="font-black text-[#113366] dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-[#EE4D2D] rounded-full"></span> Métrica de Recusas
+            </h4>
+            <p className="text-slate-600 dark:text-gray-300 font-medium">
+              Extraído diretamente do Banco de Dados consolidado. Atualização retroativa em <span className="font-bold text-[#EE4D2D]">D-1</span>.
+            </p>
+          </div>
+          <div className="space-y-1 border-t md:border-t-0 md:border-x border-slate-200 dark:border-gray-700 pt-3 md:pt-0 md:px-6">
+            <h4 className="font-black text-[#113366] dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Ofertas e Aceites
+            </h4>
+            <p className="text-slate-600 dark:text-gray-300 font-medium">
+              Dados em tempo real (<span className="font-bold text-green-500">D-0</span>) inseridos e consolidados manualmente pelos analistas de controle na malha.
+            </p>
+          </div>
+          <div className="space-y-1 border-t md:border-t-0 pt-3 md:pt-0">
+            <h4 className="font-black text-[#113366] dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span> Inserção de Drivers
+            </h4>
+            <p className="text-slate-600 dark:text-gray-300 font-medium">
+              Métricas de First Trips geradas em <span className="font-bold text-blue-500">D-1</span>, com leitura direta da planilha oficial <span className="italic font-bold">"[SPC/SPM/SPI] Gestão Drivers"</span>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 5 CARDS DE KPI */}
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
         
         <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm relative overflow-hidden group flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-16 h-16 bg-orange-100 dark:bg-orange-900/20 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
           <div>
             <div className="flex justify-between items-start mb-2 relative z-10">
-              <span className="text-xs font-black uppercase text-slate-400">Taxa de Recusa</span>
+              <span className="text-xs font-black uppercase text-slate-400">Recusa vs Dispo</span>
               <AlertTriangle size={20} className="text-orange-500" />
             </div>
             {!kpis.hasData ? (
-              <div className="py-2 text-[11px] font-black uppercase text-slate-300">Sem dados no período</div>
+              <div className="py-2 text-[11px] font-black uppercase text-slate-300">Sem dados</div>
             ) : (
               <>
                 <div className="flex items-end gap-3 relative z-10">
-                  <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{kpis.recusaPct.toFixed(1)}%</span>
-                  {renderVarPill(kpis.varRecusa, true)}
+                  <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{kpis.recusaDispoPct.toFixed(1)}%</span>
+                  {renderVarPill(kpis.varRecusaDispo, true)}
                 </div>
                 <div className="text-[10px] font-bold text-slate-500 uppercase mt-3 pt-3 border-t border-slate-100 dark:border-gray-800 relative z-10 flex justify-between">
-                  <span>{fIntTooltip(kpis.recusas)} recusas brutas</span>
-                  <span className="text-[#EE4D2D]">Ref: {kpis.refLabel}</span>
+                  <span>{fIntTooltip(kpis.recusasGlobais)} de {fIntTooltip(kpis.ofertasGlobais)} Off</span>
+                  <span className="text-[#EE4D2D]">{kpis.refLabel}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div>
+            <div className="flex justify-between items-start mb-2 relative z-10">
+              <span className="text-[11px] font-black uppercase text-slate-400">Recusa vs Rotas</span>
+              <Map size={20} className="text-red-500" />
+            </div>
+            {!kpis.hasData ? (
+              <div className="py-2 text-[11px] font-black uppercase text-slate-300">Sem dados</div>
+            ) : (
+              <>
+                <div className="flex items-end gap-3 relative z-10">
+                  <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{kpis.recusaRotPct.toFixed(1)}%</span>
+                  {renderVarPill(kpis.varRecusaRot, true)}
+                </div>
+                <div className="text-[10px] font-bold text-slate-500 uppercase mt-3 pt-3 border-t border-slate-100 dark:border-gray-800 relative z-10 flex justify-between">
+                  <span>De {fIntTooltip(kpis.roteirizadasGlobais)} Roteirizadas</span>
+                  <span className="text-[#EE4D2D]">{kpis.refLabel}</span>
                 </div>
               </>
             )}
@@ -457,7 +570,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
                   {renderVarPill(kpis.varChurn, true)}
                 </div>
                 <div className="text-[10px] font-bold text-slate-500 uppercase mt-3 pt-3 border-t border-slate-100 dark:border-gray-800 relative z-10 flex justify-between">
-                  <span>{fIntTooltip(kpis.churn)} motoristas saindo</span>
+                  <span>{fIntTooltip(kpis.churn)} motoristas</span>
                   <span className="text-[#EE4D2D]">Ref: {kpis.refLabel}</span>
                 </div>
               </>
@@ -526,7 +639,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
       <div className="grid grid-cols-1 gap-6">
         
         {/* GRÁFICO 1: EVOLUÇÃO DE RECUSAS (%) */}
-        {renderChartCard('evolucao', 'Taxa de Rejeição de Ofertas', 'Composição de Ofertas vs % de Rejeição no Tempo', <TrendingUp className="text-[#EE4D2D]"/>, 
+        {renderChartCard('evolucao', 'Taxa de Rejeição vs Disponibilidade', 'Composição de Ofertas Globais e a curva percentual de Recusas', <TrendingUp className="text-[#EE4D2D]"/>, 
           (
             <div className="relative" ref={evolMenuRef}>
               <div onClick={() => setIsEvolMenuOpen(!isEvolMenuOpen)} className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 rounded-lg px-4 py-1.5 text-xs font-bold cursor-pointer flex items-center shadow-sm hover:bg-slate-50 transition-colors">
@@ -560,7 +673,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
                 {modaisEvol.includes('Moto') && <Bar yAxisId="left" dataKey="m_off" stackId="a" name="Ofertas Moto" fill="#F5A623" maxBarSize={50} radius={topVisibleModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="m_off" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
                 {modaisEvol.includes('Van') && <Bar yAxisId="left" dataKey="v_off" stackId="a" name="Ofertas Van" fill="#8b5cf6" maxBarSize={50} radius={topVisibleModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="v_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
                 
-                <Line yAxisId="right" type="monotone" dataKey="recusaPctGeral" name="% Recusa Geral" stroke="#D0011B" strokeWidth={3} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} activeDot={{ r: 7 }} />
+                <Line yAxisId="right" type="monotone" dataKey="recusaDispoPctGeral" name="% Recusa (vs Dispo)" stroke="#D0011B" strokeWidth={3} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} activeDot={{ r: 7 }} />
               </ComposedChart>
             </ResponsiveContainer>
           ),
@@ -634,8 +747,8 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
           firstTripsProcessed.length 
         )}
 
-        {/* 🔥 GRÁFICO 4: RECUSAS ABSOLUTAS */}
-        {renderChartCard('recusasAbsolutas', 'Volume de Recusas por Modal', 'Quantidade absoluta de ofertas rejeitadas ou abandonadas', <XOctagon className="text-[#D0011B]"/>, null, 
+        {/* GRÁFICO 4: RECUSAS ABSOLUTAS */}
+        {renderChartCard('recusasAbsolutas', 'Volume de Recusas por Modal', 'Quantidade absoluta de rotas rejeitadas ou abandonadas (Fonte: BD Recusas)', <XOctagon className="text-[#D0011B]"/>, null, 
           (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={temporalData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
