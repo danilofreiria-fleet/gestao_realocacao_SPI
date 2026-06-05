@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import OverviewTable from './charts/OverviewTable';
 import OnePageSPI from './charts/OnePageSPI';
 import AtPisoDiarioTable from './charts/AtPisoDiarioTable';
@@ -14,6 +14,8 @@ import PackagesAndReallocation from './charts/PackagesAndReallocation';
 import RotationTable from './charts/RotationTable';
 import TimeAnalysisCharts from './charts/TimeAnalysisCharts';
 import AtPisoClusterTable from './charts/AtPisoClusterTable';
+import RecusasClusterTable from './charts/RecusasClusterTable'; 
+import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
 
 const Visualizations = ({ 
   activeCategory, 
@@ -27,8 +29,12 @@ const Visualizations = ({
   ofertasModalData,
   filtrosGlobais,
   atPisoClusterData,
-  recusasData // 🔥 1. RECEBEMOS A PROP AQUI
+  atExpedidaData,
+  recusasData 
 }) => {
+
+  // 💡 ESTADO DO SUB-MENU PARA ESTUDOS DE CLUSTER
+  const [clusterSubTab, setClusterSubTab] = useState('piso'); // 'piso', 'recusas', 'expedida'
 
   return (
     <div className="space-y-6">
@@ -81,7 +87,7 @@ const Visualizations = ({
               rawData={rawData} 
               historicoFrotaData={historicoFrotaData} 
               firstTripsData={firstTripsData}          
-              recusasData={recusasData} // 🔥 2. PASSAMOS A PROP PARA O GRÁFICO AQUI
+              recusasData={recusasData} 
               filtrosGlobais={filtrosGlobais} 
            />
         </div>
@@ -94,10 +100,45 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* ESTUDOS DE CLUSTERS */}
+      {/* 💡 ESTUDOS DE CLUSTERS (SUB-MENU ESTRATÉGICO) */}
       {activeCategory === 'estudosCluster' && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           
+           {/* MINI NAVEGADOR DE ABAS */}
+           <div className="flex flex-wrap bg-white dark:bg-[#1f232d] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 gap-1 w-fit">
+              <button 
+                onClick={() => setClusterSubTab('piso')} 
+                className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'piso' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}
+              >
+                Acúmulo (AT no Piso)
+              </button>
+              <button 
+                onClick={() => setClusterSubTab('recusas')} 
+                className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'recusas' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}
+              >
+                Recusas Operacionais
+              </button>
+              <button 
+                onClick={() => setClusterSubTab('expedida')} 
+                className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'expedida' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}
+              >
+                Rotas Expedidas
+              </button>
+           </div>
+
+           {/* RENDERIZAÇÃO CONDICIONAL DAS TABELAS */}
+           {clusterSubTab === 'piso' && (
+             <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />
+           )}
+
+           {clusterSubTab === 'recusas' && (
+             <RecusasClusterTable recusasData={recusasData} filtrosGlobais={filtrosGlobais} />
+           )}
+
+           {clusterSubTab === 'expedida' && (
+             <AtExpedidaClusterTable atExpedidaData={atExpedidaData} filtrosGlobais={filtrosGlobais} />
+           )}
+
         </div>
       )}
 
@@ -119,6 +160,7 @@ const Visualizations = ({
         </div>
       )}
 
+      {/* RODÍZIO */}
       {activeCategory === 'rodizio' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <RotationTable filtrosGlobais={filtrosGlobais} />
@@ -140,7 +182,7 @@ const Visualizations = ({
       )}
 
       {/* MENSAGEM SE NÃO HOUVER DADOS */}
-      {(!data || data.length === 0) && !['resumo', 'onePage', 'frota', 'saude', 'pacotes', 'ocorrencias'].includes(activeCategory) && (
+      {(!data || data.length === 0) && !['resumo', 'onePage', 'frota', 'saude', 'pacotes', 'ocorrencias', 'estudosCluster'].includes(activeCategory) && (
         <div className="p-12 text-center font-bold text-slate-400 bg-white dark:bg-[#1f232d] rounded-2xl border border-dashed border-slate-300 dark:border-gray-700">
           Nenhum registro operacional encontrado para os filtros selecionados nesta categoria.
         </div>

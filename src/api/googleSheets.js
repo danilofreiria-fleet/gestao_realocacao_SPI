@@ -716,56 +716,6 @@ export const buscarPermissoesUsuario = async (email, token) => {
 };
 
 
-// =================================================================
-// GET DELIVERY SUCCESS DATA 
-// =================================================================
-let dsMemoryCache = null;
-let dsMemoryCacheTime = null;
-
-export const getDeliverySuccessData = async () => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
-
-    // 🔥 CACHE DE MEMÓRIA: Ultra-rápido, sem limites de MB do navegador
-    if (dsMemoryCache && dsMemoryCacheTime) {
-      const agora = new Date().getTime();
-      const diferencaMinutos = (agora - dsMemoryCacheTime) / (1000 * 60);
-      if (diferencaMinutos < 15) {
-        console.log("⚡ Puxando DS da Memória RAM (Instantâneo)!");
-        return dsMemoryCache;
-      }
-    }
-
-    const idSopSpi = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${idSopSpi}/values/DS_SPM_SPI!A:ZZ`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      }
-    });
-
-    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-
-    const data = await response.json();
-    const result = data.values || [];
-
-    // Salva na memória global da aplicação
-    if (result.length > 0) {
-      dsMemoryCache = result;
-      dsMemoryCacheTime = new Date().getTime();
-    }
-
-    return result;
-  } catch (error) {
-    console.error("Erro ao buscar dados de DS:", error);
-    return [];
-  }
-};
-
 
 
 // =================================================================
@@ -882,5 +832,157 @@ export const getRecusasData = async (targetMonth = new Date().getMonth() + 1, ta
   } catch (error) {
     console.error(`Falha Crítica no getRecusasData (${tabName}):`, error);
     return []; 
+  }
+};
+
+
+// =================================================================
+// GET DELIVERY SUCCESS DATA 
+// =================================================================
+let dsMemoryCache = null;
+let dsMemoryCacheTime = null;
+
+export const getDeliverySuccessData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    // CACHE DE MEMÓRIA
+    if (dsMemoryCache && dsMemoryCacheTime) {
+      const agora = new Date().getTime();
+      const diferencaMinutos = (agora - dsMemoryCacheTime) / (1000 * 60);
+      if (diferencaMinutos < 15) {
+        console.log("⚡ Puxando DS da Memória RAM (Instantâneo)!");
+        return dsMemoryCache;
+      }
+    }
+
+    // Puxando o ID do .env 
+    const idSopSpi = import.meta.env.VITE_DS_SHEET_ID;
+    
+    
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${idSopSpi}/values/Base DS!A:ZZ`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+
+    const data = await response.json();
+    const result = data.values || [];
+
+    // Salva na memória global da aplicação
+    if (result.length > 0) {
+      dsMemoryCache = result;
+      dsMemoryCacheTime = new Date().getTime();
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Erro ao buscar dados de DS:", error);
+    return [];
+  }
+};
+
+
+
+// =================================================================
+// GET RECUSAS (MAPA DE CALOR DE RECUSAS POR CLUSTER)
+// =================================================================
+export const getRecusasDataCluster = async (regionalAtual, mesFiltro = null, anoFiltro = null) => {
+  try {
+    const token = localStorage.getItem("spiToken"); // Ou o token que você usa
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    // Define qual planilha usar com base na regional selecionada
+    const isSpiSpo = regionalAtual === 'SPI' || regionalAtual === 'SPO';
+    const sheetId = isSpiSpo 
+      ? import.meta.env.VITE_RECUSAS_SPI_SPO_SHEET_ID 
+      : import.meta.env.VITE_RECUSAS_SPM_SPC_SHEET_ID;
+
+    if (!sheetId) throw new Error("ID da planilha de Recusas não configurado.");
+
+    // Lógica para montar o nome da aba (ex: JAN-2026)
+    const dataAtual = new Date();
+    const mesIdx = mesFiltro ? parseInt(mesFiltro, 10) - 1 : dataAtual.getMonth();
+    const ano = anoFiltro || dataAtual.getFullYear();
+    const mesesAbrev = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+    const tabName = `${mesesAbrev[mesIdx]}-${ano}`;
+
+    console.log(`Buscando Recusas da aba: ${tabName} | Planilha: ${isSpiSpo ? 'SPI/SPO' : 'SPM/SPC'}`);
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}!A:K`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 404) {
+        console.warn(`Aba ${tabName} não encontrada. Pode não haver dados para este mês ainda.`);
+        return [];
+      }
+      throw new Error(`Erro HTTP: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.values || [];
+  } catch (error) {
+    console.error("Erro ao buscar dados de Recusas:", error);
+    return [];
+  }
+};
+
+
+// =================================================================
+// GET AT EXPEDIDAS (BUSCA DINÂMICA POR MÊS/ABA)
+// =================================================================
+export const getAtExpedidaData = async (abaNome) => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    const regEscolhida = localStorage.getItem("selectedRegional");
+    
+    // IDs protegidos pelas variáveis de ambiente do Vite
+    const idSPI = import.meta.env.VITE_PLANILHA_AT_SPI;
+    const idSPM = import.meta.env.VITE_PLANILHA_AT_SPM;
+
+    // Função interna para buscar a planilha alvo
+    const fetchPlanilha = async (id) => {
+      if (!id) return [];
+      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${abaNome}!A:G`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.values || [];
+    };
+
+    let result = [];
+
+    // Catraca de Segurança de Acesso
+    if (regEscolhida === 'SPI' || regEscolhida === 'SPO') {
+      result = await fetchPlanilha(idSPI);
+    } else if (regEscolhida === 'SPM' || regEscolhida === 'SPC') {
+      result = await fetchPlanilha(idSPM);
+    } else if (regEscolhida === 'BOTH') {
+      const [resSPI, resSPM] = await Promise.all([fetchPlanilha(idSPI), fetchPlanilha(idSPM)]);
+      result = resSPI.concat(resSPM.length > 1 ? resSPM.slice(1) : []);
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`Erro ao buscar dados de AT Expedidas na aba ${abaNome}:`, error);
+    return [];
   }
 };

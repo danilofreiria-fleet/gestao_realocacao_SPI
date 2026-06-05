@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData, getRecusasData } from '../api/googleSheets';
+import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData, getRecusasData, getAtExpedidaData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
 import { Layers, CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning } from 'lucide-react';
 
-// 🔥 IMPORTAÇÃO DA CATRACA DE REGIONAL
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
 const MESES = [
@@ -37,6 +36,7 @@ export default function Dashboard() {
   const [ofertasModalData, setOfertasModalData] = useState([]);
   const [atPisoClusterData, setAtPisoClusterData] = useState([]);
   const [recusasData, setRecusasData] = useState([]);
+  const [atExpedidaData, setAtExpedidaData] = useState([]);
  
   // ESTADOS DE FILTROS GLOBAIS
   const [filtros, setFiltros] = useState({
@@ -53,8 +53,6 @@ export default function Dashboard() {
   const turnoMenuRef = useRef(null);
   const stationMenuRef = useRef(null);
   const regionalMenuRef = useRef(null);
-  
-  // 💡 NOVA REF: Para capturar o container do menu de categorias
   const menuCategoriesRef = useRef(null);
 
   const [activeCategory, setActiveCategory] = useState('resumo');
@@ -69,29 +67,26 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 💡 NOVO EFFECT: Transforma o scroll vertical do mouse em scroll horizontal no menu
+  // Transforma o scroll vertical do mouse em scroll horizontal no menu
   useEffect(() => {
     const menuElement = menuCategoriesRef.current;
     if (!menuElement) return;
 
     const handleWheel = (e) => {
       if (e.deltaY !== 0) {
-        e.preventDefault(); // Impede a página de rolar para baixo/cima
-        menuElement.scrollLeft += e.deltaY * 1.5; // Ajuste o multiplicador (1.5) se quiser mais rápido ou devagar
+        e.preventDefault(); 
+        menuElement.scrollLeft += e.deltaY * 1.5; 
       }
     };
 
-    // Usamos addEventListener manual com passive: false para o preventDefault funcionar perfeitamente
     menuElement.addEventListener('wheel', handleWheel, { passive: false });
     
     return () => {
       menuElement.removeEventListener('wheel', handleWheel);
     };
-  }, [loading]); // Executa após sumir o loading e o menu renderizar de fato
+  }, [loading]); 
 
-
-
-// 🔥 MOTOR DE CARREGAMENTO INTELIGENTE (MULTI-ABA COMPLETO)
+  // 🔥 MOTOR DE CARREGAMENTO INTELIGENTE BLINDADO
   useEffect(() => {
     const carregarDados = async () => {
       setLoading(true);
@@ -99,7 +94,7 @@ export default function Dashboard() {
         const regEscolhida = localStorage.getItem("selectedRegional");
         const hubsPermitidos = getHubsPermitidos(regEscolhida);
 
-        // 1. CARREGA AS BASES PRINCIPAIS PRIMEIRO
+        // 1. CARREGA AS BASES PRINCIPAIS PRIMEIRO (Tiramos o getAtExpedidaData vazio daqui!)
         const [dataConsol, dataBase, dataPiso, dataFirstTrips, dataHistoricoFrota, dataCluster] = await Promise.all([
           getConsolidadoData(),
           getBaseReferenceData(),
@@ -115,44 +110,72 @@ export default function Dashboard() {
           setRawData(dadosConsolBrutos);
         }
         
-        if (dataBase && dataBase.length > 1) setBaseData([dataBase[0], ...dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))]);
-        if (dataPiso && dataPiso.length > 1) setAtPisoData(dataPiso);
-        if (dataFirstTrips && dataFirstTrips.length > 1) setFirstTripsData([dataFirstTrips[0], ...dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))]);
-        if (dataHistoricoFrota && dataHistoricoFrota.length > 1) setHistoricoFrotaData([dataHistoricoFrota[0], ...dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
-        if (dataCluster && dataCluster.length > 1) setAtPisoClusterData([dataCluster[0], ...dataCluster.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))]);
+        if (dataBase && dataBase.length > 1) {
+            setBaseData([dataBase[0]].concat(dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))));
+        }
+        if (dataPiso && dataPiso.length > 1) {
+            setAtPisoData(dataPiso);
+        }
+        if (dataFirstTrips && dataFirstTrips.length > 1) {
+            setFirstTripsData([dataFirstTrips[0]].concat(dataFirstTrips.slice(1).filter(r => hubsPermitidos.includes(String(r[2]).trim()))));
+        }
+        if (dataHistoricoFrota && dataHistoricoFrota.length > 1) {
+            setHistoricoFrotaData([dataHistoricoFrota[0]].concat(dataHistoricoFrota.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))));
+        }
+        if (dataCluster && dataCluster.length > 1) {
+            setAtPisoClusterData([dataCluster[0]].concat(dataCluster.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))));
+        }
 
-        // 🔥 2. MAPEAR O PANORAMA GLOBAL: Descobre todos os meses que já foram operados no ano inteiro
+        // 2. MAPEAR O PANORAMA GLOBAL (DESCOBRIR OS MESES PARA BUSCAR)
         const mesesParaBuscar = new Set();
         
         dadosConsolBrutos.forEach(row => {
-          const dObj = parseDate(row[3]); // Coluna D: Data
+          const dObj = parseDate(row[3]); 
           if (dObj && !isNaN(dObj)) {
              mesesParaBuscar.add(`${String(dObj.getMonth() + 1).padStart(2, '0')}-${dObj.getFullYear()}`);
           }
         });
 
-        // Prevenção: Se a base estiver totalmente vazia (ex: virada de ano), garante pelo menos a busca do mês atual
         if (mesesParaBuscar.size === 0) {
            mesesParaBuscar.add(`${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`);
         }
 
-        // 🔥 3. BUSCA PARALELA HISTÓRICA: Baixa todas as abas de recusa de uma vez só!
+        // Nomes formatados para AT Expedida (Ex: JUN-2026)
+        const nomesAbasMes = Array.from(mesesParaBuscar).map(mStr => {
+           const [m, y] = mStr.split('-');
+           return `${['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][parseInt(m, 10)-1]}-${y}`;
+        });
+
+        // 3. BUSCA PARALELA HISTÓRICA (RECUSAS E EXPEDIDAS)
         const promessasRecusas = Array.from(mesesParaBuscar).map(mStr => {
            const [m, y] = mStr.split('-');
-           return getRecusasData(parseInt(m, 10), parseInt(y, 10));
+           return getRecusasData(parseInt(m, 10), parseInt(y, 10)); 
         });
 
-        const resultadosRecusas = await Promise.all(promessasRecusas);
-        let bancoRecusasUnificado = [];
+        const promessasExpedidas = nomesAbasMes.map(abaNome => getAtExpedidaData(abaNome));
+
+        const [resultadosRecusas, resultadosExpedidas] = await Promise.all([
+           Promise.all(promessasRecusas),
+           Promise.all(promessasExpedidas)
+        ]);
         
+        let bancoRecusasUnificado = [];
         resultadosRecusas.forEach(res => {
            if (res && res.length > 1) {
-             if (bancoRecusasUnificado.length === 0) bancoRecusasUnificado.push(res[0]); // Pega o cabeçalho apenas na primeira aba
-             bancoRecusasUnificado.push(...res.slice(1)); // Injeta as milhares de linhas
+             if (bancoRecusasUnificado.length === 0) bancoRecusasUnificado.push(res[0]); 
+             bancoRecusasUnificado = bancoRecusasUnificado.concat(res.slice(1)); 
            }
         });
-
         setRecusasData(bancoRecusasUnificado);
+
+        let bancoExpedidasUnificado = [];
+        resultadosExpedidas.forEach(res => {
+           if (res && res.length > 1) {
+             if (bancoExpedidasUnificado.length === 0) bancoExpedidasUnificado.push(res[0]); 
+             bancoExpedidasUnificado = bancoExpedidasUnificado.concat(res.slice(1).filter(r => hubsPermitidos.includes(String(r[1]).trim()))); 
+           }
+        });
+        setAtExpedidaData(bancoExpedidasUnificado);
 
       } catch (error) {
         console.error("Erro ao carregar Dashboard", error);
@@ -226,15 +249,15 @@ export default function Dashboard() {
       const dataRow = row[3];
       const dObj = parseDate(dataRow);
       let pass = true;
-     
+      
       const st = String(row[4]).trim();
       const regionalForcada = MAPA_REGIONAL_COMPLETO[st] || row[1];
-     
+      
       if (filtros.regional.length > 0 && !filtros.regional.includes(regionalForcada)) pass = false;
       if (filtros.station.length > 0 && !filtros.station.includes(st)) pass = false;
       if (filtros.turno.length > 0 && !filtros.turno.includes(row[5])) pass = false;
       if (filtros.semana && row[2] !== filtros.semana) pass = false;
-     
+      
       if (dObj && !isNaN(dObj)) {
         if (filtros.mes && String(dObj.getMonth() + 1).padStart(2, '0') !== filtros.mes) pass = false;
         if (filtros.dataInicio || filtros.dataFim) {
@@ -300,7 +323,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-full space-y-6 print:space-y-0 print:block">
-     
+      
       {/* CARD DE FILTROS */}
       <div className="relative bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 shrink-0 print:hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -310,7 +333,7 @@ export default function Dashboard() {
             </h2>
             <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">Visão Executiva: {dadosFiltrados.length} registros analisados.</p>
           </div>
-         
+          
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={exportarCSV} className="flex items-center gap-2 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 px-4 py-2 rounded-xl text-sm font-bold transition-colors">
               <Download size={16}/> Baixar CSV
@@ -325,7 +348,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-slate-50 dark:bg-[#15171e] p-4 rounded-xl border border-slate-100 dark:border-gray-800">
-         
+          
           <div className="flex flex-col lg:col-span-1 relative" ref={regionalMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label>
             <div
@@ -416,7 +439,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 💡 MENU DE CATEGORIAS COM SCROLL VIA WHEEL DO MOUSE */}
+      {/* 💡 MENU DE CATEGORIAS */}
       <div 
         ref={menuCategoriesRef} 
         className="flex bg-white dark:bg-[#1f232d] p-1.5 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 overflow-x-auto custom-scrollbar shrink-0 print:hidden"
@@ -450,8 +473,9 @@ export default function Dashboard() {
           firstTripsData={firstTripsData}
           historicoFrotaData={historicoFrotaData}
           ofertasModalData={ofertasModalData}
-          filtrosGlobais={filtros}
           recusasData={recusasData}
+          atExpedidaData={atExpedidaData}
+          filtrosGlobais={filtros}
         />
       </div>
 
