@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine } from 'recharts';
-import { AlertOctagon, Maximize2, Minimize2, X, CalendarDays, Calendar } from 'lucide-react';
+import { Database, Calculator, Lightbulb, AlertOctagon, Maximize2, Minimize2, X, CalendarDays, Calendar } from 'lucide-react';
 
 const TIMELINE_COLORS = ['#113366', '#EE4D2D', '#D0011B'];
 const NAMES_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -328,14 +328,62 @@ export default function CapFleetCharts({ data }) {
 
   if (!data || data.length === 0) return null;
 
-  return (
+ return (
     <div className="space-y-6 pt-6">
+      
+      {/* HEADER PRINCIPAL */}
       <div className="bg-[#113366] rounded-2xl shadow-sm overflow-hidden border border-[#113366]">
         <div className="text-white text-center py-4 px-6 flex flex-col items-center justify-center gap-1">
           <h2 className="text-xl md:text-2xl font-black uppercase tracking-widest flex items-center gap-2">
             <AlertOctagon className="text-[#EE4D2D]" size={28}/> Análise de Cap Fleet e Gargalos
           </h2>
           <p className="text-xs md:text-sm font-bold text-white/80 uppercase tracking-wider">Monitoramento de limites atingidos e média do volume excedido</p>
+        </div>
+      </div>
+
+      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+          
+          {/* Pilar 1: Origem e Definição */}
+          <div className="flex gap-3 items-start">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+              <Database size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem & Definição</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Este consolidado cruza o <strong>Volume Roteirizado</strong> com a Capacidade Nominal cadastrada na aba <em>BASE</em>. É considerado um <strong>ESTOURO</strong> toda e qualquer operação em que o volume roteirizado supera 100% da capacidade do Hub ou Fleet.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 2: Métricas e Timeline */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-red-50 dark:bg-red-950/30 text-[#D0011B] rounded-lg shrink-0">
+              <Calculator size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Métricas & Timeline</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                A <strong>Média de Excesso</strong> calcula percentualmente <em>apenas o volume que passou</em> do limite nominal. Os dados são apresentados no nível macro (Total/Regional) e micro (Hubs). O gráfico de <strong>Timeline</strong> considera estritamente o histórico dos <strong>últimos 15 dias</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 3: Dica Prática de Análise */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+              <Lightbulb size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Dica Prática de Análise</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Se um Hub apresentar altos indícios de estouro de CAP, cruze essa visão com as abas de <strong>AT no Piso</strong>, <strong>SPR Expedido</strong>, <strong>Evolução de Frota</strong> e a <strong>Tabela de Rodízio</strong> para obter um diagnóstico e panorama completo do período.
+              </p>
+            </div>
+          </div>
+
         </div>
       </div>
 

@@ -41,7 +41,7 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
       const dataStr = String(row[2] || ""); 
       const hubRow = String(row[3] || "");
       
-      // 🔥 AGORA ELE LÊ DO MAPA COMPLETO
+      //LÊ DO MAPA COMPLETO
       const regDoHub = MAPA_REGIONAL_COMPLETO[hubRow] || "";
 
       if (regional.length > 0 && !regional.includes(regDoHub)) return;

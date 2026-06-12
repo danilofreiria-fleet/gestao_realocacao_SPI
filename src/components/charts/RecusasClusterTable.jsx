@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, Layers, TrendingUp, ChevronLeft, ChevronRight, ChevronDown, AlertTriangle, PieChart, Maximize2, X } from 'lucide-react';
+import { Search, MapPin, Layers, TrendingUp, ChevronLeft, ChevronRight, ChevronDown, AlertTriangle, PieChart, Database, Map, Maximize2, CalendarDays, X } from 'lucide-react';
 import { ResponsiveContainer, ComposedChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from 'recharts';
 
 // Tooltips Customizados
@@ -223,11 +223,11 @@ export default function RecusasClusterTable({ recusasData, filtrosGlobais = {} }
     </ResponsiveContainer>
   );
 
-  return (
+return (
     <div className="flex flex-col gap-6 relative">
       
       {/* CARD DE SELEÇÃO E CONTROLES */}
-      <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm">
+      <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm mt-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-2">
             <AlertTriangle className="text-[#D0011B]" size={22} />
@@ -386,9 +386,7 @@ export default function RecusasClusterTable({ recusasData, filtrosGlobais = {} }
               </button>
             </div>
             
-            {/* 🔥 Scroll Interno: A div abaixo gera o scroll se o conteúdo passar do tamanho */}
             <div className="flex-1 w-full overflow-y-auto custom-scrollbar pr-2">
-              {/* Calcula altura dinâmica garantindo pelo menos 55px por barra para nunca sobrepor */}
               <div style={{ height: Math.max(280, matrix.rankingClusters.length * 55) }}>
                 {renderTopClustersChart()}
               </div>
@@ -418,9 +416,7 @@ export default function RecusasClusterTable({ recusasData, filtrosGlobais = {} }
         )}
       </div>
 
-      {/* ============================================================ */}
       {/* MODAL DE GRÁFICO EXPANDIDO (TELA CHEIA) */}
-      {/* ============================================================ */}
       {expandedChart && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 md:p-10">
           <div className="bg-white dark:bg-[#1f232d] w-full max-w-7xl h-full max-h-[90vh] rounded-2xl shadow-2xl flex flex-col p-6 md:p-8 relative">

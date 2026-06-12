@@ -6,7 +6,6 @@ import FleetGapCharts from './charts/FleetGapCharts';
 import FirstTripsChart from './charts/FirstTripsChart';
 import VolumeDispatchCharts from './charts/VolumeDispatchCharts';
 import CapFleetCharts from './charts/CapFleetCharts';
-import AtPisoCharts from './charts/AtPisoCharts';
 import AttentionPointsFeed from './charts/AttentionPointsFeed';
 import StatusEvolutionChart from './charts/StatusEvolutionChart';
 import FleetHealthCharts from './charts/FleetHealthCharts';
@@ -16,6 +15,7 @@ import TimeAnalysisCharts from './charts/TimeAnalysisCharts';
 import AtPisoClusterTable from './charts/AtPisoClusterTable';
 import RecusasClusterTable from './charts/RecusasClusterTable'; 
 import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
+import {Map, Database, Maximize2} from 'lucide-react';
 
 const Visualizations = ({ 
   activeCategory, 
@@ -103,7 +103,7 @@ const Visualizations = ({
       {/* 💡 ESTUDOS DE CLUSTERS (SUB-MENU ESTRATÉGICO) */}
       {activeCategory === 'estudosCluster' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           
+            
            {/* MINI NAVEGADOR DE ABAS */}
            <div className="flex flex-wrap bg-white dark:bg-[#1f232d] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 gap-1 w-fit">
               <button 
@@ -126,6 +126,54 @@ const Visualizations = ({
               </button>
            </div>
 
+           {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO FIXO */}
+           <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+               
+               {/* Pilar 1: Mapas de Calor */}
+               <div className="flex gap-3 items-start">
+                 <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+                   <Map size={16} />
+                 </div>
+                 <div className="flex flex-col gap-1">
+                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Mapas de Calor (Clusters)</h4>
+                   <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                     Este módulo imersivo detalha as dores e a operação de cada Hub em nível de <strong>Cluster</strong> (Bairros/Regiões). Você pode alternar as abas no topo da tela para visualizar três diferentes matrizes de ofensores.
+                   </p>
+                 </div>
+               </div>
+
+               {/* Pilar 2: Visão do Módulo */}
+               <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+                 <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+                   <Database size={16} />
+                 </div>
+                 <div className="flex flex-col gap-1">
+                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Estrutura de Análise</h4>
+                   <ul className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed list-disc pl-4 space-y-1">
+                     <li><strong>AT no Piso:</strong> Acúmulo + Ofensores Absolutos.</li>
+                     <li><strong>Recusas (Declined):</strong> Insucesso + Ofensores + Motivos de Recusa.</li>
+                     <li><strong>Rotas Expedidas:</strong> Volume de Saída + Demandas por Cluster + Proporção de Frota.</li>
+                   </ul>
+                 </div>
+               </div>
+
+               {/* Pilar 3: Interatividade */}
+               <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+                 <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+                   <Maximize2 size={16} />
+                 </div>
+                 <div className="flex flex-col gap-1">
+                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Dicas de Interatividade</h4>
+                   <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                     Todas as informações podem ser filtradas por <strong>Dia, Semana ou Mês</strong> usando o toggle em cada gráfico. Para evitar poluição visual, todos os Hubs nascem contraídos; basta clicar sobre o nome da Station para expandir e visualizar cada Cluster.
+                   </p>
+                 </div>
+               </div>
+
+             </div>
+           </div>
+
            {/* RENDERIZAÇÃO CONDICIONAL DAS TABELAS */}
            {clusterSubTab === 'piso' && (
              <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />
@@ -146,7 +194,6 @@ const Visualizations = ({
       {activeCategory === 'gargalos' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <CapFleetCharts data={data} />
-           <AtPisoCharts data={data} />
         </div>
       )}
 

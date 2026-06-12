@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { LayoutDashboard, CalendarDays, Calendar, Filter, Clock, ArrowUpDown, Search } from 'lucide-react';
+import { Database, ShieldAlert, Settings, LayoutDashboard, CalendarDays, Calendar, Filter, Clock, ArrowUpDown, Search } from 'lucide-react';
 
 const TRADUZ_MES = {
   '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI', '06':'JUN', 
@@ -283,7 +283,7 @@ rhMap[st].novos = parseNum(row[8]);
     </th>
   );
 
-  return (
+return (
     <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden mt-8">
       
       {/* HEADER DE COMANDOS COMPLETO */}
@@ -314,6 +314,53 @@ rhMap[st].novos = parseNum(row[8]);
               <input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="bg-white text-[#113366] border-none rounded p-1 text-xs font-bold shadow-sm outline-none cursor-pointer" />
             </div>
           )}
+
+        </div>
+      </div>
+
+      {/* 🔥 NOVO: BANNER DE STORYTELLING PARA A GESTÃO */}
+      <div className="p-5 md:p-6 bg-white dark:bg-[#1f232d] border-b border-slate-200 dark:border-gray-800">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+          
+          {/* Pilar 1: Origem */}
+          <div className="flex gap-3 items-start">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+              <Database size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem dos Dados</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Métricas de <strong>1st Trip, Dormentes, Risco e Churn</strong> vêm das planilhas <em>[HUB D&A | LM Fleet]</em> e <em>[Gestão Drivers]</em>. O restante das informações operacionais (Volumes e SPR) é imputado diretamente pelos analistas de campo.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 2: Travas */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-red-50 dark:bg-red-950/30 text-[#D0011B] rounded-lg shrink-0">
+              <ShieldAlert size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Travas de Segurança Operacional</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                <strong className="text-slate-700 dark:text-gray-300">Vol Expedido:</strong> Alerta imediato caso seja maior que o processado. <br/>
+                <strong className="text-slate-700 dark:text-gray-300">AT no Piso:</strong> Havendo acúmulo, o analista confirma sistemicamente que a carga retida será prioridade e obrigatoriamente expedida em <strong className="text-[#D0011B]">&gt;D+1&lt;</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 3: Capacidade */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+              <Settings size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Premissas de CAP</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Referência baseada nas planilhas <em>[SPI] Fleet Planning</em> e <em>[LM Fleet] V4</em>. Como não possuímos link em tempo real ao <strong>PCP</strong>, cabe aos Supervisores editarem os limites de Hub e Fleet na aba BASE para manter a capacidade atualizada.
+              </p>
+            </div>
+          </div>
 
         </div>
       </div>
@@ -403,5 +450,4 @@ rhMap[st].novos = parseNum(row[8]);
         </table>
       </div>
     </div>
-  );
-}
+  );}

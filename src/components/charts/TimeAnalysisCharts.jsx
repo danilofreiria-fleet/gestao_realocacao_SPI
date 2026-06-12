@@ -1,11 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
-import { Timer, CheckCircle, AlertTriangle, AlertCircle, Clock, CalendarDays, ChevronDown, ChevronRight, X, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { Timer, CheckCircle, AlertTriangle, AlertCircle, Clock, CalendarDays, ChevronDown, ChevronRight, X, TrendingUp, TrendingDown, Users, Database, Calculator, LayoutDashboard, Lightbulb } from 'lucide-react';
 import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
 export default function TimeAnalysisCharts({ data }) {
   const [expandedReg, setExpandedReg] = useState({});
-  const [activePizzaDetails, setActivePizzaDetails] = useState(null); // Estado do Banner flutuante da Pizza
+  const [activePizzaDetails, setActivePizzaDetails] = useState(null); 
+  
+  // 🔥 TRUQUE DE PERFORMANCE (Debounce Visual para evitar Lag)
+  const [isRendering, setIsRendering] = useState(false);
+
+  useEffect(() => {
+    setIsRendering(false);
+    const timeout = setTimeout(() => setIsRendering(true), 150);
+    return () => clearTimeout(timeout);
+  }, [data]);
 
   const toggleExpandReg = (reg) => {
     setExpandedReg(prev => ({ ...prev, [reg]: !prev[reg] }));
@@ -63,7 +72,6 @@ export default function TimeAnalysisCharts({ data }) {
     const detalhesAtrasoInicio = [];
     const detalhesAtrasoFim = [];
 
-    // Estrutura para o Gráfico Expansível de Frota Ofertada (Regional -> Hub)
     const frotaOfertadaMap = {};
 
     data.forEach((row, index) => {
@@ -79,16 +87,13 @@ export default function TimeAnalysisCharts({ data }) {
       const fimSetup = timeToMinutes(row[9]);     
       const tempoTotalOp = timeToMinutes(row[10]); 
       
-      // Coluna Y da aba CONSOLIDADO (Oferta Total) = índice 24
       const veiculosOfertados = parseNum(row[24]); 
 
       let isAtrasadoGeral = false;
 
-      // ==========================================
       // CÁLCULO INÍCIO
-      // ==========================================
       if (inicioReal !== null && inicioSetup !== null) {
-        const difInicio = inicioReal - inicioSetup; // Positivo = Atraso, Negativo = Adiantado
+        const difInicio = inicioReal - inicioSetup; 
         somaMinutosAtrasoInicio += difInicio;
         registrosComInicioValido++;
 
@@ -101,9 +106,7 @@ export default function TimeAnalysisCharts({ data }) {
         }
       }
 
-      // ==========================================
       // CÁLCULO FIM
-      // ==========================================
       if (fimReal !== null && fimSetup !== null) {
         const difFim = fimReal - fimSetup;
         somaMinutosAtrasoFim += difFim;
@@ -118,33 +121,24 @@ export default function TimeAnalysisCharts({ data }) {
         }
       }
 
-      // ==========================================
-      // LISTA PARA A TABELA
-      // ==========================================
       if (isAtrasadoGeral) {
         listaAtrasos.push({
           originalIndex: index,
           hub: hubRow || 'N/A',
           data: dataStr,
-          setupInicio: row[8] || '--:--', // Puxado da base
-          inicio: row[6] || '--:--',      // Real
-          setupFim: row[9] || '--:--',    // Puxado da base
-          fim: row[7] || '--:--',         // Real
+          setupInicio: row[8] || '--:--', 
+          inicio: row[6] || '--:--',      
+          setupFim: row[9] || '--:--',    
+          fim: row[7] || '--:--',         
           tempoOp: row[10] || '--:--'
         });
       }
 
-      // ==========================================
-      // MÉDIAS GERAIS DE TEMPO (Duração)
-      // ==========================================
       if (tempoTotalOp !== null && tempoTotalOp > 0) {
         totalMinutosDelivering += tempoTotalOp;
         qtdRegistrosDelivering++;
       }
 
-      // ==========================================
-      // GRÁFICO DE FROTA OFERTADA (Expansível)
-      // ==========================================
       if (!frotaOfertadaMap[reg]) {
         frotaOfertadaMap[reg] = { regional: reg, totalVeiculos: 0, hubs: {} };
       }
@@ -160,12 +154,10 @@ export default function TimeAnalysisCharts({ data }) {
       ? minutesToTime(totalMinutosDelivering / qtdRegistrosDelivering) 
       : '--:--';
 
-    // Média de Atraso Início (Em minutos puros)
     const mediaAtrasoInicioMin = registrosComInicioValido > 0 
       ? Math.round(somaMinutosAtrasoInicio / registrosComInicioValido) 
       : 0;
 
-    // Média de Atraso Fim (Em minutos puros)
     const mediaAtrasoFimMin = registrosComFimValido > 0 
       ? Math.round(somaMinutosAtrasoFim / registrosComFimValido) 
       : 0;
@@ -180,7 +172,6 @@ export default function TimeAnalysisCharts({ data }) {
       { name: 'Atrasado', value: atrasoFim, fill: '#D0011B', details: detalhesAtrasoFim }
     ];
 
-    // Formatação da Frota Ofertada
     const chartFrotaOfertada = Object.values(frotaOfertadaMap).map(r => {
       const hubsList = Object.keys(r.hubs).map(hName => ({ name: hName, value: r.hubs[hName] })).sort((a,b) => b.value - a.value);
       return {
@@ -212,7 +203,6 @@ export default function TimeAnalysisCharts({ data }) {
 
   const { kpis, chartInicio, chartFim, chartFrotaOfertada, listaAtrasos } = processedData;
 
-  // Componente Reutilizável de Card de KPI de Atraso
   const DelayKPICard = ({ title, mediaMin, icon }) => {
     const isLate = mediaMin > 0;
     const colorClass = isLate ? 'text-[#EE4D2D]' : 'text-green-500';
@@ -248,6 +238,65 @@ export default function TimeAnalysisCharts({ data }) {
   return (
     <div className="space-y-6 relative">
       
+      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+          
+          {/* Pilar 1: Origem */}
+          <div className="flex gap-3 items-start">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+              <Database size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem dos Dados</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Este consolidado cruza o <strong>Setup (aba BASE)</strong> com o <strong>Horário Sinalizado (Analista)</strong> de acordo com o turno. Alterações de setup devem ser feitas na aba BASE, pois não possuímos link em tempo real com o PCP. Vale ressaltar: não há registro histórico de alteração de setup (ele é fixo).
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 2: Desvios (Adiantado x Atrasado) */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+              <Calculator size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Desvios Médios (Minutos)</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                O cálculo avalia a variação em minutos. Quando os Desvios Iniciais/Finais estão <strong>VERDES</strong>, mostram que a operação terminou <strong>ADIANTADA</strong>. Quando <strong>VERMELHOS</strong>, mostram o tempo médio de <strong>ATRASO</strong> no período.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 3: Gráficos de Pontualidade */}
+          <div className="flex gap-3 items-start border-t xl:border-t-0 xl:border-l border-slate-200 dark:border-gray-700 pt-4 xl:pt-0 xl:pl-6">
+            <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+              <LayoutDashboard size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Aderência & Gráficos</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                O card de <strong>Aderência Geral</strong> mostra a porcentagem (%) de pontualidade agregada. Nas Pizzas interativas, clique na fatia <strong>ATRASADO</strong> para abrir o detalhamento da ocorrência (Minutos estourados vs Setup Base).
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 4: Dica Prática */}
+          <div className="flex gap-3 items-start border-t xl:border-t-0 xl:border-l border-slate-200 dark:border-gray-700 pt-4 xl:pt-0 xl:pl-6">
+            <div className="p-2 bg-purple-50 dark:bg-purple-950/20 text-purple-600 rounded-lg shrink-0">
+              <Lightbulb size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Dica Prática de Análise</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Na tabela de Veículos Ofertados/Expedidos, cruze a alta volumetria do dia com a aba de <strong>Gargalos e CAP</strong> para identificar se o atraso ocorreu por estouro de capacidade. Além disso, confira sempre a aba de <strong>Logbook</strong> para entender a raiz do problema.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* 1. TOPO: KPIs Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 print:grid-cols-4 print:gap-2">
         <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm flex flex-col justify-center print:border-gray-300">
@@ -256,7 +305,6 @@ export default function TimeAnalysisCharts({ data }) {
           <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Duração da Expedição</p>
         </div>
 
-        {/* 🔥 NOVOS CARDS DE ATRASO */}
         <DelayKPICard title="Desvio Médio Inicial" mediaMin={kpis.mediaAtrasoInicioMin} icon={<Clock size={20} className="text-slate-400" />} />
         <DelayKPICard title="Desvio Médio Final" mediaMin={kpis.mediaAtrasoFimMin} icon={<Clock size={20} className="text-slate-400" />} />
 
@@ -294,6 +342,7 @@ export default function TimeAnalysisCharts({ data }) {
                   label={{fontSize: 12, fontWeight: 'bold'}}
                   className="cursor-pointer"
                   onClick={(entry) => handlePizzaClick(entry, 'INÍCIO')}
+                  isAnimationActive={isRendering} // 🔥 Trava do FPS
                 >
                   {chartInicio.map((entry, index) => <Cell key={`cell-ini-${index}`} fill={entry.fill} className="hover:opacity-80 transition-opacity" />)}
                 </Pie>
@@ -318,6 +367,7 @@ export default function TimeAnalysisCharts({ data }) {
                   label={{fontSize: 12, fontWeight: 'bold'}}
                   className="cursor-pointer"
                   onClick={(entry) => handlePizzaClick(entry, 'FIM')}
+                  isAnimationActive={isRendering} // 🔥 Trava do FPS
                 >
                   {chartFim.map((entry, index) => <Cell key={`cell-fim-${index}`} fill={entry.fill} className="hover:opacity-80 transition-opacity" />)}
                 </Pie>
@@ -330,7 +380,7 @@ export default function TimeAnalysisCharts({ data }) {
 
       </div>
 
-      {/* 3. 🔥 NOVO GRÁFICO: VEÍCULOS EXPEDIDOS (EXPANSÍVEL) */}
+      {/* 3. VEÍCULOS EXPEDIDOS (EXPANSÍVEL) */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid overflow-hidden">
         <div className="p-6 border-b border-slate-100 dark:border-gray-800 bg-slate-50/50 dark:bg-[#15171e]">
           <h3 className="font-black text-lg text-[#113366] dark:text-white uppercase flex items-center gap-2">
@@ -372,7 +422,7 @@ export default function TimeAnalysisCharts({ data }) {
       </div>
 
 
-      {/* 4. 🔥 TABELA DE ATRASOS CRÍTICOS (COM SETUP INICIAL E FINAL) 🔥 */}
+      {/* 4. 🔥 TABELA DE ATRASOS CRÍTICOS 🔥 */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid" style={{ maxHeight: '600px' }}>
         
         {/* BARRA VERMELHA */}
@@ -474,5 +524,4 @@ export default function TimeAnalysisCharts({ data }) {
       )}
 
     </div>
-  );
-}
+  );}

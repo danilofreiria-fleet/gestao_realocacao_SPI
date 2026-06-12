@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Area, AreaChart } from 'recharts';
-import { Package, RefreshCw, Percent, TrendingUp, Maximize2, Minimize2, AlertCircle, MessageSquare, MapPin, Calendar, Clock } from 'lucide-react';
+import { Package, RefreshCw, Percent, TrendingUp, Maximize2, Minimize2, AlertCircle, MessageSquare, MapPin, Calendar, Clock,Database, BookOpen, Calculator } from 'lucide-react';
 
 const TRADUZ_MES = { '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI', '06':'JUN', '07':'JUL', '08':'AGO', '09':'SET', '10':'OUT', '11':'NOV', '12':'DEZ' };
 
@@ -203,10 +203,10 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
   };
 
   const showLabels = chartData.length <= 15;
-
-  return (
+return (
     <div className="space-y-6 mt-6 pb-12">
       
+      {/* HEADER DE COMANDOS */}
       <div className="flex justify-end">
         <div className="flex bg-slate-100 dark:bg-[#15171e] p-1 rounded-xl border border-slate-200 dark:border-gray-700">
           {['dia', 'semana', 'mes'].map((p) => (
@@ -214,6 +214,55 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
               {p === 'dia' ? 'Dia' : p === 'semana' ? 'Sem' : 'Mês'}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+          
+          {/* Pilar 1: Origem e Orientação */}
+          <div className="flex gap-3 items-start">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+              <Database size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem dos Dados</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Dados preenchidos <strong>totalmente pelos analistas (D-0)</strong>. O Logbook reflete o que foi digitado no campo "Justificativa".
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 2: Dica Prática de Gestão */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+              <BookOpen size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Boas Práticas</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                É recomendável manter uma planilha interna de controle para separar, por exemplo, o que foi <em>"Volumoso retido por falta de espaço"</em> do que foi <em>"Retido por erro operacional"</em>, não dependendo exclusivamente do Inventário. O gráfico <strong>Divergência de Capacidade</strong> já ajuda nisso cruzando pacotes retidos vs Vans/Utilitários dispensados sem carga.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 3: Fórmulas de Qualidade */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+              <Calculator size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Fórmulas (KPIs)</h4>
+              <div className="flex flex-col gap-1 mt-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 leading-relaxed">
+                <p><strong className="text-slate-700 dark:text-gray-300">Desv. Fleet:</strong> Volumosos Não Exp. ÷ Vol. Processado</p>
+                <p><strong className="text-slate-700 dark:text-gray-300">Desv. Hub:</strong> Pacotes Não Exp. ÷ Vol. Processado</p>
+                <p><strong className="text-slate-700 dark:text-gray-300">Taxa Corr:</strong> Total de Realocações ÷ Vol. Processado</p>
+                <p><strong className="text-slate-700 dark:text-gray-300">Eficiência:</strong> (Vol. Expedido ÷ Vol. Proc.) × 100</p>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -372,5 +421,4 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
 
       </div>
     </div>
-  );
-}
+  );}

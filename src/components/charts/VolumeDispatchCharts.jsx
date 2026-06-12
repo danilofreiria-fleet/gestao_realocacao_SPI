@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine } from 'recharts';
-import { Truck, Maximize2, Minimize2, X, Calendar, CalendarDays } from 'lucide-react';
+import { Database, LineChart, Calculator, Truck, Maximize2, Minimize2, X, Calendar, CalendarDays } from 'lucide-react';
 
 const NAMES_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -422,7 +422,7 @@ export default function VolumeDispatchCharts({ data }) {
     );
   };
 
-  // 🔥 NOVO GRÁFICO: PROPORÇÃO DE MODAIS (100% STACKED BAR)
+  //PROPORÇÃO DE MODAIS (100% STACKED BAR)
   const ProportionModalChart = ({ data }) => (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 30, right: 20, left: -10, bottom: 20 }}>
@@ -546,6 +546,7 @@ export default function VolumeDispatchCharts({ data }) {
   return (
     <div className="space-y-6 pt-6 print:pt-0">
       
+      {/* HEADER PRINCIPAL */}
       <div className="bg-[#113366] rounded-2xl shadow-sm overflow-hidden border border-[#113366] print:break-inside-avoid">
         <div className="text-white text-center py-5 px-6 flex flex-col items-center justify-center gap-1">
           <h2 className="text-xl md:text-3xl font-black uppercase tracking-widest flex items-center gap-3">
@@ -554,6 +555,54 @@ export default function VolumeDispatchCharts({ data }) {
           <p className="text-xs md:text-sm font-bold text-white/80 uppercase tracking-wider">
             Aderência do Plano vs Execução • Evolução de Volume e Produtividade (SPR)
           </p>
+        </div>
+      </div>
+
+      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0 print:hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+          
+          {/* Pilar 1: Origem */}
+          <div className="flex gap-3 items-start">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+              <Database size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem dos Dados</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                <strong>TODAS AS INFORMAÇÕES SÃO PREENCHIDAS PELOS ANALISTAS.</strong> TODAS as informações desse módulo são um retrato <strong>D-0</strong> real da operação ao fechamento de cada turno.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 2: Leitura dos Gráficos */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+              <LineChart size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Leitura dos Gráficos</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                <strong className="text-[#D0011B]">Linha Vermelha:</strong> Representa a variação percentual (%) exata em relação ao período imediatamente anterior na régua de tempo. <br/>
+                <strong className="text-slate-700 dark:text-gray-300">Modais:</strong> Consolidação de veículos carregados no período, apresentada tanto em número absoluto quanto em proporção de frota.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 3: Cálculos de SPR */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+              <Calculator size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Produtividade (SPR)</h4>
+              <div className="flex flex-col gap-1.5 mt-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 leading-relaxed">
+                <p><strong className="text-slate-700 dark:text-gray-300">SPR Roteirizado:</strong> Vol. Roteirizado ÷ AT Roteirizada</p>
+                <p><strong className="text-slate-700 dark:text-gray-300">SPR Expedido:</strong> Vol. Expedido ÷ Soma de Veículos Carregados (Utilitário, Van, Passeio, Moto)</p>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -572,5 +621,4 @@ export default function VolumeDispatchCharts({ data }) {
         <ToggleableChartCard id="modaisProportion" titleBase="PROPORÇÃO DE MODAIS EXPEDIDOS (%)" isProportion={true} colSpan="xl:col-span-2" />
       </div>
     </div>
-  );
-}
+  );}

@@ -13,7 +13,7 @@ export default function RegionalSelection() {
     navigate("/app/premissas");
   };
 
-  // 🔥 AS REGRINHAS MÁGICAS: Verifica qual botão deve acender
+  //Verifica qual botão deve acender
   const canAccessSPI = allowed === 'SPI' || allowed === 'SPO' || allowed === 'BOTH';
   const canAccessSPM = allowed === 'SPM' || allowed === 'SPC' || allowed === 'BOTH';
 

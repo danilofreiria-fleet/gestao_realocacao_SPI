@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { getDeliverySuccessData } from '../api/googleSheets';
 import { getHubsPermitidos, MAPA_REGIONAL_COMPLETO } from '../constants/regionais';
-import { Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck } from 'lucide-react';
+import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck } from 'lucide-react';
 
 export default function DeliverySuccess() {
   const [loading, setLoading] = useState(true);
@@ -69,17 +69,56 @@ export default function DeliverySuccess() {
     return mes.charAt(0).toUpperCase() + mes.slice(1);
   };
 
-  const renderSemaforo = (val) => {
-    if (val === null || val === undefined) return '-';
-    let icon = '🟢';
-    if (val < 95) icon = '🔴';
-    else if (val < 98) icon = '🟡';
-    return (
-      <span className="flex items-center justify-center gap-1.5 font-black">
-        <span className="text-[10px]">{icon}</span> {val}%
-      </span>
-    );
-  };
+const renderSemaforo = (val, currentViewMode) => {
+  if (val === null || val === undefined || val === '') return '-';
+  
+  const num = Number(val);
+  // Verifica se a visão atual é de D-0
+  const isD0 = currentViewMode === 'D0' || currentViewMode === 'MONTH_D0';
+
+  if (isD0) {
+    // 🔥 REGRA D-0: >= 95 Verde | < 95 Vermelho (Sem Amarelo)
+    if (num >= 95) {
+      return (
+        <div className="flex items-center gap-1.5 justify-center text-emerald-600 dark:text-emerald-400 font-black">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
+          {num}%
+        </div>
+      );
+    } else {
+      return (
+         <div className="flex items-center gap-1.5 justify-center text-[#D0011B] font-black">
+          <div className="w-2 h-2 rounded-full bg-[#D0011B] shadow-[0_0_5px_rgba(208,1,27,0.5)]"></div>
+          {num}%
+        </div>
+      );
+    }
+  } else {
+    // 🔥 REGRA TOTAL: >= 98 Verde | 95 a 97.99 Amarelo | < 95 Vermelho
+    if (num >= 98) {
+      return (
+        <div className="flex items-center gap-1.5 justify-center text-emerald-600 dark:text-emerald-400 font-black">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
+          {num}%
+        </div>
+      );
+    } else if (num >= 95) {
+      return (
+        <div className="flex items-center gap-1.5 justify-center text-yellow-600 dark:text-yellow-400 font-black">
+          <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]"></div>
+          {num}%
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex items-center gap-1.5 justify-center text-[#D0011B] font-black">
+          <div className="w-2 h-2 rounded-full bg-[#D0011B] shadow-[0_0_5px_rgba(208,1,27,0.5)]"></div>
+          {num}%
+        </div>
+      );
+    }
+  }
+};
 
   const toggleRegSelection = (reg) => {
     setSelectedRegs(prev => prev.includes(reg) ? prev.filter(r => r !== reg) : [...prev, reg]);
@@ -386,7 +425,7 @@ export default function DeliverySuccess() {
   const showsEmptyState = selectedRegs.length === 0 && selectedHubs.length === 0 && !searchTerm;
   const activeColumns = viewMode.includes('MONTH') ? processed.colMeses : processed.colSemanasFiltradas;
 
-  return (
+ return (
     <div className="flex flex-col h-full gap-6">
       
       {/* 1. PAINEL DE CONTROLE / FILTROS E DOWNLOADS */}
@@ -417,7 +456,8 @@ export default function DeliverySuccess() {
           </div>
         </div>
 
-        {/* FILTROS AVANÇADOS */}
+
+       {/* FILTROS AVANÇADOS */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             <div className="md:col-span-4 flex flex-col gap-2 relative" ref={dropdownRegRef}>
                 <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><Filter size={12}/> 1. Subregional</label>
@@ -469,6 +509,57 @@ export default function DeliverySuccess() {
             </div>
         </div>
       </div>
+
+
+      {/* BANNER DE STORYTELLING PARA A GESTÃO */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+        
+        {/* Pilar 1: Origem dos dados */}
+        <div className="flex gap-3 items-start">
+          <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+            <Database size={16} />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem & Limitação</h4>
+            <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+              Os dados do DS são puxados diretamente do banco de dados via <strong>BigQuery</strong>. Os motoristas são identificados por ID. Não é possível, no momento, identificar a performance por cluster devido ao espaço massivo necessário para consolidação dessas informações.
+            </p>
+          </div>
+        </div>
+
+        {/* Pilar 2: Regras e Metas */}
+        <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+          <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+            <Target size={16} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Regras de Ouro (Metas)</h4>
+            <div className="flex flex-col gap-1 mt-1">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Meta DS Total: <strong className="text-slate-800 dark:text-white">98%</strong>
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Meta DS D-0: <strong className="text-slate-800 dark:text-white">95%</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Pilar 3: Dica de ouro (PROCV) */}
+        <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+          <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+            <Lightbulb size={16} />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Dica Prática de Análise</h4>
+            <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+              Baixe o CSV do seu Hub e importe na coluna B da sua aba destino. Em outra aba, importe o cadastro de motoristas do <strong>SPX</strong> (<em>Menu lateral &gt; Gestão de Equipe &gt; Perfil de motorista ➔ "Exportar"</em>). Realize um <strong>PROCV</strong> simples na coluna A (utilizando ARRAYFORMULA fica ainda mais fácil) usando a coluna de ID do motorista para cruzar o código com os nomes e dados cadastrais da frota.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
 
       {/* 2. SÉRIE DE CARDS EXECUTIVOS (KPIs) */}
       <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0 transition-opacity duration-300 ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
@@ -562,7 +653,8 @@ export default function DeliverySuccess() {
 
                                 return (
                                     <td key={col.id} className={`p-4 border-r border-slate-200 dark:border-gray-700 ${val !== null && val < 95 ? 'bg-red-50/50 dark:bg-red-900/10 text-[#D0011B]' : 'bg-slate-50/30 dark:bg-gray-800/10 text-slate-800 dark:text-gray-200'}`}>
-                                    {renderSemaforo(val)}
+                                    {/* 🔥 AQUI PASSA O VIEW MODE */}
+                                    {renderSemaforo(val, viewMode)}
                                     </td>
                                 );
                               })}
@@ -586,7 +678,8 @@ export default function DeliverySuccess() {
 
                                   return (
                                   <td key={col.id} className={`p-3 font-bold border-r border-slate-100 dark:border-gray-800 ${val !== null && val < 95 ? 'text-[#D0011B] font-black bg-red-50/20 dark:bg-red-900/5' : ''}`}>
-                                      {renderSemaforo(val)}
+                                      {/* 🔥 AQUI TAMBÉM PASSA O VIEW MODE */}
+                                      {renderSemaforo(val, viewMode)}
                                   </td>
                                   );
                               })}

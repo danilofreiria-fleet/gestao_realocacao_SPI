@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Zap, ChevronDown, ChevronRight, CalendarDays, Calendar, Filter } from 'lucide-react';
+import { Database, ShieldAlert, Settings, Target, Zap, ChevronDown, ChevronRight, CalendarDays, Calendar, Filter } from 'lucide-react';
 
 // 🔥 IMPORTAÇÃO DINÂMICA DA FONTE ÚNICA DA VERDADE
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../../constants/regionais';
@@ -232,7 +232,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
   }
 
   return (
-    <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden">
+    <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden mt-8">
       
       {/* HEADER COM TOGGLE */}
       <div className="bg-[#113366] py-4 px-6 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -250,6 +250,44 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
           <button onClick={() => setViewMode('manual')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'manual' ? 'bg-white text-[#113366] shadow' : 'text-white/70 hover:text-white'}`}>
             <Filter size={14}/> Manual (Filtros)
           </button>
+        </div>
+      </div>
+
+      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO: AT NO PISO */}
+      <div className="p-5 md:p-6 bg-white dark:bg-[#1f232d] border-b border-slate-200 dark:border-gray-800">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+          
+          {/* Pilar 1: Origem */}
+          <div className="flex gap-3 items-start">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+              <Database size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem dos Dados</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                As informações desta tabela (AT no Piso Diário) são extraídas e consolidadas diretamente do <strong>Banco de Dados</strong> da operação, refletindo o acúmulo real retido nas bases.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 2: Regras e Metas */}
+          <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+              <Target size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Regras de Ouro (Metas)</h4>
+              <div className="flex flex-col gap-2 mt-1">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Target (Ideal): <strong className="text-slate-800 dark:text-white">Menos de 1% (&lt; 1%)</strong>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300">
+                  <div className="w-2 h-2 rounded-full bg-[#D0011B]"></div> Alerta Crítico: <strong className="text-slate-800 dark:text-white">Igual ou maior a 1% (&ge; 1%)</strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -310,5 +348,4 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
         </table>
       </div>
     </div>
-  );
-}
+  );}

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin, ChevronDown, Download } from 'lucide-react';
+import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin, ChevronDown, Download, Database, Lightbulb } from 'lucide-react';
 import { getRodagemData } from '../../api/googleSheets';
 import { getHubsPermitidos } from '../../constants/regionais';
 
@@ -293,6 +293,55 @@ export default function RotationTable() {
   return (
     <div className="flex flex-col space-y-4 mt-6">
       
+      {/*BANNER DE STORYTELLING PARA A GESTÃO */}
+      <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+          
+          {/* Pilar 1: Origem e Operação */}
+          <div className="flex gap-3 items-start">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+              <Database size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Origem & Utilização</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Dados consolidados via <strong>BigQuery</strong> (identificação por ID). Na <em>Central de Filtros</em>, pesquise por um ou múltiplos Hubs para uma visão macro. Você pode afunilar por Modal, Status Diário ou Quantidade de Viagens realizadas no período.
+              </p>
+            </div>
+          </div>
+
+          {/* Pilar 2: Legenda (Status) */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+              <MapPin size={16} />
+            </div>
+            <div className="flex flex-col gap-1 w-full">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Legenda de Status</h4>
+              <div className="flex flex-col gap-1 mt-1 text-[11px] font-medium leading-relaxed">
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold"><CheckCircle size={12}/> RODOU (Viagem concluída)</span>
+                <span className="flex items-center gap-1 text-[#D0011B] font-bold"><XCircle size={12}/> RECUSOU (Abrange substituições e cancelamentos)</span>
+                <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400 font-bold"><AlertTriangle size={12}/> DISPONÍVEL (Aguardando oferta)</span>
+                <span className="flex items-center gap-1 text-slate-400 font-bold"><div className="w-3 h-3 rounded bg-slate-200 dark:bg-gray-700 flex items-center justify-center">-</div> INDISPONÍVEL</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pilar 3: Dica Prática de Cruzamento */}
+          <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+            <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+              <Lightbulb size={16} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Dica Prática de Análise</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                Baixe o CSV do Hub e importe na coluna B. Em outra aba, importe a base do <strong>SPX</strong> (<em>Gestão de Equipe &gt; Perfil &gt; Exportar</em>). Faça um <strong>PROCV</strong> (ou <em>ARRAYFORMULA</em>) usando a coluna de ID para cruzar os dados do painel com os nomes e cadastros atualizados da frota.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* PAINEL DE CONTROLE DE FILTROS E DOWNLOAD */}
       <div className="bg-white dark:bg-[#1f232d] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 p-4 shrink-0 flex flex-col gap-4">
         
