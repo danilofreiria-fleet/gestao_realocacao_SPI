@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   BookOpen, ShieldAlert, Calculator, MousePointerClick, Info, MessageSquare, 
   Image as ImageIcon, LayoutDashboard, Zap, CalendarDays, Users, Activity, 
-  BarChart3, AlertOctagon, Package, Clock, Truck, MessageSquareWarning, Layers 
+  BarChart3, AlertOctagon, Package, Clock, Truck, MessageSquareWarning, Layers, Award
 } from 'lucide-react';
 
 export default function Premissas() {
@@ -83,7 +83,6 @@ export default function Premissas() {
             <LayoutDashboard size={20} /> Guias de Visualização (Módulos do Dashboard)
           </h2>
           
-          {/* 🔥 NOVO DESIGN DE CARDS UNIFICADOS */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-2">
             
             <div className="flex flex-col bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 hover:border-[#113366] dark:hover:border-blue-400 transition-colors h-full">
@@ -300,13 +299,34 @@ export default function Premissas() {
               </ul>
             </div>
 
-            <div className="flex flex-col bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 h-full md:col-span-2 xl:col-span-1">
+            <div className="flex flex-col bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 h-full">
+              <div className="flex items-center gap-2 mb-1"><Info size={18} className="text-[#EE4D2D] shrink-0"/><h3 className="font-black text-slate-800 dark:text-white text-sm uppercase">Qualidade e Piso</h3></div>
+              <p className="text-[10px] text-slate-500 font-bold mb-3 uppercase tracking-wider">Desvios de Malha</p>
+              <ul className="text-xs space-y-2 text-slate-700 dark:text-gray-300 font-bold flex-1">
+                <li className="flex gap-2"><span className="text-[#113366] dark:text-blue-400 shrink-0">Desvio Fleet:</span> Volumosos Não Exp. ÷ Vol. Processado</li>
+                <li className="flex gap-2"><span className="text-[#113366] dark:text-blue-400 shrink-0">Desvio Hub:</span> Pacotes Não Exp. ÷ Vol. Processado</li>
+                <li className="flex gap-2"><span className="text-[#113366] dark:text-blue-400 shrink-0">Taxa Correção:</span> Total Realocações ÷ Vol. Processado</li>
+                <li className="flex gap-2"><span className="text-[#113366] dark:text-blue-400 shrink-0">Eficiência:</span> (Vol. Expedido ÷ Vol. Processado) × 100</li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 h-full">
               <div className="flex items-center gap-2 mb-1"><Info size={18} className="text-[#EE4D2D] shrink-0"/><h3 className="font-black text-slate-800 dark:text-white text-sm uppercase">Tempo & Atrasos</h3></div>
               <p className="text-[10px] text-slate-500 font-bold mb-3 uppercase tracking-wider">Tolerância: 15 minutos</p>
               <ul className="text-xs space-y-2 text-slate-700 dark:text-gray-300 font-bold flex-1">
                 <li className="flex gap-2"><span className="text-[#113366] dark:text-blue-400 shrink-0">Ritmo:</span> Tempo Total Ops ÷ Total Carregados</li>
                 <li className="flex gap-2"><span className="text-[#113366] dark:text-blue-400 shrink-0">Atraso Início:</span> Se (Início Real) for maior que (Setup Início + 15 min)</li>
                 <li className="flex gap-2"><span className="text-[#113366] dark:text-blue-400 shrink-0">Atraso Fim:</span> Se (Fim Real) for maior que (Setup Fim + 15 min)</li>
+              </ul>
+            </div>
+
+            {/* 🔥 NOVO: CARD DE DELIVERY SUCCESS */}
+            <div className="flex flex-col bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 h-full md:col-span-2 xl:col-span-1">
+              <div className="flex items-center gap-2 mb-1"><Award size={18} className="text-[#EE4D2D] shrink-0"/><h3 className="font-black text-slate-800 dark:text-white text-sm uppercase">Delivery Success (DS)</h3></div>
+              <p className="text-[10px] text-slate-500 font-bold mb-3 uppercase tracking-wider">Taxa de Sucesso na Entrega</p>
+              <ul className="text-xs space-y-2 text-slate-700 dark:text-gray-300 font-bold flex-1">
+                <li className="flex gap-2 items-center"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></div> <span className="text-[#113366] dark:text-blue-400 shrink-0">Meta DS Total:</span> 98%</li>
+                <li className="flex gap-2 items-center"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></div> <span className="text-[#113366] dark:text-blue-400 shrink-0">Meta DS D-0:</span> 95% (Margem ajustada para pacotes em trânsito)</li>
               </ul>
             </div>
 
