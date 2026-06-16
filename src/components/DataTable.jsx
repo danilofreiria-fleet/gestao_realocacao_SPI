@@ -4,7 +4,6 @@ import { getConsolidadoData, updateRowData, insertRowData, deleteRowData, getBas
 import { Search, ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp, AlertTriangle, Eraser, LucideBarChartHorizontal } from 'lucide-react';
 import FormSection from './FormSection';
 
-
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
 const MESES = [
@@ -35,8 +34,13 @@ const DataTable = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [duplicateAlert, setDuplicateAlert] = useState(null); 
 
-  const [draftFilters, setDraftFilters] = useState({ regional: '', ano: '', mes: '', semana: '', station: '', dataInicio: '', dataFim: '' });
-  const [appliedFilters, setAppliedFilters] = useState({ regional: '', ano: '', mes: '', semana: '', station: '', dataInicio: '', dataFim: '' });
+  // 🔥 ESTADO ÚNICO DE FILTROS (Sem Rascunho!)
+  const initialFilters = { regional: [], ano: '', mes: '', semana: [], station: [], dataInicio: '', dataFim: '' };
+  const [appliedFilters, setAppliedFilters] = useState(initialFilters);
+  
+  const [openFilterDropdown, setOpenFilterDropdown] = useState(null);
+  const [stationSearchTerm, setStationSearchTerm] = useState('');
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
@@ -63,7 +67,6 @@ const DataTable = () => {
         emptyRow[3] = action.prefill.data;
         emptyRow[4] = action.prefill.station;
         emptyRow[5] = action.prefill.turno;
-        // 🔥 Usa o mapa dinâmico para preencher a regional
         emptyRow[1] = action.prefill.regional || MAPA_REGIONAL_COMPLETO[action.prefill.station] || "";
         emptyRow[2] = action.prefill.semana || ""; 
 
@@ -108,14 +111,11 @@ const DataTable = () => {
           return fullRow;
         });
 
-        // 🔥 CATRACA DE REGIONAL: Filtra só as stations da regional logada
         const regEscolhida = localStorage.getItem("selectedRegional");
         const hubsPermitidos = getHubsPermitidos(regEscolhida);
         
-        // Mantém APENAS as stations permitidas (Índice 4 = Station na base de Gestão)
         processedRows = processedRows.filter(row => hubsPermitidos.includes(String(row[4]).trim()));
 
-        // Ordenação Inteligente: Mais novo primeiro
         processedRows.sort((a, b) => {
           const dataA = parseDate(a[3]) || new Date(0);
           const dataB = parseDate(b[3]) || new Date(0);
@@ -152,9 +152,10 @@ const DataTable = () => {
 
   const filteredRows = useMemo(() => {
     return rows.filter(row => {
-      const matchRegional = !appliedFilters.regional || (colIndex.regional !== -1 && String(row[colIndex.regional]) === appliedFilters.regional);
-      const matchSemana = !appliedFilters.semana || (colIndex.semana !== -1 && String(row[colIndex.semana]) === appliedFilters.semana);
-      const matchStation = !appliedFilters.station || (colIndex.station !== -1 && String(row[colIndex.station]) === appliedFilters.station);
+      const matchRegional = appliedFilters.regional.length === 0 || (colIndex.regional !== -1 && appliedFilters.regional.includes(String(row[colIndex.regional])));
+      const matchSemana = appliedFilters.semana.length === 0 || (colIndex.semana !== -1 && appliedFilters.semana.includes(String(row[colIndex.semana])));
+      const matchStation = appliedFilters.station.length === 0 || (colIndex.station !== -1 && appliedFilters.station.includes(String(row[colIndex.station])));
+      
       let matchAno = true, matchMes = true, matchData = true;
 
       if (colIndex.data !== -1) {
@@ -180,14 +181,16 @@ const DataTable = () => {
     return filteredRows.slice(start, start + itemsPerPage);
   }, [filteredRows, currentPage, itemsPerPage]);
 
-  const handleFilterChange = (e) => setDraftFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  const handleSearch = () => { setAppliedFilters(draftFilters); setCurrentPage(1); };
+  // 🔥 HANDLER DE FILTRO AUTOMÁTICO (Inputs Simples)
+  const handleFilterChange = (e) => {
+    setAppliedFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setCurrentPage(1); // Volta pra página 1 sempre que filtra
+  };
   
   const limparFiltros = () => {
-    const limpos = { regional: '', ano: '', mes: '', semana: '', station: '', dataInicio: '', dataFim: '' };
-    setDraftFilters(limpos);
-    setAppliedFilters(limpos);
+    setAppliedFilters(initialFilters);
     setCurrentPage(1);
+    setStationSearchTerm('');
   };
 
   const toggleExpand = (key) => setExpandedObs(prev => ({ ...prev, [key]: !prev[key] }));
@@ -275,7 +278,6 @@ const DataTable = () => {
       newData[index] = value;
       
       if (index === 3) newData[2] = calcularSemana(value); 
-      // 🔥 Usa o mapa dinâmico para preencher a regional
       if (index === 4) newData[1] = MAPA_REGIONAL_COMPLETO[value] || ""; 
 
       if (index === 4 || index === 5) {
@@ -485,6 +487,92 @@ const DataTable = () => {
     }
   };
 
+  // 🔥 HANDLER AUTOMÁTICO PARA O MULTI-SELECT
+  const renderMultiSelect = (label, filterKey, options, enableSearch = false, widthClass = "w-full") => {
+    const isOpen = openFilterDropdown === filterKey;
+    const selectedCount = appliedFilters[filterKey].length;
+
+    return (
+      <div className={`flex flex-col relative ${widthClass}`}>
+        <label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">{label}</label>
+        <div 
+          onClick={() => setOpenFilterDropdown(isOpen ? null : filterKey)}
+          className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg px-3 text-[11px] font-bold cursor-pointer flex justify-between items-center h-[38px] hover:border-[#113366] transition-colors"
+        >
+          <span className="truncate pr-2 select-none text-slate-700 dark:text-gray-200">
+            {selectedCount === 0 ? "Todas as opções" : `${selectedCount} selecionada(s)`}
+          </span>
+          <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}/>
+        </div>
+
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-[90]" onClick={() => setOpenFilterDropdown(null)} />
+            <div className={`absolute top-full left-0 mt-1 min-w-[220px] w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-[100] p-2 flex flex-col max-h-[280px]`}>
+              
+              {enableSearch && (
+                <div className="relative mb-2 shrink-0">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
+                  <input 
+                    type="text"
+                    className="w-full bg-slate-50 dark:bg-[#15171e] border border-slate-200 dark:border-gray-700 rounded text-[11px] py-1.5 pl-7 pr-2 font-medium outline-none text-slate-700 dark:text-white"
+                    placeholder="Pesquisar..."
+                    value={stationSearchTerm}
+                    onChange={(e) => setStationSearchTerm(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-between text-[10px] font-black border-b border-slate-100 dark:border-gray-800 pb-1.5 px-1 mb-1 shrink-0">
+                <button 
+                  type="button" 
+                  className="text-[#113366] dark:text-blue-400 hover:underline" 
+                  onClick={() => { setAppliedFilters(prev => ({...prev, [filterKey]: options})); setCurrentPage(1); }}
+                >
+                  Selecionar Todas
+                </button>
+                <button 
+                  type="button" 
+                  className="text-red-500 hover:underline" 
+                  onClick={() => { setAppliedFilters(prev => ({...prev, [filterKey]: []})); setCurrentPage(1); }}
+                >
+                  Limpar
+                </button>
+              </div>
+              
+              <div className="overflow-y-auto custom-scrollbar flex-1 space-y-0.5">
+                {options.filter(opt => !enableSearch || !stationSearchTerm || String(opt).toLowerCase().includes(stationSearchTerm.toLowerCase())).length === 0 ? (
+                   <div className="text-[10px] text-slate-400 text-center py-4 font-bold">Nenhum resultado</div>
+                ) : (
+                  options.filter(opt => !enableSearch || !stationSearchTerm || String(opt).toLowerCase().includes(stationSearchTerm.toLowerCase())).map(opt => {
+                    const isChecked = appliedFilters[filterKey].includes(opt);
+                    return (
+                      <label key={opt} className="flex items-center space-x-2 px-2 py-1.5 rounded hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-300 select-none transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked} 
+                          onChange={() => {
+                            setAppliedFilters(prev => ({
+                              ...prev,
+                              [filterKey]: isChecked ? prev[filterKey].filter(v => v !== opt) : [...prev[filterKey], opt]
+                            }));
+                            setCurrentPage(1); // Força ir pra pág 1 ao filtrar
+                          }} 
+                          className="rounded border-slate-300 dark:border-gray-600 text-[#113366] focus:ring-[#113366] h-3.5 w-3.5 cursor-pointer" 
+                        />
+                        <span className="truncate">{opt}</span>
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 transition-colors relative">
       
@@ -543,20 +631,48 @@ const DataTable = () => {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6 bg-slate-50 dark:bg-[#15171e] p-4 rounded-xl border border-slate-100 dark:border-gray-800 items-end shrink-0">
-        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Regional</label><select name="regional" value={draftFilters.regional} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Todas</option>{opcoesDropdown.regionais.map(reg => <option key={reg} value={reg}>{reg}</option>)}</select></div>
-        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Ano</label><select name="ano" value={draftFilters.ano} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Todos</option>{opcoesDropdown.anos.map(ano => <option key={ano} value={ano}>{ano}</option>)}</select></div>
-        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Mês</label><select name="mes" value={draftFilters.mes} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Todos</option>{MESES.map(mes => <option key={mes.value} value={mes.value}>{mes.label}</option>)}</select></div>
-        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Semana</label><select name="semana" value={draftFilters.semana} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Todas</option>{opcoesDropdown.semanas.map(sem => <option key={sem} value={sem}>{sem}</option>)}</select></div>
-        <div className="flex flex-col lg:col-span-1 md:col-span-2 col-span-2"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Station / Hub</label><select name="station" value={draftFilters.station} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm"><option value="">Todas</option>{opcoesDropdown.stations.map(station => <option key={station} value={station}>{station}</option>)}</select></div>
-        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Data Início</label><input type="date" name="dataInicio" value={draftFilters.dataInicio} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-gray-300 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm" /></div>
-        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Data Fim</label><input type="date" name="dataFim" value={draftFilters.dataFim} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-gray-300 border border-slate-200 dark:border-gray-700 rounded-lg p-2 text-sm" /></div>
         
-        <div className="flex gap-2 lg:col-span-1 md:col-span-4 col-span-2 h-[38px]">
-          <button onClick={limparFiltros} className="flex flex-1 items-center justify-center bg-slate-200 dark:bg-gray-700 hover:bg-slate-300 dark:hover:bg-gray-600 text-slate-700 dark:text-gray-200 font-bold rounded-lg transition-colors" title="Limpar Filtros">
-            <Eraser size={16} />
-          </button>
-          <button onClick={handleSearch} className="flex-[3] flex items-center justify-center gap-2 bg-[#0055A5] hover:bg-blue-700 text-white font-bold text-sm rounded-lg transition-colors">
-            <Search size={16} /> Buscar
+        <div className="lg:col-span-1 md:col-span-2 col-span-2">
+           {renderMultiSelect('Regional', 'regional', opcoesDropdown.regionais)}
+        </div>
+        
+        <div className="flex flex-col">
+          <label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Ano</label>
+          <select name="ano" value={appliedFilters.ano} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg px-2 text-[11px] font-bold outline-none h-[38px] cursor-pointer">
+             <option value="">Todos</option>
+             {opcoesDropdown.anos.map(ano => <option key={ano} value={ano}>{ano}</option>)}
+          </select>
+        </div>
+        
+        <div className="flex flex-col">
+          <label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Mês</label>
+          <select name="mes" value={appliedFilters.mes} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg px-2 text-[11px] font-bold outline-none h-[38px] cursor-pointer">
+             <option value="">Todos</option>
+             {MESES.map(mes => <option key={mes.value} value={mes.value}>{mes.label}</option>)}
+          </select>
+        </div>
+        
+        <div className="lg:col-span-1 md:col-span-2 col-span-2">
+           {renderMultiSelect('Semana', 'semana', opcoesDropdown.semanas)}
+        </div>
+        
+        <div className="flex flex-col lg:col-span-2 md:col-span-4 col-span-2">
+           {renderMultiSelect('Station / Hub', 'station', opcoesDropdown.stations, true)}
+        </div>
+        
+        <div className="flex flex-col">
+          <label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Data Início</label>
+          <input type="date" name="dataInicio" value={appliedFilters.dataInicio} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg px-2 text-[11px] font-bold outline-none h-[38px]" />
+        </div>
+        <div className="flex flex-col">
+          <label className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase mb-1">Data Fim</label>
+          <input type="date" name="dataFim" value={appliedFilters.dataFim} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg px-2 text-[11px] font-bold outline-none h-[38px]" />
+        </div>
+        
+        {/* BOTÃO DE LIMPEZA REDESENHADO */}
+        <div className="flex gap-2 lg:col-span-8 md:col-span-4 col-span-2 mt-2 pt-4 border-t border-slate-200 dark:border-gray-700">
+          <button onClick={limparFiltros} className="flex-1 flex items-center justify-center bg-slate-200 dark:bg-gray-700 hover:bg-slate-300 dark:hover:bg-gray-600 text-slate-700 dark:text-gray-200 font-bold rounded-lg transition-colors h-[38px]" title="Limpar Todos os Filtros">
+            <Eraser size={16} className="mr-2"/> Limpar Todos os Filtros
           </button>
         </div>
       </div>
