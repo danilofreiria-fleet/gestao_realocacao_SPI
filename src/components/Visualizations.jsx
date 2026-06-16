@@ -15,6 +15,7 @@ import TimeAnalysisCharts from './charts/TimeAnalysisCharts';
 import AtPisoClusterTable from './charts/AtPisoClusterTable';
 import RecusasClusterTable from './charts/RecusasClusterTable'; 
 import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
+import EstudosCapacidade from './charts/EstudosCapacidade';
 import {Map, Database, Maximize2} from 'lucide-react';
 
 const Visualizations = ({ 
@@ -194,6 +195,16 @@ const Visualizations = ({
       {activeCategory === 'gargalos' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <CapFleetCharts data={data} />
+        </div>
+      )}
+
+      {/* ESTUDOS DE CAPACIDADE */}
+      {activeCategory === 'capacidade' && (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <EstudosCapacidade 
+              consolidadoData={rawData} 
+              baseData={baseData} 
+           />
         </div>
       )}
 

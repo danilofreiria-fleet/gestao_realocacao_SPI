@@ -8,9 +8,52 @@ const ID_PLANILHA_SOP = import.meta.env.VITE_SPREADSHEET_ID_SOP;
 const ID_PLANILHA_LOGS = import.meta.env.VITE_SPREADSHEET_ID_LOGS;
 const ID_PERMISSION_SHEET = import.meta.env.VITE_PERMISSION_SHEET;
 
-
-
 const ABA_NOME = "CONSOLIDADO-GESTÃO-SPI_REALOCAÇÃO";
+
+// =================================================================
+// 🛡️ MOTOR DE FILA INTELIGENTE 2.0 (ANTI-ERRO 429 E LOCK GLOBAL)
+// =================================================================
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+let activeRequests = 0;
+let globalRateLimitPause = false; // 🔥 O "Sinal Vermelho" Global
+const MAX_CONCURRENT_REQUESTS = 2; // Baixamos para 2 para máxima segurança
+
+const fetchWithQueue = async (url, options, retries = 5) => {
+  // 1. Catraca: Aguarda se a fila está cheia OU se tomamos bloqueio global
+  // O Math.random (Jitter) impede que várias requisições acordem no exato mesmo milissegundo
+  while (activeRequests >= MAX_CONCURRENT_REQUESTS || globalRateLimitPause) {
+    await sleep(Math.floor(Math.random() * 200) + 100); 
+  }
+
+  activeRequests++; // Entrou
+  try {
+    const response = await fetch(url, options);
+    
+    // 2. Tomou 429? Ativa o sinal vermelho para todo o sistema!
+    if (response.status === 429 && retries > 0) {
+      activeRequests--;
+      globalRateLimitPause = true; // 🛑 Para todas as outras requisições
+      
+      const attempt = 6 - retries; // Vai de 1 a 5
+      const waitTime = Math.pow(2, attempt) * 1500; // Ex: 3s, 6s, 12s, 24s...
+      
+      console.warn(`🛑 [ERRO 429] Google bloqueou. Pausa Global de ${waitTime/1000}s (Tentativa ${attempt}/5)...`);
+      
+      await sleep(waitTime);
+      globalRateLimitPause = false; // 🟢 Libera o sinal vermelho
+      
+      // Coloca a requisição que falhou de volta na fila
+      return fetchWithQueue(url, options, retries - 1); 
+    }
+    
+    activeRequests--; // Saiu
+    return response;
+  } catch (error) {
+    activeRequests--;
+    throw error;
+  }
+};
 
 // =================================================================
 // HELPERS DE COMPARAÇÃO (À PROVA DE BALAS)
@@ -35,7 +78,7 @@ const limpaTexto = (str) => String(str || "").trim().toLowerCase();
 
 const getSheetIdByName = async (spreadsheetId, sheetName, token) => {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`;
-  const response = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+  const response = await fetchWithQueue(url, { headers: { "Authorization": `Bearer ${token}` } });
   const data = await response.json();
   const sheet = data.sheets.find(s => s.properties.title === sheetName);
   if (!sheet) throw new Error(`Aba '${sheetName}' não encontrada.`);
@@ -62,20 +105,10 @@ export const registrarLog = async (acao, dataRef, station, turno, statusInfo, ra
     const userEmail = localStorage.getItem("userEmail") || "Analista"; 
     const dataHoraAtual = new Date().toLocaleString('pt-BR');
 
-    // 🔥 MÁGICA DO BACKUP: Transforma o array em texto para caber numa célula
-    const backupSnapshot = rawData && rawData.length > 0 
-      ? JSON.stringify(rawData) 
-      : "[]";
+    const backupSnapshot = rawData && rawData.length > 0 ? JSON.stringify(rawData) : "[]";
 
     const logData = [
-      dataHoraAtual,
-      userEmail,
-      acao,             
-      dataRef || "",    
-      station || "",    
-      turno || "",      
-      statusInfo || "Sucesso",
-      backupSnapshot    // 🔥 COLUNA H: Onde o Array vai morar!
+      dataHoraAtual, userEmail, acao, dataRef || "", station || "", turno || "", statusInfo || "Sucesso", backupSnapshot 
     ];
 
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_LOGS}/values/LOGS!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
@@ -91,29 +124,22 @@ export const registrarLog = async (acao, dataRef, station, turno, statusInfo, ra
 };
 
 // =================================================================
-// GET (Leitura Super Rápida - Via API Oficial)
+// GET (Leitura Super Rápida - Usando a Fila)
 // =================================================================
 export const getConsolidadoData = async () => {
   try {
     const token = localStorage.getItem("spiToken");
-    if (!token) {
-        throw new Error("Usuário não autenticado. Faça login novamente.");
-    }
+    if (!token) throw new Error("Usuário não autenticado. Faça login novamente.");
 
     const RANGE = `${ABA_NOME}!A:BH`; 
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}`;
 
-    const response = await fetch(url, {
+    const response = await fetchWithQueue(url, {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      }
+      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
     
-    if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status} - O Token pode ter expirado.`);
-    }
+    if (!response.ok) throw new Error(`Erro HTTP: ${response.status} - O Token pode ter expirado.`);
 
     const result = await response.json(); 
     return result.values ? result.values : [];
@@ -135,27 +161,17 @@ export const insertRowData = async (rowData) => {
 
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ values: [rowData] })
     });
 
     if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-    
     const jsonResult = await response.json();
-
-    // 🔥 LOG DE SUCESSO: Veja o 'rowData' aqui no finalzinho!
     registrarLog("CRIAR", rowData[3], rowData[4], rowData[5], "Salvo no Consolidado Principal", rowData);
-
     return jsonResult;
   } catch (error) {
     console.error("Erro na API (POST append):", error);
-    
-    // 🔥 LOG DE ERRO: Se der erro, a gente salva o 'rowData' do mesmo jeito pra não perder o que o analista digitou!
     registrarLog("ERRO_CRIAR", rowData[3], rowData[4], rowData[5], String(error.message), rowData);
-    
     throw error;
   }
 };
@@ -168,57 +184,28 @@ export const salvarNasOrigens = async (payload) => {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // 1. O Report Diário pega exatamente as primeiras 47 colunas (0 a 46)
     const linhaGestao = payload.slice(0, 47);
-
-    // 2. A SOP pega informações pontuais (mantendo o ?? para não perder zeros)
     const linhaControle = [
-      payload[3] ?? "",  // A: Data
-      payload[1] ?? "",  // B: Regional
-      payload[4] ?? "",  // C: Station
-      payload[5] ?? "",  // D: Turno
-      payload[12] ?? "", // E: Vol Roteirizado
-      payload[13] ?? "", // F: Vol Processado
-      payload[14] ?? "", // G: Vol Expedido
-      payload[51] ?? "", // H: Realoc Pre (AZ)
-      payload[52] ?? "", // I: Realoc Durante (BA)
-      payload[53] ?? "", // J: Total Realocados (Calculado) (BB)
-      payload[54] ?? "", // K: Não Coube (BC)
-      payload[55] ?? "", // L: Outros Motivos (BD)
-      payload[56] ?? "", // M: Taxa Correção Fleet (BE)
-      payload[57] ?? "", // N: Desvio Piso Fleet (BF)
-      payload[58] ?? "", // O: Desvio Piso Hub (BG)
-      payload[2] ?? "",  // P: Semana do Ano
-      payload[59] ?? ""  // Q: Eficiência Expedição (BH)
+      payload[3] ?? "", payload[1] ?? "", payload[4] ?? "", payload[5] ?? "", payload[12] ?? "",
+      payload[13] ?? "", payload[14] ?? "", payload[51] ?? "", payload[52] ?? "", payload[53] ?? "",
+      payload[54] ?? "", payload[55] ?? "", payload[56] ?? "", payload[57] ?? "", payload[58] ?? "",
+      payload[2] ?? "", payload[59] ?? ""
     ];
 
     const urlGestao = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     const urlControle = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
     const [resGestao, resControle] = await Promise.all([
-      fetch(urlGestao, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ values: [linhaGestao] })
-      }),
-      fetch(urlControle, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ values: [linhaControle] })
-      })
+      fetch(urlGestao, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: [linhaGestao] }) }),
+      fetch(urlControle, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: [linhaControle] }) })
     ]);
 
-    if (!resGestao.ok || !resControle.ok) {
-       throw new Error(`Falha nas Origens - Report: ${resGestao.status} | SOP: ${resControle.status}`);
-    }
+    if (!resGestao.ok || !resControle.ok) throw new Error(`Falha nas Origens - Report: ${resGestao.status} | SOP: ${resControle.status}`);
 
-    // 🔥 LOG: SUCESSO ORIGENS
     registrarLog("CRIAR_ORIGENS", payload[3], payload[4], payload[5], "Salvo simultaneamente no Report e SOP");
-
     return true;
   } catch (error) {
     console.error("Erro ao salvar nas origens:", error);
-    // 🔥 LOG: ERRO ORIGENS
     registrarLog("ERRO_CRIAR_ORIGENS", payload[3], payload[4], payload[5], String(error.message));
     throw error;
   }
@@ -233,34 +220,23 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     if (!token) throw new Error("Usuário não autenticado.");
 
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
-
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
     const hubAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
     const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
 
     console.log("🚀 INICIANDO EDIÇÃO TRIPLA EM BLOCO...");
 
-    // --- 1. EXECUÇÃO CONSOLIDADO ---
     try {
-      const payloadConsolidado = [{
-        range: `'${ABA_NOME}'!A${rowIndex}`,
-        values: [rowData.map(safeVal)]
-      }];
-      
+      const payloadConsolidado = [{ range: `'${ABA_NOME}'!A${rowIndex}`, values: [rowData.map(safeVal)] }];
       const reqConsol = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadConsolidado })
       });
       if (!reqConsol.ok) throw new Error(await reqConsol.text());
-      console.log("✅ 1/3 - Consolidado Atualizado (Linha Inteira)!");
-    } catch (e) { 
-      throw new Error(`Falha no Consolidado: ${e.message}`); 
-    }
+    } catch (e) { throw new Error(`Falha no Consolidado: ${e.message}`); }
 
-    // --- 2. EXECUÇÃO REPORT DIÁRIO ---
     try {
-      const respRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respRep = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataRep = await respRep.json();
       let encontrouReport = false;
       const linhaGestao = rowData.slice(0, 47).map(safeVal);
@@ -271,37 +247,28 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
           if (padronizarData(r[3]) === dataAlvo && limpaTexto(r[4]) === hubAlvo && limpaTexto(r[5]) === turnoAlvo) {
             encontrouReport = true;
             const payloadRep = [{ range: `'REPORT DIARIO'!A${i + 1}`, values: [linhaGestao] }];
-            
             const reqRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+              method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
             });
             if (!reqRep.ok) throw new Error(await reqRep.text());
-            console.log("✅ 2/3 - Report Diário Atualizado (Linha Existente)!");
             break;
           }
         }
       }
 
-      // 🔥 AUTO-CURA: Se não achou a linha para editar, cria uma nova!
       if (!encontrouReport) {
         const urlAppendRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
         const reqAppend = await fetch(urlAppendRep, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ values: [linhaGestao] })
         });
         if (!reqAppend.ok) throw new Error(await reqAppend.text());
-        console.log("✅ 2/3 - Report Diário Atualizado (Nova Linha Injetada)!");
       }
-    } catch (e) { 
-      throw new Error(`Falha no Report: ${e.message}`); 
-    }
+    } catch (e) { throw new Error(`Falha no Report: ${e.message}`); }
 
-    // --- 3. EXECUÇÃO SOP ---
     try {
-      const respSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respSop = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataSop = await respSop.json();
       let encontrouSop = false;
       
@@ -319,47 +286,38 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
           if (padronizarData(r[0]) === dataAlvo && limpaTexto(r[2]) === hubAlvo && limpaTexto(r[3]) === turnoAlvo) {
             encontrouSop = true;
             const payloadSop = [{ range: `CONTROLE!A${i + 1}`, values: [linhaControle] }];
-            
             const reqSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+              method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadSop })
             });
             if (!reqSop.ok) throw new Error(await reqSop.text());
-            console.log("✅ 3/3 - SOP Atualizada (Linha Existente)!");
             break;
           }
         }
       }
 
-      // 🔥 AUTO-CURA: Se o analista adicionou Realocação depois, cria a linha na SOP agora!
       if (!encontrouSop) {
         const urlAppendSop = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
         const reqAppendSop = await fetch(urlAppendSop, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ values: [linhaControle] })
         });
         if (!reqAppendSop.ok) throw new Error(await reqAppendSop.text());
-        console.log("✅ 3/3 - SOP Atualizada (Nova Linha Injetada)!");
       }
-    } catch (e) { 
-      throw new Error(`Falha na SOP: ${e.message}`); 
-    }
+    } catch (e) { throw new Error(`Falha na SOP: ${e.message}`); }
 
     registrarLog("EDITAR", dataAlvo, hubAlvo, turnoAlvo, "Editado nas origens com sucesso", rowData);
-
     return { success: true };
   } catch (error) {
     console.error("❌ Erro Crítico na Edição:", error);
     const dataAlvoErr = oldRowData ? oldRowData[3] : rowData[3];
     const hubAlvoErr = oldRowData ? oldRowData[4] : rowData[4];
     const turnoAlvoErr = oldRowData ? oldRowData[5] : rowData[5];
-    
     registrarLog("ERRO_EDITAR", dataAlvoErr, hubAlvoErr, turnoAlvoErr, String(error.message));
     throw error;
   }
 };
+
 // =================================================================
 // DELETE (Exclusão)
 // =================================================================
@@ -371,24 +329,17 @@ export const deleteRowData = async (rowIndex, rowData) => {
     const dataAlvo = padronizarData(rowData[3]);
     const stationAlvo = limpaTexto(rowData[4]);
     const turnoAlvo = limpaTexto(rowData[5]);
-    console.log(`Buscando para EXCLUIR: ${dataAlvo} | ${stationAlvo} | ${turnoAlvo}`);
 
-    // 1. Deleta do Consolidado
     const gidConsolidado = await getSheetIdByName(SPREADSHEET_ID, ABA_NOME, token);
     await executeDeleteAPI(SPREADSHEET_ID, gidConsolidado, rowIndex, token);
 
-    // 2. Deleta do Report
     try {
-      const respReport = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respReport = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT%20DIARIO'!A:G`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataReport = await respReport.json();
-      
       if (dataReport.values) {
         for (let i = dataReport.values.length - 1; i >= 1; i--) {
           const row = dataReport.values[i];
-          let dataLida = row[3];
-
-          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
-            console.log("Achou no Report! Excluindo...");
+          if (padronizarData(row[3]) === dataAlvo && limpaTexto(row[4]) === stationAlvo && limpaTexto(row[5]) === turnoAlvo) {
             const gidReport = await getSheetIdByName(ID_PLANILHA_REPORTS, "REPORT DIARIO", token);
             await executeDeleteAPI(ID_PLANILHA_REPORTS, gidReport, i + 1, token);
             break; 
@@ -397,18 +348,13 @@ export const deleteRowData = async (rowIndex, rowData) => {
       }
     } catch (e) { console.error("Erro Report:", e); }
 
-    // 3. Deleta da SOP
     try {
-      const respSOP = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
+      const respSOP = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:E`, { headers: { "Authorization": `Bearer ${token}` } });
       const dataSOP = await respSOP.json();
-      
       if (dataSOP.values) {
         for (let i = dataSOP.values.length - 1; i >= 1; i--) {
           const row = dataSOP.values[i];
-          let dataLida = row[0];
-
-          if (padronizarData(dataLida) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
-            console.log("Achou na SOP! Excluindo...");
+          if (padronizarData(row[0]) === dataAlvo && limpaTexto(row[2]) === stationAlvo && limpaTexto(row[3]) === turnoAlvo) {
             const gidSOP = await getSheetIdByName(ID_PLANILHA_SOP, "CONTROLE", token);
             await executeDeleteAPI(ID_PLANILHA_SOP, gidSOP, i + 1, token);
             break;
@@ -417,389 +363,113 @@ export const deleteRowData = async (rowIndex, rowData) => {
       }
     } catch (e) { console.error("Erro SOP:", e); }
 
-    // Ache essa linha e adicione o rowData no final:
-registrarLog("EXCLUIR", dataAlvo, stationAlvo, turnoAlvo, "Excluído com sucesso", rowData);
-
+    registrarLog("EXCLUIR", dataAlvo, stationAlvo, turnoAlvo, "Excluído com sucesso", rowData);
     return { success: true };
   } catch (error) { 
-    // 🔥 LOG: ERRO EXCLUIR
     registrarLog("ERRO_EXCLUIR", rowData[3], rowData[4], rowData[5], String(error.message));
     throw error; 
   }
 };
 
 // =================================================================
-// POST (Criar Nova Linha - Via Apps Script) [LEGADO/OPCIONAL]
-// =================================================================
-export const sendDataToSheets = async (payload) => {
-  try {
-    const response = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      mode: 'no-cors', 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { success: true };
-  } catch (error) {
-    console.error("Erro na API (POST):", error);
-    throw error;
-  }
-};
-
-// =================================================================
-// GET BASE (Busca os dados de CAP e Setup na aba BASE)
+// GET BASE E DADOS GERAIS DA DASHBOARD (Usando a Fila)
 // =================================================================
 export const getBaseReferenceData = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) return [];
-
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/BASE!A:Z`;
-    
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    const response = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/BASE!A:Z`, {
+      method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
-    
     if (!response.ok) return [];
     const result = await response.json();
     return result.values || [];
-  } catch (error) {
-    console.error("Erro na API (GET BASE):", error);
-    return [];
-  }
+  } catch (error) { return []; }
 };
 
-// =================================================================
-// GET DADOS RH (Para a One Page SPI)
-// =================================================================
 export const getDadosRHDashboard = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
-
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/DADOS_DASHBOARD!A:AD`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    const response = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/DADOS_DASHBOARD!A:AD`, {
+      method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
-
-    if (!response.ok) {
-        console.warn("Aba DADOS_DASHBOARD ausente. Retornando vazio para não quebrar a tela.");
-        return [];
-    }
-    
+    if (!response.ok) return [];
     const result = await response.json();
     return result.values || [];
-  } catch (error) {
-    console.error("Erro na API (GET DADOS RH):", error);
-    return []; 
-  }
+  } catch (error) { return []; }
 };
 
-// ====// =================================================================
-// GET DADOS DO AT PISO (Matriz Original para a One Page)
-// =================================================================
 export const getDadosAtPiso = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
-
-    // 🔥 ID CHUMBADO: Garantia 100% que vai buscar na planilha de Permissões
     const ID_PLANILHA_AT_PISO = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
-
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_AT_PISO}/values/PIVOT_AT_PISO!A:ZZ`;
-    
-    // Requisição com os Headers de Autenticação Nativos embutidos
-    const response = await fetch(url, { 
-      method: "GET", 
-      headers: { 
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      } 
+    const response = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_AT_PISO}/values/PIVOT_AT_PISO!A:ZZ`, { 
+      method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } 
     });
-
     if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
     const result = await response.json();
-    
-    // 🔥 Devolvemos a Matriz de Arrays crua exatamente como a One Page espera ler
     return result.values || [];
-  } catch (error) {
-    console.error("Erro na API (GET PIVOT AT PISO):", error);
-    return [];
-  }
+  } catch (error) { return []; }
 };
 
-
-// =================================================================
-// VERIFICAÇÃO DE ACESSO AO DASHBOARD
-// =================================================================
 export const verificarAcessoGestor = async (emailUsuario, token) => {
   try {
     if (!token) return false;
-
-    // 🔥 VACINA 1: Adiciona um timestamp na URL para o navegador nunca fazer cache
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/ACESSOS_DASHBOARD!A:A?t=${new Date().getTime()}`;
-    
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { 
-        "Authorization": `Bearer ${token}`, 
-        "Accept": "application/json",
-        // 🔥 VACINA 2: Força o navegador a buscar dados frescos
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache"
-      }
+    const response = await fetchWithQueue(url, {
+      method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json", "Cache-Control": "no-cache", "Pragma": "no-cache" }
     });
-    
     if (!response.ok) return false;
-    
     const result = await response.json();
     if (!result.values) return false;
-
-    // 🔥 VACINA 3: Filtra linhas vazias antes de mapear
-    const emailsPermitidos = result.values
-      .filter(linha => linha && linha.length > 0 && linha[0]) // Só passa se a célula tiver algo
-      .map(linha => String(linha[0]).trim().toLowerCase());
-    
+    const emailsPermitidos = result.values.filter(linha => linha && linha.length > 0 && linha[0]).map(linha => String(linha[0]).trim().toLowerCase());
     return emailsPermitidos.includes(String(emailUsuario).trim().toLowerCase());
-  } catch (error) {
-    console.error("Erro ao verificar permissões de gestor:", error);
-    return false; 
-  }
+  } catch (error) { return false; }
 };
 
-// =================================================================
-// GET FIRST TRIPS
-// =================================================================
 export const getFirstTripsData = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
-   
-    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/PIVOT_DIARIO_FIRST_TRIPS!A:ZZZ`, {
-      headers: { 
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      }
+    const resp = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/PIVOT_DIARIO_FIRST_TRIPS!A:ZZZ`, {
+      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
     const data = await resp.json();
     return data.values || [];
-  } catch (error) {
-    console.error("Erro ao buscar First Trips:", error);
-    return [];
-  }
+  } catch (error) { return []; }
 };
 
-
-// =================================================================
-// GET HISTORICO DE FROTA
-// =================================================================
 export const getHistoricoFrotaData = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
-    
-    // Busca os dados da nova aba HISTORICO_FROTA (A até I)
-    const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/HISTORICO_FROTA!A:i`, {
+    const resp = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/HISTORICO_FROTA!A:i`, {
       headers: { "Authorization": `Bearer ${token}` }
     });
-    
-    if (!resp.ok) {
-        console.warn("Aba HISTORICO_FROTA ausente ou vazia.");
-        return [];
-    }
-
+    if (!resp.ok) return [];
     const data = await resp.json();
     return data.values || [];
-  } catch (error) {
-    console.error("Erro ao buscar Histórico de Frota:", error);
-    return [];
-  }
+  } catch (error) { return []; }
 };
 
-
-
-// =================================================================
-// GET RODAGEM (Rodízio) - Mesclando SPI e SPM Automaticamente
-// =================================================================
 export const getRodagemData = async (tabName) => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
-
-    // ID da SPI (Que já estava no seu .env)
     const idSPI = import.meta.env.VITE_SPREADSHEET_ID_RODIZIO;
-    // 🔥 NOVO: ID da SPM que você me passou
     const idSPM = "1_-P1-RA5rTdc_-L40GUwP5pG1iqVytOKchYz_Oq712o";
-    
-    if (!idSPI) throw new Error("A variável VITE_SPREADSHEET_ID_RODIZIO não foi encontrada no .env");
+    const headers = { "Authorization": `Bearer ${token}`, "Accept": "application/json" };
 
-    const urlSPI = `https://sheets.googleapis.com/v4/spreadsheets/${idSPI}/values/${tabName}`;
-    const urlSPM = `https://sheets.googleapis.com/v4/spreadsheets/${idSPM}/values/${tabName}`;
-
-    const headers = { 
-      "Authorization": `Bearer ${token}`, 
-      "Accept": "application/json" 
-    };
-
-    // 🔥 PULO DO GATO: Dispara as duas buscas ao mesmo tempo!
     const [respSPI, respSPM] = await Promise.all([
-      fetch(urlSPI, { method: "GET", headers }).catch(() => null),
-      fetch(urlSPM, { method: "GET", headers }).catch(() => null)
+      fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idSPI}/values/${tabName}`, { method: "GET", headers }).catch(() => null),
+      fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idSPM}/values/${tabName}`, { method: "GET", headers }).catch(() => null)
     ]);
 
     let dadosCombinados = [];
     let cabecalho = null;
 
-    // 1. Processa os dados da SPI
-    if (respSPI && respSPI.ok) {
-      const dataSPI = await respSPI.json();
-      if (dataSPI.values && dataSPI.values.length > 0) {
-        cabecalho = dataSPI.values[0]; // Salva a linha de cabeçalho
-        dadosCombinados.push(...dataSPI.values.slice(1)); // Adiciona os motoristas
-      }
-    }
-
-    // 2. Processa os dados da SPM
-    if (respSPM && respSPM.ok) {
-      const dataSPM = await respSPM.json();
-      if (dataSPM.values && dataSPM.values.length > 0) {
-        if (!cabecalho) cabecalho = dataSPM.values[0]; // Pega o cabeçalho se a SPI estiver vazia
-        dadosCombinados.push(...dataSPM.values.slice(1)); // Adiciona os motoristas embaixo
-      }
-    }
-
-    // Se nenhuma aba existir no mês (ex: Mês futuro), retorna vazio
-    if (!cabecalho) {
-      console.warn(`Aba ${tabName} não encontrada em nenhuma das planilhas.`);
-      return [];
-    }
-
-    // Devolve a matriz final: Cabeçalho na linha 0, seguido de todos os motoristas
-    return [cabecalho, ...dadosCombinados];
-
-  } catch (error) {
-    console.error(`Falha Crítica no getRodagemData (${tabName}):`, error);
-    return []; 
-  }
-};
-
-
-// =================================================================
-// PERMISSÃO DE USUÁRIO Regional
-// =================================================================
-export const buscarPermissoesUsuario = async (email, token) => {
-  try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PERMISSION_SHEET}/values/PERMISSOES!A:C`;
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    const result = await response.json();
-    
-    if (!result.values) return null;
-
-    const permissao = result.values.find(row => 
-      String(row[0]).trim().toLowerCase() === String(email).trim().toLowerCase()
-    );
-
-    if (!permissao) return null;
-
-    return {
-      email: permissao[0],
-      regional: permissao[1], // 'SPI', 'SPM' ou 'BOTH'
-      cargo: permissao[2]
-    };
-  } catch (error) {
-    console.error("Erro ao buscar permissões:", error);
-    return null;
-  }
-};
-
-
-
-
-// =================================================================
-// GET DADOS AT PISO POR CLUSTER
-// =================================================================
-let atPisoClusterMemoryCache = null;
-
-export const getAtPisoClusterData = async () => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
-
-    // Se já foi baixado nesta sessão, retorna instantaneamente da memória RAM
-    if (atPisoClusterMemoryCache) return atPisoClusterMemoryCache;
-
-    const idSpreadsheet = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${idSpreadsheet}/values/AT_PISO_CLUSTER!A:F`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      }
-    });
-
-    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-    const data = await response.json();
-    
-    const result = data.values || [];
-    if (result.length > 0) {
-      atPisoClusterMemoryCache = result;
-    }
-    return result;
-  } catch (error) {
-    console.error("Erro ao buscar dados de AT Piso Cluster:", error);
-    return [];
-  }
-};
-
-
-
-
-// =================================================================
-// GET RECUSAS DATA (Buscando SPI e SPM simultaneamente)
-// =================================================================
-let recusasMemoryCache = {}; // Cache local para evitar bater na API toda hora
-
-export const getRecusasData = async (targetMonth = new Date().getMonth() + 1, targetYear = new Date().getFullYear()) => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
-
-    // Define o nome da aba (ex: FEV-2026)
-    const monthStr = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][targetMonth - 1];
-    const tabName = `${monthStr}-${targetYear}`;
-
-    // Se já baixou essa aba antes, devolve direto do cache
-    if (recusasMemoryCache[tabName]) {
-      return recusasMemoryCache[tabName];
-    }
-
-    // IDs das planilhas de recusa (Substitua pelos IDs reais)
-    const idSPI = import.meta.env.VITE_SPREADSHEET_ID_RECUSAS_SPI 
-    const idSPM = import.meta.env.VITE_SPREADSHEET_ID_RECUSAS_SPM 
-
-    const urlSPI = `https://sheets.googleapis.com/v4/spreadsheets/${idSPI}/values/${tabName}!A:Z`;
-    const urlSPM = `https://sheets.googleapis.com/v4/spreadsheets/${idSPM}/values/${tabName}!A:Z`;
-
-    const headers = { 
-      "Authorization": `Bearer ${token}`, 
-      "Accept": "application/json" 
-    };
-
-    // 🔥 PULO DO GATO: Dispara as duas buscas ao mesmo tempo!
-    const [respSPI, respSPM] = await Promise.all([
-      fetch(urlSPI, { method: "GET", headers }).catch(() => null),
-      fetch(urlSPM, { method: "GET", headers }).catch(() => null)
-    ]);
-
-    let dadosCombinados = [];
-    let cabecalho = null;
-
-    // Processa SPI
     if (respSPI && respSPI.ok) {
       const dataSPI = await respSPI.json();
       if (dataSPI.values && dataSPI.values.length > 0) {
@@ -807,8 +477,71 @@ export const getRecusasData = async (targetMonth = new Date().getMonth() + 1, ta
         dadosCombinados.push(...dataSPI.values.slice(1)); 
       }
     }
+    if (respSPM && respSPM.ok) {
+      const dataSPM = await respSPM.json();
+      if (dataSPM.values && dataSPM.values.length > 0) {
+        if (!cabecalho) cabecalho = dataSPM.values[0]; 
+        dadosCombinados.push(...dataSPM.values.slice(1)); 
+      }
+    }
+    if (!cabecalho) return [];
+    return [cabecalho, ...dadosCombinados];
+  } catch (error) { return []; }
+};
 
-    // Processa SPM
+export const buscarPermissoesUsuario = async (email, token) => {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PERMISSION_SHEET}/values/PERMISSOES!A:C`;
+    const response = await fetchWithQueue(url, { headers: { Authorization: `Bearer ${token}` } });
+    const result = await response.json();
+    if (!result.values) return null;
+    const permissao = result.values.find(row => String(row[0]).trim().toLowerCase() === String(email).trim().toLowerCase());
+    if (!permissao) return null;
+    return { email: permissao[0], regional: permissao[1], cargo: permissao[2] };
+  } catch (error) { return null; }
+};
+
+export const getAtPisoClusterData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+    const idSpreadsheet = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
+    const response = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idSpreadsheet}/values/AT_PISO_CLUSTER!A:F`, {
+      method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    });
+    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+    const data = await response.json();
+    return data.values || [];
+  } catch (error) { return []; }
+};
+
+export const getRecusasData = async (targetMonth = new Date().getMonth() + 1, targetYear = new Date().getFullYear()) => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    const monthStr = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][targetMonth - 1];
+    const tabName = `${monthStr}-${targetYear}`;
+
+    const idSPI = import.meta.env.VITE_SPREADSHEET_ID_RECUSAS_SPI 
+    const idSPM = import.meta.env.VITE_SPREADSHEET_ID_RECUSAS_SPM 
+    const headers = { "Authorization": `Bearer ${token}`, "Accept": "application/json" };
+
+    const [respSPI, respSPM] = await Promise.all([
+      fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idSPI}/values/${tabName}!A:Z`, { method: "GET", headers }).catch(() => null),
+      fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idSPM}/values/${tabName}!A:Z`, { method: "GET", headers }).catch(() => null)
+    ]);
+
+    let dadosCombinados = [];
+    let cabecalho = null;
+
+    if (respSPI && respSPI.ok) {
+      const dataSPI = await respSPI.json();
+      if (dataSPI.values && dataSPI.values.length > 0) {
+        cabecalho = dataSPI.values[0]; 
+        dadosCombinados.push(...dataSPI.values.slice(1)); 
+      }
+    }
     if (respSPM && respSPM.ok) {
       const dataSPM = await respSPM.json();
       if (dataSPM.values && dataSPM.values.length > 0) {
@@ -817,150 +550,61 @@ export const getRecusasData = async (targetMonth = new Date().getMonth() + 1, ta
       }
     }
 
-    if (!cabecalho) {
-      console.warn(`Aba de Recusas ${tabName} não encontrada em nenhuma das planilhas.`);
-      return [];
-    }
-
-    const resultadoFinal = [cabecalho, ...dadosCombinados];
-    
-    // Salva no cache para otimizar a navegação
-    recusasMemoryCache[tabName] = resultadoFinal;
-    
-    return resultadoFinal;
-
-  } catch (error) {
-    console.error(`Falha Crítica no getRecusasData (${tabName}):`, error);
-    return []; 
-  }
+    if (!cabecalho) return [];
+    return [cabecalho, ...dadosCombinados];
+  } catch (error) { return []; }
 };
-
-
-// =================================================================
-// GET DELIVERY SUCCESS DATA 
-// =================================================================
-let dsMemoryCache = null;
-let dsMemoryCacheTime = null;
 
 export const getDeliverySuccessData = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
-
-    // CACHE DE MEMÓRIA
-    if (dsMemoryCache && dsMemoryCacheTime) {
-      const agora = new Date().getTime();
-      const diferencaMinutos = (agora - dsMemoryCacheTime) / (1000 * 60);
-      if (diferencaMinutos < 15) {
-        console.log("⚡ Puxando DS da Memória RAM (Instantâneo)!");
-        return dsMemoryCache;
-      }
-    }
-
-    // Puxando o ID do .env 
     const idSopSpi = import.meta.env.VITE_DS_SHEET_ID;
-    
-    
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${idSopSpi}/values/Base DS!A:ZZ`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      }
+    const response = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idSopSpi}/values/Base DS!A:ZZ`, {
+      method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
-
     if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-
     const data = await response.json();
-    const result = data.values || [];
-
-    // Salva na memória global da aplicação
-    if (result.length > 0) {
-      dsMemoryCache = result;
-      dsMemoryCacheTime = new Date().getTime();
-    }
-
-    return result;
-  } catch (error) {
-    console.error("Erro ao buscar dados de DS:", error);
-    return [];
-  }
+    return data.values || [];
+  } catch (error) { return []; }
 };
 
-
-
-// =================================================================
-// GET RECUSAS (MAPA DE CALOR DE RECUSAS POR CLUSTER)
-// =================================================================
 export const getRecusasDataCluster = async (regionalAtual, mesFiltro = null, anoFiltro = null) => {
   try {
-    const token = localStorage.getItem("spiToken"); // Ou o token que você usa
+    const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
-    // Define qual planilha usar com base na regional selecionada
     const isSpiSpo = regionalAtual === 'SPI' || regionalAtual === 'SPO';
-    const sheetId = isSpiSpo 
-      ? import.meta.env.VITE_RECUSAS_SPI_SPO_SHEET_ID 
-      : import.meta.env.VITE_RECUSAS_SPM_SPC_SHEET_ID;
-
-    if (!sheetId) throw new Error("ID da planilha de Recusas não configurado.");
-
-    // Lógica para montar o nome da aba (ex: JAN-2026)
+    const sheetId = isSpiSpo ? import.meta.env.VITE_RECUSAS_SPI_SPO_SHEET_ID : import.meta.env.VITE_RECUSAS_SPM_SPC_SHEET_ID;
+    
     const dataAtual = new Date();
     const mesIdx = mesFiltro ? parseInt(mesFiltro, 10) - 1 : dataAtual.getMonth();
     const ano = anoFiltro || dataAtual.getFullYear();
     const mesesAbrev = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
     const tabName = `${mesesAbrev[mesIdx]}-${ano}`;
 
-    console.log(`Buscando Recusas da aba: ${tabName} | Planilha: ${isSpiSpo ? 'SPI/SPO' : 'SPM/SPC'}`);
-
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}!A:K`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      }
+    const response = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}!A:K`, {
+      method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
 
-    if (!response.ok) {
-      if (response.status === 400 || response.status === 404) {
-        console.warn(`Aba ${tabName} não encontrada. Pode não haver dados para este mês ainda.`);
-        return [];
-      }
-      throw new Error(`Erro HTTP: ${response.status}`);
-    }
-
+    if (!response.ok) return [];
     const data = await response.json();
     return data.values || [];
-  } catch (error) {
-    console.error("Erro ao buscar dados de Recusas:", error);
-    return [];
-  }
+  } catch (error) { return []; }
 };
 
-
-// =================================================================
-// GET AT EXPEDIDAS (BUSCA DINÂMICA POR MÊS/ABA)
-// =================================================================
 export const getAtExpedidaData = async (abaNome) => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
 
     const regEscolhida = localStorage.getItem("selectedRegional");
-    
-    // IDs protegidos pelas variáveis de ambiente do Vite
     const idSPI = import.meta.env.VITE_PLANILHA_AT_SPI;
     const idSPM = import.meta.env.VITE_PLANILHA_AT_SPM;
 
-    // Função interna para buscar a planilha alvo
     const fetchPlanilha = async (id) => {
       if (!id) return [];
-      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${abaNome}!A:G`, {
+      const res = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${abaNome}!A:G`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) return [];
@@ -969,8 +613,6 @@ export const getAtExpedidaData = async (abaNome) => {
     };
 
     let result = [];
-
-    // Catraca de Segurança de Acesso
     if (regEscolhida === 'SPI' || regEscolhida === 'SPO') {
       result = await fetchPlanilha(idSPI);
     } else if (regEscolhida === 'SPM' || regEscolhida === 'SPC') {
@@ -979,10 +621,6 @@ export const getAtExpedidaData = async (abaNome) => {
       const [resSPI, resSPM] = await Promise.all([fetchPlanilha(idSPI), fetchPlanilha(idSPM)]);
       result = resSPI.concat(resSPM.length > 1 ? resSPM.slice(1) : []);
     }
-
     return result;
-  } catch (error) {
-    console.error(`Erro ao buscar dados de AT Expedidas na aba ${abaNome}:`, error);
-    return [];
-  }
+  } catch (error) { return []; }
 };
