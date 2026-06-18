@@ -29,7 +29,8 @@ export const HUBS_SPI = {
   "LM Hub_SP_Itapeva": "SPI3",
   "LM Hub_SP_Sorocaba_Região Norte": "SPI3",
   "LM Hub_SP_Tatuí": "SPI3",
-  "LM Hub_SP_Registro": "SPI3"
+  "LM Hub_SP_Registro": "SPI3",
+  "LM Hub_SP_Sorocaba_02": "SPI3"
 };
 
 export const LISTA_SPI = Object.keys(HUBS_SPI);
