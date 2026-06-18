@@ -87,9 +87,19 @@ export default function StatusEvolutionChart({ historicoFrotaData, filtrosGlobai
       finalAggs[p].Novos += item.novos;
     });
 
-    // 3. Ordenar e Calcular Variação %
+  // 3. Ordenar e Calcular Variação %
+    const MESES_ORDEM = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+
     const dadosOrdenados = Object.values(finalAggs).sort((a, b) => {
-      if (periodo === 'dia') return a.rawDate.localeCompare(b.rawDate);
+      // Se for mês, usa a ordem cronológica do array acima
+      if (periodo === 'mes') {
+        return MESES_ORDEM.indexOf(a.name) - MESES_ORDEM.indexOf(b.name);
+      }
+      // Se for dia, usa a data bruta
+      if (periodo === 'dia') {
+        return a.rawDate.localeCompare(b.rawDate);
+      }
+      // Se for semana (Ex: W-21, W-22), a ordem alfabética funciona perfeitamente
       return a.name.localeCompare(b.name);
     });
 
