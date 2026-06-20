@@ -67,6 +67,7 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
           realocPre: 0, realocDur: 0, realocTotal: 0,
           naoExpCoube: 0, naoExpOutros: 0, naoExpTotal: 0,
           ofertaCap: 0, carregadoCap: 0,
+          volProc: 0, volExp: 0, // 🔥 Adicionado para matemática absoluta
           taxaCorrecao: 0, desvioFleet: 0, desvioHub: 0,
           eficiencia: 0, count: 0
         };
@@ -85,10 +86,10 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
       d.ofertaCap += (parseNum(row[20]) + parseNum(row[23])); 
       d.carregadoCap += (parseNum(row[25]) + parseNum(row[28]));
 
-      d.taxaCorrecao += parseNum(row[56]); 
-      d.desvioFleet += parseNum(row[57]); 
-      d.desvioHub += parseNum(row[58]); 
-      d.eficiencia += parseNum(row[59]); 
+      // 🔥 PUXA OS VOLUMES CRUS PARA MATEMÁTICA PERFEITA
+      d.volProc += parseNum(row[13]); 
+      d.volExp += parseNum(row[14]); 
+
       d.count++;
     });
 
@@ -98,10 +99,11 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
     let prevNaoExp = null;
 
     return result.map(d => {
-      d.taxaCorrecao = d.count > 0 ? d.taxaCorrecao / d.count : 0;
-      d.desvioFleet = d.count > 0 ? d.desvioFleet / d.count : 0;
-      d.desvioHub = d.count > 0 ? d.desvioHub / d.count : 0;
-      d.eficiencia = d.count > 0 ? d.eficiencia / d.count : 0;
+      // 🔥 MATEMÁTICA ABSOLUTA: Abandona o average e usa = (A / B) * 100
+      d.eficiencia = d.volProc > 0 ? (d.volExp / d.volProc) * 100 : 0;
+      d.desvioFleet = d.volProc > 0 ? (d.naoExpCoube / d.volProc) * 100 : 0;
+      d.desvioHub = d.volProc > 0 ? (d.naoExpOutros / d.volProc) * 100 : 0;
+      d.taxaCorrecao = d.volProc > 0 ? (d.realocTotal / d.volProc) * 100 : 0;
       
       d.varRealoc = (prevRealoc !== null && prevRealoc > 0) ? Number((((d.realocTotal - prevRealoc) / prevRealoc) * 100).toFixed(1)) : 0;
       prevRealoc = d.realocTotal;
@@ -242,7 +244,7 @@ return (
             <div className="flex flex-col gap-1">
               <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Boas Práticas</h4>
               <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-                É recomendável manter uma planilha interna de controle para separar, por exemplo, o que foi <em>"Volumoso retido por falta de espaço"</em> do que foi <em>"Retido por erro operacional"</em>, não dependendo exclusivamente do Inventário. O gráfico <strong>Divergência de Capacidade</strong> já ajuda nisso cruzando pacotes retidos vs Vans/Utilitários dispensados sem carga.
+                É recomendável manter uma planilha interna de controle para separar o que foi <em>"Retido por falta de espaço (Volumoso/Não Coube)"</em> do que foi <em>"Retido por erro (Outros)"</em>. O gráfico <strong>Divergência de Capacidade</strong> ajuda nisso cruzando pacotes retidos vs Vans/Utilitários dispensados sem carga.
               </p>
             </div>
           </div>
@@ -256,7 +258,7 @@ return (
               <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Fórmulas (KPIs)</h4>
               <div className="flex flex-col gap-1 mt-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 leading-relaxed">
                 <p><strong className="text-slate-700 dark:text-gray-300">Desv. Fleet:</strong> Volumosos Não Exp. ÷ Vol. Processado</p>
-                <p><strong className="text-slate-700 dark:text-gray-300">Desv. Hub:</strong> Pacotes Não Exp. ÷ Vol. Processado</p>
+                <p><strong className="text-slate-700 dark:text-gray-300">Desv. Hub:</strong> Outros Motivos ÷ Vol. Processado</p>
                 <p><strong className="text-slate-700 dark:text-gray-300">Taxa Corr:</strong> Total de Realocações ÷ Vol. Processado</p>
                 <p><strong className="text-slate-700 dark:text-gray-300">Eficiência:</strong> (Vol. Expedido ÷ Vol. Proc.) × 100</p>
               </div>
@@ -299,7 +301,7 @@ return (
               <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
               
-              <Bar yAxisId="left" dataKey="naoExpCoube" name="Não Coube" fill="#D0011B" barSize={35} stackId="a" isAnimationActive={true}>
+              <Bar yAxisId="left" dataKey="naoExpCoube" name="Não Coube (Volumoso)" fill="#D0011B" barSize={35} stackId="a" isAnimationActive={true}>
                 {showLabels && <LabelList dataKey="naoExpCoube" position="center" fill="#fff" fontSize={10} fontWeight="bold" formatter={fInt} />}
               </Bar>
               <Bar yAxisId="left" dataKey="naoExpOutros" name="Outros Motivos" fill="#113366" barSize={35} stackId="a" radius={[4, 4, 0, 0]} isAnimationActive={true}>
@@ -421,4 +423,5 @@ return (
 
       </div>
     </div>
-  );}
+  );
+}

@@ -18,7 +18,7 @@ import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
 import EstudosCapacidade from './charts/EstudosCapacidade';
 import { MapPin, Database, Maximize2, Loader2 } from 'lucide-react';
 
-// 🔥 IMPORT DAS APIs PARA O LAZY LOAD
+// IMPORT DAS APIs PARA O LAZY LOAD
 import { getRecusasData, getAtExpedidaData } from '../api/googleSheets';
 
 const Visualizations = ({ 
@@ -40,14 +40,14 @@ const Visualizations = ({
   const [clusterSubTab, setClusterSubTab] = useState('piso'); 
 
   // =================================================================
-  // 🔥 ESTADOS DO LAZY LOAD (CARGA SOB DEMANDA)
+  // ESTADOS DO LAZY LOAD (CARGA SOB DEMANDA)
   // =================================================================
   const [lazyRecusas, setLazyRecusas] = useState(propRecusasData || []);
   const [lazyExpedida, setLazyExpedida] = useState(propAtExpedidaData || []);
   const [isLoadingPesados, setIsLoadingPesados] = useState(false);
 
   // =================================================================
-  // 🔥 MOTOR DE BUSCA SOB DEMANDA DAS BASES PESADAS
+  // MOTOR DE BUSCA SOB DEMANDA DAS BASES PESADAS
   // =================================================================
   useEffect(() => {
     // Só dispara se o usuário entrar em abas que usam esses dados E se os dados ainda não foram baixados
@@ -135,7 +135,7 @@ const Visualizations = ({
       
       {activeCategory === 'resumo' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <OverviewTable data={data} rawData={rawData} baseData={baseData} firstTripsData={firstTripsData} filtrosGlobais={filtrosGlobais} />
+          <OverviewTable data={data} rawData={rawData} baseData={baseData} firstTripsData={firstTripsData} filtrosGlobais={filtrosGlobais} historicoFrotaData={historicoFrotaData}/>
         </div>
       )}
 
@@ -235,12 +235,12 @@ const Visualizations = ({
              </div>
            </div>
 
-           {/* 🔥 Tabela 1: Não usa Lazy Load */}
+           {/*Tabela 1: Não usa Lazy Load */}
            {clusterSubTab === 'piso' && (
              <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />
            )}
 
-           {/* 🔥 Tabelas 2 e 3: Usam Lazy Load */}
+           {/*Tabelas 2 e 3: Usam Lazy Load */}
            {clusterSubTab === 'recusas' && (
              isLoadingPesados ? <LoadingOverlay /> : <RecusasClusterTable recusasData={lazyRecusas} filtrosGlobais={filtrosGlobais} />
            )}
