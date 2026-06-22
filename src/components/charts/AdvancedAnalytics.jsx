@@ -252,30 +252,36 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
     }
 
     // ==========================================
-    // 🔥 GERADOR DE TEXTO PURO (SEATALK FRIENDLY)
+    // 🔥 GERADOR HTML BLINDADO (SEATALK FRIENDLY)
     // ==========================================
-    let pTxt = `<b>Solicitação de Roteirização - ${hubBaseStats.nomeHub} (${localTurno === 'ALL' ? 'Todos os Turnos' : localTurno})</b>\n\n`;
+    // SeaTalk ignora <br> e \n soltos. A única forma de forçar a quebra é usando blocos <div> e &nbsp;
+    const getRowHtml = (emoji, nome, util, spr) => {
+      if (util > 0) {
+        return `<div style="margin:0; padding:0;">${emoji} <b>${nome}:</b> ${util} x SPR ${spr} = ${formataInt(util * spr)} pcts</div>`;
+      }
+      return '';
+    };
 
-    pTxt += `📦 <b>Volume Projetado:</b> ${formataInt(sVol)} pacotes\n\n`;
+    const solicitacaoHTML = `
+      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+        <div style="margin:0; padding:0;"><b>Solicitação de Roteirização - ${hubBaseStats.nomeHub} (${localTurno === 'ALL' ? 'Todos os Turnos' : localTurno})</b></div>
+        <div style="margin:0; padding:0;">&nbsp;</div>
+        <div style="margin:0; padding:0;">📦 <b>Volume Projetado:</b> ${formataInt(sVol)} pacotes</div>
+        <div style="margin:0; padding:0;">&nbsp;</div>
+        <div style="margin:0; padding:0;"><b>🎯 PARÂMETROS DE ROTEIRIZAÇÃO (FROTA ÚTIL)</b></div>
+        ${getRowHtml('🏍️', 'Motos', mUtil, sM)}
+        ${getRowHtml('🚗', 'Passeios', pUtil, sP)}
+        ${getRowHtml('🚙', 'Utilitários', uUtil, sU)}
+        ${getRowHtml('🚐', 'Vans', vUtil, sV)}
+        <div style="margin:0; padding:0;">&nbsp;</div>
+        <div style="margin:0; padding:0;">✅ <b>Capacidade Total Liberada:</b> ${formataInt(capUtil)} pacotes</div>
+        <div style="margin:0; padding:0;">&nbsp;</div>
+        <div style="margin:0; padding:0;">${gapPacotes < 0 
+          ? `⚠️ <b style="color: #D0011B;">Atenção:</b> Risco de acúmulo de ${formataInt(Math.abs(gapPacotes))} pacotes (Déficit de Frota).` 
+          : `✅ <b>Status:</b> Operação coberta com sobra de ${formataInt(gapPacotes)} pacotes na capacidade.`}</div>
+      </div>
+    `;
 
-    pTxt += `<b>🎯 PARÂMETROS DE ROTEIRIZAÇÃO (FROTA ÚTIL)</b>\n`;
-    if (mUtil > 0) pTxt += `🏍️ <b>Motos:</b> ${mUtil} x SPR ${sM} = ${formataInt(mUtil * sM)} pcts\n`;
-    if (pUtil > 0) pTxt += `🚗 <b>Passeios:</b> ${pUtil} x SPR ${sP} = ${formataInt(pUtil * sP)} pcts\n`;
-    if (uUtil > 0) pTxt += `🚙 <b>Utilitários:</b> ${uUtil} x SPR ${sU} = ${formataInt(uUtil * sU)} pcts\n`;
-    if (vUtil > 0) pTxt += `🚐 <b>Vans:</b> ${vUtil} x SPR ${sV} = ${formataInt(vUtil * sV)} pcts\n`;
-
-    pTxt += `\n✅ <b>Capacidade Total Liberada:</b> ${formataInt(capUtil)} pacotes\n`;
-
-    if (gapPacotes < 0) {
-      pTxt += `\n⚠️ <b style="color: #D0011B;">Atenção:</b> Risco de acúmulo de ${formataInt(Math.abs(gapPacotes))} pacotes (Déficit de Frota).`;
-    } else {
-      pTxt += `\n✅ <b>Status:</b> Operação coberta com sobra de ${formataInt(gapPacotes)} pacotes na capacidade.`;
-    }
-
-    // Converte os \n para <br> apenas para exibir na tela/copiar no HTML invisivel
-    const solicitacaoHTML = pTxt.replace(/\n/g, '<br>');
-
-    // Retorno Limpo sem duplicar chaves
     return { 
       sVol, frotaInserida, frotaUtil, capUtil, gapPacotes, sprMedioSimulado,
       status, cor, bg, icone, texto, satHub, satFleet,
@@ -328,7 +334,7 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
             <Calculator size={28} className="text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-black uppercase tracking-tight">Calculadora de Rotas</h2>
+            <h2 className="text-2xl font-black uppercase tracking-tight">Calculadora de Rotas (PCP)</h2>
             <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mt-1">Simule o cenário e previna gargalos de frota</p>
           </div>
         </div>
@@ -380,7 +386,7 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
                 <b>Passo 1:</b> Baixe a disponibilidade dos motoristas para o seu turno do dia seguinte (Menu lateral &gt; Gestão de Equipe &gt; Disponibilidade do motorista &gt; Selecione as datas &gt; no menu seletor "disponibilidade do motorista", clique na seta "&gt;" e selecione o SEU TURNO CORRESPONDENTE).
               </p>
               <p>
-                <b>Passo 2:</b> Exporte o arquivo, importe em um sheets (selecionando a opção "inserir novas páginas").
+                <b>Passo 2:</b> Exporte o arquivo, importe em um sheets (selecionando a option "inserir novas páginas").
               </p>
               <p>
                 <b>Passo 3:</b> Filtre seus motoristas disponíveis por modal e coloque o input nos campos abaixo. Se necessário, altere os campos de SPR (Eles iniciam com o Referencial da Aba Base).
