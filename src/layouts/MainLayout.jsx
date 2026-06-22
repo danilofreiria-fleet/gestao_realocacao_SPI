@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Award, LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays, ClipboardList, BookOpen } from 'lucide-react';
+import { Award, LayoutDashboard, TableProperties, ShieldCheck, LogOut, Sun, Moon, ChevronLeft, ChevronRight, Timer, MapPin, CalendarDays, ClipboardList, BookOpen, Calculator } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
 export default function MainLayout() {
@@ -89,6 +89,7 @@ export default function MainLayout() {
   const menuItems = [
     { path: '/app/premissas', name: 'Manual do Sistema', icon: <BookOpen size={20} /> }, 
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
+    { path: '/app/calculadora', name: 'Calculadora de SPR', icon: <Calculator size={20} /> }, // 🔥 NOVA FERRAMENTA INSERIDA NO MENU!
     { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
     { path: '/app/ds', name: 'Delivery Success', icon: <Award size={20} /> },
     { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> },
@@ -134,8 +135,7 @@ export default function MainLayout() {
                   className="text-2xl font-black italic text-[#EE4D2D] uppercase drop-shadow-md" 
                   style={{ 
                     transform: 'skewX(-10deg)', 
-                    letterSpacing: '-1.5px', // Deixa as letras coladinhas
-                    // Oito sombras brancas criando um contorno 100% externo
+                    letterSpacing: '-1.5px', 
                     textShadow: `
                       -2px -2px 0 #fff,  
                        2px -2px 0 #fff,

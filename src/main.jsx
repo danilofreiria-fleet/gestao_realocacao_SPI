@@ -14,6 +14,9 @@ import SelecionarRegional from './components/RegionalSelection.jsx';
 import Premissas from './pages/Premissas.jsx';
 import DeliverySuccess from './pages/DeliverySuccess.jsx';
 
+// PÁGINA INDEPENDENTE IMPORTADA 
+import CalculadoraPage from './pages/CalculadoraPage.jsx';
+
 import './index.css';
 
 const GOOGLE_CLIENT_ID = "790138478897-0jk3ihltoadqe9o392n7cdnn1ck1li73.apps.googleusercontent.com";
@@ -56,6 +59,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="reports" element={<ReportsProntos />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="validacao" element={<Validacao />} />
+            
+            {/* ROTA DA CALCULADORA DE ROTAS (PCP) */}
+            <Route path="calculadora" element={<CalculadoraPage />} />
+            
           </Route>
         </Routes>
       </BrowserRouter>
