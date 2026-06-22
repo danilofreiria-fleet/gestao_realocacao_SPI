@@ -334,7 +334,7 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
             <Calculator size={28} className="text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-black uppercase tracking-tight">Calculadora de Rotas (PCP)</h2>
+            <h2 className="text-2xl font-black uppercase tracking-tight">Calculadora de Rotas</h2>
             <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mt-1">Simule o cenário e previna gargalos de frota</p>
           </div>
         </div>
@@ -412,7 +412,7 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
             <div className="flex flex-col gap-2 border-b border-slate-100 dark:border-gray-800 pb-4">
               <div className="flex items-center gap-2">
                 <Sliders className="text-[#EE4D2D]" size={20} />
-                <h3 className="font-black text-[#113366] dark:text-white uppercase text-base">Painel de Imputação (PCP)</h3>
+                <h3 className="font-black text-[#113366] dark:text-white uppercase text-base">Painel de Imputação </h3>
               </div>
             </div>
 
