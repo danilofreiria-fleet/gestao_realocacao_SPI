@@ -18,11 +18,10 @@ import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
 import EstudosCapacidade from './charts/EstudosCapacidade';
 import { MapPin, Database, Maximize2, Loader2 } from 'lucide-react';
 
-// IMPORT DAS APIs PARA O LAZY LOAD
+// APIs PARA O LAZY LOAD
 import { getRecusasData, getAtExpedidaData } from '../api/googleSheets';
 
-// 🔥 CORREÇÃO GLOBAL: Atrelando ao 'window', qualquer gráfico nas suas pastas 
-// conseguirá usar o TRADUZ_MES sem gerar erro de escopo não definido.
+
 window.TRADUZ_MES = {
   '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr', 
   '05': 'Mai', '06': 'Jun', '07': 'Jul', '08': 'Ago', 

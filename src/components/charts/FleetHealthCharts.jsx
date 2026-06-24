@@ -4,9 +4,9 @@ import { Activity, UserMinus, UserCheck, AlertTriangle, Truck, TrendingUp, Maxim
 
 const TRADUZ_MES = { '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI', '06':'JUN', '07':'JUL', '08':'AGO', '09':'SET', '10':'OUT', '11':'NOV', '12':'DEZ' };
 const NAMES_MESES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-const MODAL_OPTIONS = ['Passeio', 'Utilitário', 'Moto', 'Van'];
+const MODAL_OPTIONS = ['Passeio', 'Fiorino', 'Moto', 'Van'];
 
-// 🔥 OTIMIZAÇÃO 1: CACHE GLOBAL DE DATAS (Evita calcular a mesma data milhares de vezes)
+// CACHE GLOBAL DE DATAS 
 const DATE_CACHE = {};
 const getCachedParsedDate = (rawDate) => {
   if (!rawDate) return null;
@@ -45,7 +45,7 @@ const getCachedParsedDate = (rawDate) => {
   return result;
 };
 
-// 🔥 OTIMIZAÇÃO 2: FAST-PATH DE NÚMEROS (Pula regex pesado se não houver vírgula)
+// FAST-PATH DE NÚMEROS (Pula regex pesado se não houver vírgula)
 const parseNum = (val) => {
   if (!val) return 0;
   if (typeof val === 'number') return val;
@@ -60,16 +60,19 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
 
   const [modaisEvol, setModaisEvol] = useState(MODAL_OPTIONS);
   const [modaisConv, setModaisConv] = useState(MODAL_OPTIONS);
+  const [modaisRec, setModaisRec] = useState(MODAL_OPTIONS); // FILTRO PARA RECUSAS
   
   const [isEvolMenuOpen, setIsEvolMenuOpen] = useState(false);
   const [isConvMenuOpen, setIsConvMenuOpen] = useState(false);
+  const [isRecMenuOpen, setIsRecMenuOpen] = useState(false); // MENU DE FILTRO
   
   const evolMenuRef = useRef(null);
   const convMenuRef = useRef(null);
+  const recMenuRef = useRef(null);
 
   const { regional = [], station = [], turno = [], semana = "", mes = "", dataInicio = "", dataFim = "" } = filtrosGlobais;
 
-  // MAPEAMENTO DO BANCO DE DADOS DE RECUSAS
+  // MAPEAMENTO DO BANCO DE DADOS DE RECUSAS (Coluna K = Índice 10)
   const COL_REC_REG = 2;    
   const COL_REC_HUB = 4;    
   const COL_REC_TURNO = 7;  
@@ -80,6 +83,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     function handleClickOutside(event) {
       if (evolMenuRef.current && !evolMenuRef.current.contains(event.target)) setIsEvolMenuOpen(false);
       if (convMenuRef.current && !convMenuRef.current.contains(event.target)) setIsConvMenuOpen(false);
+      if (recMenuRef.current && !recMenuRef.current.contains(event.target)) setIsRecMenuOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -333,8 +337,9 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
 
       aggs[chavePeriodo].totalRecusasGlobais += 1;
 
+      // MAPEAMENTO E CONTAGEM DAS RECUSAS POR MODAL
       if (modal.includes('PASS')) aggs[chavePeriodo].p_rec += 1;
-      else if (modal.includes('UTIL')) aggs[chavePeriodo].u_rec += 1;
+      else if (modal.includes('FIORINO')) aggs[chavePeriodo].u_rec += 1;
       else if (modal.includes('MOTO')) aggs[chavePeriodo].m_rec += 1;
       else if (modal.includes('VAN')) aggs[chavePeriodo].v_rec += 1;
     });
@@ -347,10 +352,32 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
       .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   }, [rawData, recusasData, periodo, regional, station, turno]); 
 
+  // Dados Específicos do Gráfico 1 (Evolução) para recalcular a linha de % dinamicamente
+  const chartEvolucaoData = useMemo(() => {
+    return temporalData.map(d => {
+      const ofertasEvolSel = (modaisEvol.includes('Passeio') ? d.p_off : 0) + 
+                             (modaisEvol.includes('Fiorino') ? d.u_off : 0) + 
+                             (modaisEvol.includes('Moto') ? d.m_off : 0) + 
+                             (modaisEvol.includes('Van') ? d.v_off : 0);
+                             
+      const recusasEvolSel = (modaisEvol.includes('Passeio') ? d.p_rec : 0) + 
+                             (modaisEvol.includes('Fiorino') ? d.u_rec : 0) + 
+                             (modaisEvol.includes('Moto') ? d.m_rec : 0) + 
+                             (modaisEvol.includes('Van') ? d.v_rec : 0);
+                             
+      return { 
+        ...d, 
+        ofertasEvolSel, 
+        recusasEvolSel, 
+        recusaPctEvol: ofertasEvolSel > 0 ? (recusasEvolSel / ofertasEvolSel) * 100 : 0 
+      };
+    });
+  }, [temporalData, modaisEvol]);
+
   const chartConversaoData = useMemo(() => {
     return temporalData.map(d => {
-      const ofertasSel = (modaisConv.includes('Passeio') ? d.p_off : 0) + (modaisConv.includes('Utilitário') ? d.u_off : 0) + (modaisConv.includes('Moto') ? d.m_off : 0) + (modaisConv.includes('Van') ? d.v_off : 0);
-      const accSel = (modaisConv.includes('Passeio') ? d.p_acc : 0) + (modaisConv.includes('Utilitário') ? d.u_acc : 0) + (modaisConv.includes('Moto') ? d.m_acc : 0) + (modaisConv.includes('Van') ? d.v_acc : 0);
+      const ofertasSel = (modaisConv.includes('Passeio') ? d.p_off : 0) + (modaisConv.includes('Fiorino') ? d.u_off : 0) + (modaisConv.includes('Moto') ? d.m_off : 0) + (modaisConv.includes('Van') ? d.v_off : 0);
+      const accSel = (modaisConv.includes('Passeio') ? d.p_acc : 0) + (modaisConv.includes('Fiorino') ? d.u_acc : 0) + (modaisConv.includes('Moto') ? d.m_acc : 0) + (modaisConv.includes('Van') ? d.v_acc : 0);
       return { ...d, ofertasSel, accSel, convPct: ofertasSel > 0 ? (accSel / ofertasSel) * 100 : 0 };
     });
   }, [temporalData, modaisConv]);
@@ -452,6 +479,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
   };
 
   const topVisibleModal = [...MODAL_OPTIONS].reverse().find(s => modaisEvol.includes(s));
+  const topVisibleRecModal = [...MODAL_OPTIONS].reverse().find(s => modaisRec.includes(s)); // 🔥 Determina o topo visual das Recusas
 
   const renderVarPill = (valor, invertColors = false) => {
     if (isNaN(valor) || valor === 0) return null;
@@ -470,7 +498,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
   return (
     <div className="space-y-6 mt-6">
       
-      {/* 🔥 NOVO: BANNER DE DOCUMENTAÇÃO E ORIGEM DOS DADOS OPERACIONAIS */}
+      {/* BANNER DE DOCUMENTAÇÃO E ORIGEM DOS DADOS OPERACIONAIS */}
       <div className="bg-slate-50 dark:bg-[#15171e] rounded-2xl border border-slate-200 dark:border-gray-800 p-5 flex flex-col md:flex-row items-start gap-4 shadow-sm">
         <div className="bg-blue-100 dark:bg-blue-950/40 p-2.5 rounded-xl text-[#113366] dark:text-blue-400 shrink-0">
           <Database size={20} />
@@ -660,7 +688,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
           ),
           (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={temporalData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+              <ComposedChart data={chartEvolucaoData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
@@ -669,15 +697,15 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
                 <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold' }} />
 
                 {modaisEvol.includes('Passeio') && <Bar yAxisId="left" dataKey="p_off" stackId="a" name="Ofertas Passeio" fill="#113366" maxBarSize={50} radius={topVisibleModal === 'Passeio' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="p_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisEvol.includes('Utilitário') && <Bar yAxisId="left" dataKey="u_off" stackId="a" name="Ofertas Utilitário" fill="#3b82f6" maxBarSize={50} radius={topVisibleModal === 'Utilitário' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="u_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
+                {modaisEvol.includes('Fiorino') && <Bar yAxisId="left" dataKey="u_off" stackId="a" name="Ofertas Fiorino" fill="#3b82f6" maxBarSize={50} radius={topVisibleModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="u_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
                 {modaisEvol.includes('Moto') && <Bar yAxisId="left" dataKey="m_off" stackId="a" name="Ofertas Moto" fill="#F5A623" maxBarSize={50} radius={topVisibleModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="m_off" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
                 {modaisEvol.includes('Van') && <Bar yAxisId="left" dataKey="v_off" stackId="a" name="Ofertas Van" fill="#8b5cf6" maxBarSize={50} radius={topVisibleModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="v_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
                 
-                <Line yAxisId="right" type="monotone" dataKey="recusaDispoPctGeral" name="% Recusa (vs Dispo)" stroke="#D0011B" strokeWidth={3} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} activeDot={{ r: 7 }} />
+                <Line yAxisId="right" type="monotone" dataKey="recusaPctEvol" name="% Recusa (vs Dispo)" stroke="#D0011B" strokeWidth={3} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} activeDot={{ r: 7 }} />
               </ComposedChart>
             </ResponsiveContainer>
           ),
-          temporalData.length
+          chartEvolucaoData.length
         )}
 
         {/* GRÁFICO 2: DESEMPENHO POR MODAL */}
@@ -747,8 +775,26 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
           firstTripsProcessed.length 
         )}
 
-        {/* GRÁFICO 4: RECUSAS ABSOLUTAS */}
-        {renderChartCard('recusasAbsolutas', 'Volume de Recusas por Modal', 'Quantidade absoluta de rotas rejeitadas ou abandonadas (Fonte: BD Recusas)', <XOctagon className="text-[#D0011B]"/>, null, 
+        {/* GRÁFICO 4: RECUSAS ABSOLUTAS POR MODAL */}
+        {renderChartCard('recusasAbsolutas', 'Volume de Recusas por Modal', 'Quantidade absoluta de rotas rejeitadas ou abandonadas (Fonte: BD Recusas)', <XOctagon className="text-[#D0011B]"/>, 
+          (
+            <div className="relative" ref={recMenuRef}>
+              <div onClick={() => setIsRecMenuOpen(!isRecMenuOpen)} className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 rounded-lg px-4 py-1.5 text-xs font-bold cursor-pointer flex items-center shadow-sm hover:bg-slate-50 transition-colors">
+                <Filter size={14} className="text-[#EE4D2D] mr-1.5"/> 
+                <span className="mr-2">{modaisRec.length === 4 ? 'Todos os Modais' : `${modaisRec.length} Selecionados`}</span>
+                <ChevronDown size={14} className={`transition-transform ${isRecMenuOpen ? 'rotate-180' : ''}`} />
+              </div>
+              {isRecMenuOpen && (
+                <div className="absolute top-[100%] right-0 mt-1 w-48 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl z-50 py-1">
+                  {MODAL_OPTIONS.map(modal => (
+                    <label key={`rec-${modal}`} className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200 transition-colors">
+                      <input type="checkbox" checked={modaisRec.includes(modal)} onChange={() => toggleModal(modal, setModaisRec)} className="rounded border-slate-300 text-[#113366] focus:ring-[#113366] w-3 h-3 cursor-pointer" /> {modal}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          ), 
           (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={temporalData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
@@ -758,10 +804,10 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold' }} />
 
-                <Bar dataKey="p_rec" stackId="a" name="Recusas Passeio" fill="#113366" maxBarSize={60}><LabelList dataKey="p_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>
-                <Bar dataKey="u_rec" stackId="a" name="Recusas Utilitário" fill="#3b82f6" maxBarSize={60}><LabelList dataKey="u_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>
-                <Bar dataKey="m_rec" stackId="a" name="Recusas Moto" fill="#F5A623" maxBarSize={60}><LabelList dataKey="m_rec" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>
-                <Bar dataKey="v_rec" stackId="a" name="Recusas Van" fill="#8b5cf6" maxBarSize={60} radius={[4, 4, 0, 0]}><LabelList dataKey="v_rec" position="top" fill="#8b5cf6" fontSize={11} fontWeight="bold" formatter={fInt} /></Bar>
+                {modaisRec.includes('Passeio') && <Bar dataKey="p_rec" stackId="a" name="Recusas Passeio" fill="#113366" maxBarSize={60} radius={topVisibleRecModal === 'Passeio' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="p_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
+                {modaisRec.includes('Fiorinos') && <Bar dataKey="u_rec" stackId="a" name="Recusas Fiorino" fill="#3b82f6" maxBarSize={60} radius={topVisibleRecModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="u_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
+                {modaisRec.includes('Moto') && <Bar dataKey="m_rec" stackId="a" name="Recusas Moto" fill="#F5A623" maxBarSize={60} radius={topVisibleRecModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="m_rec" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
+                {modaisRec.includes('Van') && <Bar dataKey="v_rec" stackId="a" name="Recusas Van" fill="#8b5cf6" maxBarSize={60} radius={topVisibleRecModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="v_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
               </BarChart>
             </ResponsiveContainer>
           ),
