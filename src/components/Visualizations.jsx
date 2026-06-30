@@ -15,12 +15,13 @@ import TimeAnalysisCharts from './charts/TimeAnalysisCharts';
 import AtPisoClusterTable from './charts/AtPisoClusterTable';
 import RecusasClusterTable from './charts/RecusasClusterTable'; 
 import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
+import DispoClusterTable from './charts/DispoClusterTable';
+import EstresseClusterTable from './charts/EstresseClusterTable'; 
 import EstudosCapacidade from './charts/EstudosCapacidade';
 import { MapPin, Database, Maximize2, Loader2 } from 'lucide-react';
 
 // APIs PARA O LAZY LOAD
-import { getRecusasData, getAtExpedidaData } from '../api/googleSheets';
-
+import { getRecusasData, getAtExpedidaData, getDisponibilidadeClusterData } from '../api/googleSheets';
 
 window.TRADUZ_MES = {
   '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr', 
@@ -44,6 +45,7 @@ const Visualizations = ({
   recusasData: propRecusasData 
 }) => {
 
+  // 📌 AJUSTE CRÍTICO: Definido fixamente como 'piso' para abrir direto no Acúmulo do Piso
   const [clusterSubTab, setClusterSubTab] = useState('piso'); 
 
   // =================================================================
@@ -51,16 +53,16 @@ const Visualizations = ({
   // =================================================================
   const [lazyRecusas, setLazyRecusas] = useState(propRecusasData || []);
   const [lazyExpedida, setLazyExpedida] = useState(propAtExpedidaData || []);
+  const [lazyDispo, setLazyDispo] = useState([]); 
   const [isLoadingPesados, setIsLoadingPesados] = useState(false);
 
   // =================================================================
   // MOTOR DE BUSCA SOB DEMANDA DAS BASES PESADAS
   // =================================================================
   useEffect(() => {
-    // Só dispara se o usuário entrar em abas que usam esses dados E se os dados ainda não foram baixados
     const precisaBaixar = 
       (activeCategory === 'estudosCluster' || activeCategory === 'saude') && 
-      (lazyRecusas.length <= 1 || lazyExpedida.length <= 1);
+      (lazyRecusas.length <= 1 || lazyExpedida.length <= 1 || lazyDispo.length <= 1);
 
     if (precisaBaixar) {
       const fetchDadosPesados = async () => {
@@ -89,33 +91,38 @@ const Visualizations = ({
           });
 
           const promessasRecusas = Array.from(mesesParaBuscar).map(mStr => {
-             const [m, y] = mStr.split('-');
-             return getRecusasData(parseInt(m, 10), parseInt(y, 10));
+              const [m, y] = mStr.split('-');
+              return getRecusasData(parseInt(m, 10), parseInt(y, 10));
           });
           const promessasExpedidas = nomesAbasMes.map(abaNome => getAtExpedidaData(abaNome));
 
-          const [resultadosRecusas, resultadosExpedidas] = await Promise.all([
-             Promise.all(promessasRecusas),
-             Promise.all(promessasExpedidas)
+          const [resultadosRecusas, resultadosExpedidas, dataDispo] = await Promise.all([
+              Promise.all(promessasRecusas),
+              Promise.all(promessasExpedidas),
+              getDisponibilidadeClusterData() 
           ]);
 
           let bancoRecusasUnificado = [];
           resultadosRecusas.forEach(res => {
-             if (res && res.length > 1) {
-               if (bancoRecusasUnificado.length === 0) bancoRecusasUnificado.push(res[0]);
-               bancoRecusasUnificado = bancoRecusasUnificado.concat(res.slice(1));
-             }
+              if (res && res.length > 1) {
+                if (bancoRecusasUnificado.length === 0) bancoRecusasUnificado.push(res[0]);
+                bancoRecusasUnificado = bancoRecusasUnificado.concat(res.slice(1));
+              }
           });
           setLazyRecusas(bancoRecusasUnificado);
 
           let bancoExpedidasUnificado = [];
           resultadosExpedidas.forEach(res => {
-             if (res && res.length > 1) {
-               if (bancoExpedidasUnificado.length === 0) bancoExpedidasUnificado.push(res[0]);
-               bancoExpedidasUnificado = bancoExpedidasUnificado.concat(res.slice(1));
-             }
+              if (res && res.length > 1) {
+                if (bancoExpedidasUnificado.length === 0) bancoExpedidasUnificado.push(res[0]);
+                bancoExpedidasUnificado = bancoExpedidasUnificado.concat(res.slice(1));
+              }
           });
           setLazyExpedida(bancoExpedidasUnificado);
+
+          if (dataDispo && dataDispo.length > 1) {
+              setLazyDispo(dataDispo);
+          }
 
         } catch (error) {
           console.error("Erro no Lazy Load de Dados Pesados:", error);
@@ -128,12 +135,11 @@ const Visualizations = ({
     }
   }, [activeCategory, rawData]);
 
-  // Sub-componente de Loading Visual
   const LoadingOverlay = () => (
     <div className="flex flex-col items-center justify-center p-20 border border-dashed border-slate-300 dark:border-gray-700 rounded-2xl bg-slate-50/50 dark:bg-[#1f232d] min-h-[400px]">
        <Loader2 className="w-12 h-12 animate-spin text-[#EE4D2D] mb-4" />
        <p className="font-black text-[#113366] dark:text-white uppercase tracking-widest text-base">Baixando Planilhas de Cluster...</p>
-       <p className="text-xs text-slate-500 font-bold mt-2">A Fila do Google está processando o histórico de Recusas e Expedição. Isso pode levar alguns segundos.</p>
+       <p className="text-xs text-slate-500 font-bold mt-2">A Fila do Google está processando o histórico pesado. Isso pode levar alguns segundos.</p>
     </div>
   );
 
@@ -161,7 +167,6 @@ const Visualizations = ({
         </div>
       )}
 
-      {/* SAÚDE DE FROTA (Usa Lazy Load) */}
       {activeCategory === 'saude' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            {isLoadingPesados ? <LoadingOverlay /> : (
@@ -169,26 +174,24 @@ const Visualizations = ({
                 rawData={rawData} 
                 historicoFrotaData={historicoFrotaData} 
                 firstTripsData={firstTripsData}          
-                recusasData={lazyRecusas} // 🔥 Passa a variável local!
+                recusasData={lazyRecusas} 
                 filtrosGlobais={filtrosGlobais} 
              />
            )}
         </div>
       )}
-
-      {activeCategory === 'volumes' && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <VolumeDispatchCharts data={data} />
-        </div>
-      )}
-
-      {/* ESTUDOS DE CLUSTERS (Usa Lazy Load) */}
+      
+      {/* ESTUDOS DE CLUSTERS */}
       {activeCategory === 'estudosCluster' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
            
+           {/* SUB-NAVEGAÇÃO INTERNA */}
            <div className="flex flex-wrap bg-white dark:bg-[#1f232d] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 gap-1 w-fit">
               <button onClick={() => setClusterSubTab('piso')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'piso' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
-                Acúmulo (AT no Piso)
+                Acúmulo (Piso)
+              </button>
+              <button onClick={() => setClusterSubTab('dispo')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'dispo' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
+                Frota Disponível
               </button>
               <button onClick={() => setClusterSubTab('recusas')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'recusas' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
                 Recusas Operacionais
@@ -196,8 +199,13 @@ const Visualizations = ({
               <button onClick={() => setClusterSubTab('expedida')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'expedida' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
                 Rotas Expedidas
               </button>
+              {/* Nova Sub-Aba para Cruzamento de Dados e Análise de Estresse */}
+              <button onClick={() => setClusterSubTab('estresse')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'estresse' ? 'bg-[#EE4D2D] text-white shadow-md' : 'text-slate-500 hover:text-[#113366]'}`}>
+                ⚡ Índice de Estresse
+              </button>
            </div>
 
+           {/* CARD INFORMATIVO */}
            <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
                
@@ -208,7 +216,7 @@ const Visualizations = ({
                  <div className="flex flex-col gap-1">
                    <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Mapas de Calor (Clusters)</h4>
                    <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-                     Este módulo imersivo detalha as dores e a operação de cada Hub em nível de <strong>Cluster</strong> (Bairros/Regiões). Você pode alternar as abas no topo da tela para visualizar três diferentes matrizes de ofensores.
+                     Este módulo imersivo detalha as dores e a operação de cada Hub em nível de <strong>Cluster</strong> (Bairros/Regiões). Use as abas superiores para navegar entre os indicadores puros ou a visão unificada de estresse.
                    </p>
                  </div>
                </div>
@@ -220,9 +228,10 @@ const Visualizations = ({
                  <div className="flex flex-col gap-1">
                    <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Estrutura de Análise</h4>
                    <ul className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed list-disc pl-4 space-y-1">
-                     <li><strong>AT no Piso:</strong> Acúmulo + Ofensores Absolutos.</li>
-                     <li><strong>Recusas:</strong> Insucesso + Ofensores + Motivos de Recusa.</li>
-                     <li><strong>Rotas Expedidas:</strong> Volume de Saída + Demandas por Cluster.</li>
+                     <li><strong>Disponível:</strong> Frota alocada na ponta.</li>
+                     <li><strong>AT no Piso:</strong> Acúmulo Absoluto.</li>
+                     <li><strong>Recusas:</strong> Insucesso de saídas.</li>
+                     <li><strong>Rotas Expedidas:</strong> Demanda/Vazão real.</li>
                    </ul>
                  </div>
                </div>
@@ -234,7 +243,7 @@ const Visualizations = ({
                  <div className="flex flex-col gap-1">
                    <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Dicas de Interatividade</h4>
                    <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-                     Todas as informações podem ser filtradas por <strong>Dia, Semana ou Mês</strong>. Para evitar poluição visual, todos os Hubs nascem contraídos; basta clicar sobre o nome da Station para expandir e visualizar cada Cluster.
+                     Todas as informações podem ser filtradas por <strong>Dia, Semana ou Mês</strong>. Para evitar poluição visual, as tabelas padrões nascem contraídas; basta clicar sobre o nome da Station para expandir e visualizar os Clusters.
                    </p>
                  </div>
                </div>
@@ -242,12 +251,15 @@ const Visualizations = ({
              </div>
            </div>
 
-           {/*Tabela 1: Não usa Lazy Load */}
+           {/* RENDERIZAÇÃO CONDICIONAL DAS TABELAS INTERNAS */}
            {clusterSubTab === 'piso' && (
              <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />
            )}
 
-           {/*Tabelas 2 e 3: Usam Lazy Load */}
+           {clusterSubTab === 'dispo' && (
+             isLoadingPesados ? <LoadingOverlay /> : <DispoClusterTable dispoData={lazyDispo} filtrosGlobais={filtrosGlobais} />
+           )}
+
            {clusterSubTab === 'recusas' && (
              isLoadingPesados ? <LoadingOverlay /> : <RecusasClusterTable recusasData={lazyRecusas} filtrosGlobais={filtrosGlobais} />
            )}
@@ -256,18 +268,38 @@ const Visualizations = ({
              isLoadingPesados ? <LoadingOverlay /> : <AtExpedidaClusterTable atExpedidaData={lazyExpedida} filtrosGlobais={filtrosGlobais} />
            )}
 
-        </div>
-      )}
+           {/* 🔥 NOVA CONDICIONAL: Cruza as 4 fontes usando o motor sob demanda */}
+           {clusterSubTab === 'estresse' && (
+             isLoadingPesados ? <LoadingOverlay /> : (
+               <EstresseClusterTable 
+                  data={data}
+                 dispoData={lazyDispo}
+                 atPisoClusterData={atPisoClusterData}
+                 recusasData={lazyRecusas}
+                 atExpedidaData={lazyExpedida}
+                 filtrosGlobais={filtrosGlobais}
+               />
+             )
+           )}
 
-      {activeCategory === 'gargalos' && (
-        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <CapFleetCharts data={data} />
         </div>
       )}
 
       {activeCategory === 'capacidade' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <EstudosCapacidade consolidadoData={rawData} baseData={baseData} />
+        </div>
+      )}
+
+      {activeCategory === 'volumes' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <VolumeDispatchCharts data={data} />
+        </div>
+      )}
+
+      {activeCategory === 'gargalos' && (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <CapFleetCharts data={data} />
         </div>
       )}
 

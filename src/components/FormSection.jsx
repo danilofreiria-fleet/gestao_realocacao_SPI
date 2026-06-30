@@ -256,7 +256,7 @@ const FormSection = ({
                     type={field.type}
                     value={fieldValue}
                     onKeyDown={(e) => {
-                      // 🔥 BLINDA O TECLADO PARA CAMPOS DE NÚMERO
+                      //BLINDA O TECLADO PARA CAMPOS DE NÚMERO
                       if (field.type === 'number') {
                         // Veta espaço, vírgula, ponto, letras e sinais matemáticos
                         if (['e', 'E', '+', '-', '.', ',', ' '].includes(e.key)) {
@@ -265,7 +265,7 @@ const FormSection = ({
                       }
                     }}
                     onInput={(e) => {
-                      // 🔥 CASO O USUÁRIO DE "CTRL+V" COM LIXO, LIMPA TUDO QUE NÃO É DÍGITO
+                     //CASO O USUÁRIO DE "CTRL+V" COM LIXO, LIMPA TUDO QUE NÃO É DÍGITO
                       if (field.type === 'number') {
                         e.target.value = e.target.value.replace(/\D/g, ''); 
                       }

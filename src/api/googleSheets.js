@@ -505,7 +505,7 @@ export const getAtPisoClusterData = async () => {
   try {
     const token = localStorage.getItem("spiToken");
     if (!token) throw new Error("Usuário não autenticado.");
-    const idSpreadsheet = "1hppCHTfDUsPOo_DmAVhc3eSSzeKD8Yx4UgEjFzW_y_4";
+    const idSpreadsheet = import.meta.env.VITE_PLANILHA_AT_PISO;
     const response = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idSpreadsheet}/values/AT_PISO_CLUSTER!A:F`, {
       method: "GET", headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
     });
@@ -675,80 +675,93 @@ export const getRecusasDataCluster = async (regionalAtual, mesFiltro = null, ano
 export const getAtExpedidaData = async (abaNome) => {
 
   try {
-
     const token = localStorage.getItem("spiToken");
-
     if (!token) throw new Error("Usuário não autenticado.");
-
-
-
     const regEscolhida = localStorage.getItem("selectedRegional");
 
-   
-
     // IDs protegidos pelas variáveis de ambiente do Vite
-
     const idSPI = import.meta.env.VITE_PLANILHA_AT_SPI;
-
     const idSPM = import.meta.env.VITE_PLANILHA_AT_SPM;
 
-
-
     // Função interna para buscar a planilha alvo
-
     const fetchPlanilha = async (id) => {
-
       if (!id) return [];
-
       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${abaNome}!A:G`, {
-
         headers: { "Authorization": `Bearer ${token}` }
-
       });
-
       if (!res.ok) return [];
-
       const json = await res.json();
-
       return json.values || [];
-
     };
-
-
 
     let result = [];
 
-
-
     // Catraca de Segurança de Acesso
-
     if (regEscolhida === 'SPI' || regEscolhida === 'SPO') {
-
       result = await fetchPlanilha(idSPI);
-
     } else if (regEscolhida === 'SPM' || regEscolhida === 'SPC') {
-
       result = await fetchPlanilha(idSPM);
-
     } else if (regEscolhida === 'BOTH') {
-
       const [resSPI, resSPM] = await Promise.all([fetchPlanilha(idSPI), fetchPlanilha(idSPM)]);
-
       result = resSPI.concat(resSPM.length > 1 ? resSPM.slice(1) : []);
-
     }
-
-
-
     return result;
 
   } catch (error) {
-
     console.error(`Erro ao buscar dados de AT Expedidas na aba ${abaNome}:`, error);
-
     return [];
-
   }
-
 };
 
+
+
+export const getDisponibilidadeClusterData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    const regEscolhida = localStorage.getItem("selectedRegional");
+
+    // 🔥 CORREÇÃO AQUI: Voltando para a variável exata que você tem no .env
+    const idPlanilha = import.meta.env.VITE_PLANILHA_DISPO_SPI; 
+
+    if (!idPlanilha) {
+      console.error("Aviso: VITE_PLANILHA_DISPO_SPI não encontrada no .env");
+      return [];
+    }
+
+    // Função interna que busca uma aba específica da planilha usando OAuth
+    const fetchAba = async (nomeDaAba) => {
+      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/${nomeDaAba}!A:ZZ`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.values || [];
+    };
+
+    let result = [];
+
+    // A "catraca" escolhe a ABA baseada na Regional Selecionada
+    if (regEscolhida === 'SPI' || regEscolhida === 'SPO') {
+      result = await fetchAba('CLUSTERS_SPI');
+      
+    } else if (regEscolhida === 'SPM' || regEscolhida === 'SPC') {
+      result = await fetchAba('CLUSTERS_SPM');
+      
+    } else if (regEscolhida === 'BOTH') {
+      const [resSPI, resSPM] = await Promise.all([
+        fetchAba('CLUSTERS_SPI'),
+        fetchAba('CLUSTERS_SPM')
+      ]);
+      
+      // Junta os dados das duas abas, removendo o cabeçalho da segunda
+      result = resSPI.concat(resSPM.length > 1 ? resSPM.slice(1) : []);
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Erro ao buscar Disponibilidade Cluster via API:", error);
+    return [];
+  }
+};

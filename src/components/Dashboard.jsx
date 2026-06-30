@@ -39,10 +39,12 @@ export default function Dashboard() {
   const [filtros, setFiltros] = useState({
     regional: [], station: [], turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
   });
+  
 
   const [isTurnoMenuOpen, setIsTurnoMenuOpen] = useState(false);
   const [isStationMenuOpen, setIsStationMenuOpen] = useState(false);
   const [isRegionalMenuOpen, setIsRegionalMenuOpen] = useState(false);
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
   const [stationSearchText, setStationSearchText] = useState('');
 
   const turnoMenuRef = useRef(null);
@@ -146,12 +148,12 @@ export default function Dashboard() {
     { id: 'onePage', label: 'One Page', icon: <Zap size={16}/> },
     { id: 'frota', label: 'Gestão de Frota', icon: <Users size={16}/> },
     { id: 'saude', label: 'Saúde de Frota', icon: <Activity size={16}/> },
+    { id: 'estudosCluster', label: 'Estudos de Cluster', icon: <Layers size={16}/> },
+    { id: 'capacidade', label: 'Estudos de Capacidade', icon: <PieChart size={16}/> },
     { id: 'volumes', label: 'Volumes & SPR', icon: <BarChart3 size={16}/> },
     { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
-    { id: 'capacidade', label: 'Estudos de Capacidade', icon: <PieChart size={16}/> },
     { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },
     { id: 'tempo', label: 'Tempo de Expedição', icon: <Clock size={16}/> },
-    { id: 'estudosCluster', label: 'Estudos de Cluster', icon: <Layers size={16}/> },
     { id: 'rodizio', label: 'Rodízio', icon: <CalendarDays size={16}/> },
     { id: 'ocorrencias', label: 'Logbook (Relatos)', icon: <MessageSquareWarning size={16}/> },
   ];
@@ -230,7 +232,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-full space-y-6 print:space-y-0 print:block">
-      {activeCategory !== 'capacidade' && (
+      {activeCategory !== 'capacidade' && 'estudosCluster' && (
         <div className="relative bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 shrink-0 print:hidden">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
@@ -247,11 +249,19 @@ export default function Dashboard() {
               <button onClick={limparFiltros} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-[#EE4D2D] transition-colors ml-2">
                 <Eraser size={16} /> Limpar Filtros
               </button>
+              <button
+                type="button"
+                onClick={() => setIsFiltersCollapsed(prev => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition-colors hover:border-[#EE4D2D] hover:text-[#EE4D2D] dark:border-gray-700 dark:bg-[#1f232d] dark:text-gray-200"
+              >
+                <span>{isFiltersCollapsed ? 'Expandir filtros' : 'Recolher filtros'}</span>
+                <ChevronDown size={16} className={`transition-transform ${isFiltersCollapsed ? 'rotate-180' : ''}`} />
+              </button>
             </div>
           </div>
 
-          {/* Mantive as div originais dos filtros do dashboard aqui dentro (sem cortes para nâo quebrar) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-slate-50 dark:bg-[#15171e] p-4 rounded-xl border border-slate-100 dark:border-gray-800">
+          {!isFiltersCollapsed && (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-slate-50 dark:bg-[#15171e] p-4 rounded-xl border border-slate-100 dark:border-gray-800">
              <div className="flex flex-col lg:col-span-1 relative" ref={regionalMenuRef}>
             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><MapPin size={12}/> Regional</label>
             <div
@@ -340,6 +350,7 @@ export default function Dashboard() {
           <div className="flex flex-col lg:col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><CalendarDays size={12}/> Início</label><input type="date" name="dataInicio" value={filtros.dataInicio} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-1.5 text-xs font-medium" /></div>
           <div className="flex flex-col lg:col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><CalendarDays size={12}/> Fim</label><input type="date" name="dataFim" value={filtros.dataFim} onChange={handleChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg p-1.5 text-xs font-medium" /></div>
           </div>
+          )}
         </div>
       )}
 
