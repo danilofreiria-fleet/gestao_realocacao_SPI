@@ -722,16 +722,15 @@ export const getDisponibilidadeClusterData = async () => {
 
     const regEscolhida = localStorage.getItem("selectedRegional");
 
-    // 🔥 CORREÇÃO AQUI: Voltando para a variável exata que você tem no .env
-    const idPlanilha = import.meta.env.VITE_PLANILHA_DISPO_SPI; 
+    const idSPI = import.meta.env.VITE_PLANILHA_DISPO_SPI; 
+    const idSPM = import.meta.env.VITE_PLANILHA_DISPO_SPM;
 
-    if (!idPlanilha) {
-      console.error("Aviso: VITE_PLANILHA_DISPO_SPI não encontrada no .env");
+    if (!idSPI || !idSPM) {
+      console.error("Aviso: VITE_PLANILHA_DISPO_SPI ou SPM não encontrada no .env");
       return [];
     }
 
-    // Função interna que busca uma aba específica da planilha usando OAuth
-    const fetchAba = async (nomeDaAba) => {
+    const fetchAba = async (idPlanilha, nomeDaAba) => {
       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/${nomeDaAba}!A:ZZ`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -742,20 +741,15 @@ export const getDisponibilidadeClusterData = async () => {
 
     let result = [];
 
-    // A "catraca" escolhe a ABA baseada na Regional Selecionada
     if (regEscolhida === 'SPI' || regEscolhida === 'SPO') {
-      result = await fetchAba('CLUSTERS_SPI');
-      
+      result = await fetchAba(idSPI, 'CLUSTERS_SPI');
     } else if (regEscolhida === 'SPM' || regEscolhida === 'SPC') {
-      result = await fetchAba('CLUSTERS_SPM');
-      
-    } else if (regEscolhida === 'BOTH') {
+      result = await fetchAba(idSPM, 'CLUSTERS_SPM');
+    } else {
       const [resSPI, resSPM] = await Promise.all([
-        fetchAba('CLUSTERS_SPI'),
-        fetchAba('CLUSTERS_SPM')
+        fetchAba(idSPI, 'CLUSTERS_SPI'),
+        fetchAba(idSPM, 'CLUSTERS_SPM')
       ]);
-      
-      // Junta os dados das duas abas, removendo o cabeçalho da segunda
       result = resSPI.concat(resSPM.length > 1 ? resSPM.slice(1) : []);
     }
 

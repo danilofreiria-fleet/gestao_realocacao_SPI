@@ -6,6 +6,8 @@ import FormSection from './FormSection';
 
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
+const PINNED_WIDTHS = [80, 100, 80, 100, 250, 140]; // Ações, Regional, Semana, Data, Station Name, Dispatch Window
+
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
   { value: '04', label: 'Abril' }, { value: '05', label: 'Maio' }, { value: '06', label: 'Junho' },
@@ -181,10 +183,9 @@ const DataTable = () => {
     return filteredRows.slice(start, start + itemsPerPage);
   }, [filteredRows, currentPage, itemsPerPage]);
 
-  // 🔥 HANDLER DE FILTRO AUTOMÁTICO (Inputs Simples)
   const handleFilterChange = (e) => {
     setAppliedFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    setCurrentPage(1); // Volta pra página 1 sempre que filtra
+    setCurrentPage(1); 
   };
   
   const limparFiltros = () => {
@@ -487,7 +488,6 @@ const DataTable = () => {
     }
   };
 
-  // 🔥 HANDLER AUTOMÁTICO PARA O MULTI-SELECT
   const renderMultiSelect = (label, filterKey, options, enableSearch = false, widthClass = "w-full") => {
     const isOpen = openFilterDropdown === filterKey;
     const selectedCount = appliedFilters[filterKey].length;
@@ -612,6 +612,7 @@ const DataTable = () => {
         </div>
       )}
 
+      {}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
         <div>
         <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
@@ -669,7 +670,6 @@ const DataTable = () => {
           <input type="date" name="dataFim" value={appliedFilters.dataFim} onChange={handleFilterChange} className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg px-2 text-[11px] font-bold outline-none h-[38px]" />
         </div>
         
-        {/* BOTÃO DE LIMPEZA REDESENHADO */}
         <div className="flex gap-2 lg:col-span-8 md:col-span-4 col-span-2 mt-2 pt-4 border-t border-slate-200 dark:border-gray-700">
           <button onClick={limparFiltros} className="flex-1 flex items-center justify-center bg-slate-200 dark:bg-gray-700 hover:bg-slate-300 dark:hover:bg-gray-600 text-slate-700 dark:text-gray-200 font-bold rounded-lg transition-colors h-[38px]" title="Limpar Todos os Filtros">
             <Eraser size={16} className="mr-2"/> Limpar Todos os Filtros
@@ -677,28 +677,55 @@ const DataTable = () => {
         </div>
       </div>
 
+      {}
       {loading ? (
         <div className="flex flex-1 flex-col items-center justify-center"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div></div>
       ) : (
-        <div className="flex-1 overflow-x-auto rounded-xl border border-slate-200 dark:border-gray-800 relative shadow-sm h-[calc(100vh-320px)] min-h-[400px]">
+        <div className="flex-1 overflow-x-auto rounded-xl border border-slate-200 dark:border-gray-800 relative shadow-sm h-[calc(100vh-320px)] min-h-[400px] custom-scrollbar">
           <table className="w-full text-left text-sm text-slate-600 dark:text-gray-300 whitespace-nowrap">
-            <thead className="bg-slate-100 dark:bg-[#15171e] text-slate-500 dark:text-gray-400 uppercase text-[10px] sticky top-0 z-20">
+            <thead className="text-slate-500 dark:text-gray-400 uppercase text-[10px]">
               <tr>
-                <th className="px-4 py-3 font-bold sticky left-0 bg-slate-100 dark:bg-[#15171e] z-30 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#1f2937]">Ações</th>
-                {headers.map((col, i) => i === 0 ? null : (
-                  <th key={i} className="px-4 py-3 font-bold border-b border-slate-200 dark:border-gray-800">{col}</th>
-                ))}
+                <th 
+                  className="px-4 py-3 font-bold sticky top-0 left-0 bg-slate-100 dark:bg-[#15171e] z-[40] border-b border-slate-200 dark:border-gray-800"
+                  style={{ minWidth: PINNED_WIDTHS[0] }}
+                >
+                  Ações
+                </th>
+                {headers.map((col, i) => {
+                  if (i === 0) return null;
+                  
+                  // Verifica se é uma das 5 colunas de dados seguintes (1 ao 5)
+                  const isPinned = i <= 5;
+                  // Calcula a posição Left somando as larguras das colunas anteriores
+                  const leftPos = isPinned ? PINNED_WIDTHS.slice(0, i).reduce((a, b) => a + b, 0) : 0;
+
+                  return (
+                    <th 
+                      key={i} 
+                      className={`px-4 py-3 font-bold border-b border-slate-200 dark:border-gray-800 bg-slate-100 dark:bg-[#15171e] sticky top-0 ${isPinned ? 'z-[40]' : 'z-[20]'} ${isPinned && i === 5 ? 'shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.5)]' : ''}`}
+                      style={isPinned ? { left: leftPos, minWidth: PINNED_WIDTHS[i] } : {}}
+                    >
+                      {col}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {currentRows.map((row, rowIndex) => (
-                <tr key={rowIndex} className="border-b border-slate-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-gray-800/50">
-                  <td className="px-4 py-3 text-center sticky left-0 bg-white dark:bg-[#1f232d] shadow-[1px_0_0_0_#f1f5f9] dark:shadow-[1px_0_0_0_#1f2937] z-10">
+                <tr key={rowIndex} className="bg-white dark:bg-[#1f232d] border-b border-slate-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <td 
+                    className="px-4 py-3 text-center sticky left-0 bg-inherit z-[20]"
+                    style={{ minWidth: PINNED_WIDTHS[0] }}
+                  >
                     <button onClick={() => abrirModalEdicao(row)} className="text-[#EE4D2D] dark:text-blue-400 hover:text-white hover:bg-[#EE4D2D] font-bold text-[10px] uppercase border border-[#EE4D2D]/30 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full transition-colors">Editar</button>
                   </td>
                   
                   {headers.map((_, cellIndex) => {
                     if (cellIndex === 0) return null;
+
+                    const isPinned = cellIndex <= 5;
+                    const leftPos = isPinned ? PINNED_WIDTHS.slice(0, cellIndex).reduce((a, b) => a + b, 0) : 0;
 
                     const isLongText = cellIndex === 41 || cellIndex === 42;
                     const content = row[cellIndex];
@@ -706,7 +733,11 @@ const DataTable = () => {
                     const isExpanded = !!expandedObs[keyId];
 
                     return (
-                      <td key={cellIndex} className="px-4 py-3 max-w-[250px]">
+                      <td 
+                        key={cellIndex} 
+                        className={`px-4 py-3 max-w-[250px] ${isPinned ? `sticky bg-inherit z-[20] ${cellIndex === 5 ? 'shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]' : ''}` : ''}`}
+                        style={isPinned ? { left: leftPos, minWidth: PINNED_WIDTHS[cellIndex] } : {}}
+                      >
                         {isLongText ? (
                           <div className="flex items-center justify-between gap-2">
                             <span className={isExpanded ? "whitespace-normal break-words" : "truncate block"}>
@@ -731,6 +762,7 @@ const DataTable = () => {
         </div>
       )}
 
+      {}
       {!loading && (
         <div className="flex justify-between items-center mt-4 shrink-0">
           <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-gray-400">

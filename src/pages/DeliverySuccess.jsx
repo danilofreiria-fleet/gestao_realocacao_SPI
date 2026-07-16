@@ -3,6 +3,18 @@ import { getDeliverySuccessData } from '../api/googleSheets';
 import { getHubsPermitidos, MAPA_REGIONAL_COMPLETO } from '../constants/regionais';
 import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck } from 'lucide-react';
 
+// 🔥 VACINA CONTRA ERROS DE DIGITAÇÃO E SUFIXOS DO BIGQUERY (ex: _1)
+const padronizarHubLocal = (nome) => {
+  if (!nome) return "";
+  let n = String(nome).trim();
+  let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
+  
+  if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
+  if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  
+  return n;
+};
+
 export default function DeliverySuccess() {
   const [loading, setLoading] = useState(true);
   const [rawData, setRawData] = useState([]);
@@ -58,67 +70,62 @@ export default function DeliverySuccess() {
     loadData();
   }, []);
 
-  // Função auxiliar para descobrir qual é o mês de uma semana W-XX
   const obterMesDaSemana = (weekStr) => {
     const w = parseInt(String(weekStr).replace(/\D/g, ''), 10);
     if (!w) return "Outros";
     const ano = new Date().getFullYear();
-    // Pega o dia 1 de jan, soma as semanas, +3 dias para cair bem no meio da semana (evita pular o mês)
     const dataBase = new Date(ano, 0, 1 + (w - 1) * 7 + 3);
     const mes = dataBase.toLocaleString('pt-BR', { month: 'long' });
     return mes.charAt(0).toUpperCase() + mes.slice(1);
   };
 
-const renderSemaforo = (val, currentViewMode) => {
-  if (val === null || val === undefined || val === '') return '-';
-  
-  const num = Number(val);
-  // Verifica se a visão atual é de D-0
-  const isD0 = currentViewMode === 'D0' || currentViewMode === 'MONTH_D0';
+  const renderSemaforo = (val, currentViewMode) => {
+    if (val === null || val === undefined || val === '') return '-';
+    
+    const num = Number(val);
+    const isD0 = currentViewMode === 'D0' || currentViewMode === 'MONTH_D0';
 
-  if (isD0) {
-    // 🔥 REGRA D-0: >= 95 Verde | < 95 Vermelho (Sem Amarelo)
-    if (num >= 95) {
-      return (
-        <div className="flex items-center gap-1.5 justify-center text-emerald-600 dark:text-emerald-400 font-black">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
-          {num}%
-        </div>
-      );
+    if (isD0) {
+      if (num >= 95) {
+        return (
+          <div className="flex items-center gap-1.5 justify-center text-emerald-600 dark:text-emerald-400 font-black">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
+            {num}%
+          </div>
+        );
+      } else {
+        return (
+           <div className="flex items-center gap-1.5 justify-center text-[#D0011B] font-black">
+            <div className="w-2 h-2 rounded-full bg-[#D0011B] shadow-[0_0_5px_rgba(208,1,27,0.5)]"></div>
+            {num}%
+          </div>
+        );
+      }
     } else {
-      return (
-         <div className="flex items-center gap-1.5 justify-center text-[#D0011B] font-black">
-          <div className="w-2 h-2 rounded-full bg-[#D0011B] shadow-[0_0_5px_rgba(208,1,27,0.5)]"></div>
-          {num}%
-        </div>
-      );
+      if (num >= 98) {
+        return (
+          <div className="flex items-center gap-1.5 justify-center text-emerald-600 dark:text-emerald-400 font-black">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
+            {num}%
+          </div>
+        );
+      } else if (num >= 95) {
+        return (
+          <div className="flex items-center gap-1.5 justify-center text-yellow-600 dark:text-yellow-400 font-black">
+            <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]"></div>
+            {num}%
+          </div>
+        );
+      } else {
+        return (
+          <div className="flex items-center gap-1.5 justify-center text-[#D0011B] font-black">
+            <div className="w-2 h-2 rounded-full bg-[#D0011B] shadow-[0_0_5px_rgba(208,1,27,0.5)]"></div>
+            {num}%
+          </div>
+        );
+      }
     }
-  } else {
-    // 🔥 REGRA TOTAL: >= 98 Verde | 95 a 97.99 Amarelo | < 95 Vermelho
-    if (num >= 98) {
-      return (
-        <div className="flex items-center gap-1.5 justify-center text-emerald-600 dark:text-emerald-400 font-black">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
-          {num}%
-        </div>
-      );
-    } else if (num >= 95) {
-      return (
-        <div className="flex items-center gap-1.5 justify-center text-yellow-600 dark:text-yellow-400 font-black">
-          <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]"></div>
-          {num}%
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex items-center gap-1.5 justify-center text-[#D0011B] font-black">
-          <div className="w-2 h-2 rounded-full bg-[#D0011B] shadow-[0_0_5px_rgba(208,1,27,0.5)]"></div>
-          {num}%
-        </div>
-      );
-    }
-  }
-};
+  };
 
   const toggleRegSelection = (reg) => {
     setSelectedRegs(prev => prev.includes(reg) ? prev.filter(r => r !== reg) : [...prev, reg]);
@@ -129,28 +136,72 @@ const renderSemaforo = (val, currentViewMode) => {
     setSelectedHubs(prev => prev.includes(hub) ? prev.filter(h => h !== hub) : [...prev, hub]);
   };
 
+  // 🔥 SANITIZADOR BLINDADO O(1): Remove acentos, espaços, hífens, underlines... TUDO!
+  const sanitizeHubName = (hubName) => {
+    if (!hubName) return "";
+    return String(hubName)
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Z0-9]/g, ""); 
+  };
+
+  // 🔥 SANITIZADOR PARA A BARRA DE PESQUISA (Resolve o bug do "sumar" vs "Sumaré")
+  const sanitizeForSearch = (str) => {
+    if (!str) return '';
+    return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
+  // Cria um Set rápido de hubs permitidos sanitizados (Com Fallback para 'SPI1')
+  const permittedHubsSet = useMemo(() => {
+    const permitidosLista = getHubsPermitidos(currentRegional) || [];
+    
+    // 🔥 FALLBACK DE SEGURANÇA: Garante que "SPI1" seja pego se currentRegional for "SPI"
+    const extraPermitted = Object.keys(MAPA_REGIONAL_COMPLETO).filter(k => {
+      const reg = MAPA_REGIONAL_COMPLETO[k];
+      if (!reg) return false;
+      if (currentRegional === 'BOTH') return true;
+      return reg.toUpperCase().includes(String(currentRegional).toUpperCase());
+    });
+
+    return new Set([...permitidosLista, ...extraPermitted].map(sanitizeHubName));
+  }, [currentRegional]);
+
   // =========================================================
   // 1. EXTRAIR HUBS E SUBREGIONAIS
   // =========================================================
   const { listRegs, listHubs } = useMemo(() => {
     if (rawData.length < 2) return { listRegs: [], listHubs: [] };
-    const hubsPermitidos = new Set(getHubsPermitidos(currentRegional));
+    
     const setR = new Set();
     const setH = new Set();
     const len = rawData.length;
     
     for (let i = 1; i < len; i++) {
-      const hub = String(rawData[i][4] || "").trim(); // Coluna E
-      if (hub && hubsPermitidos.has(hub)) {
-        const subRegional = MAPA_REGIONAL_COMPLETO[hub] || String(rawData[i][2] || "").trim(); 
+      const hubRaw = String(rawData[i][4] || "").trim(); // Coluna E
+      const hub = padronizarHubLocal(hubRaw); // Aplica a vacina logo na extração
+      
+      // Checagem robusta usando a versão limpa do nome do hub
+      if (hub && permittedHubsSet.has(sanitizeHubName(hub))) {
+        const cleanHubName = sanitizeHubName(hub);
+        
+        let subRegional = MAPA_REGIONAL_COMPLETO[hub]; 
+        if(!subRegional) {
+            const chaves = Object.keys(MAPA_REGIONAL_COMPLETO);
+            const foundKey = chaves.find(k => sanitizeHubName(k) === cleanHubName);
+            if(foundKey) subRegional = MAPA_REGIONAL_COMPLETO[foundKey];
+        }
+        
+        subRegional = subRegional || String(rawData[i][2] || "").trim(); 
+
         if (subRegional) setR.add(subRegional);
         if (selectedRegs.length === 0 || selectedRegs.includes(subRegional)) {
-          setH.add(hub);
+          setH.add(hub); 
         }
       }
     }
     return { listRegs: Array.from(setR).sort(), listHubs: Array.from(setH).sort() };
-  }, [rawData, currentRegional, selectedRegs]);
+  }, [rawData, permittedHubsSet, selectedRegs]);
 
   // =========================================================
   // 2. MOTOR DE PROCESSAMENTO (FILTRA VAZIOS E GERA MESES)
@@ -186,11 +237,10 @@ const renderSemaforo = (val, currentViewMode) => {
 
     const weeksCount = colSemanasOriginais.length;
     const aggs = {};
-    const globalWeekDataTracker = {}; // 🔥 Rastreador de colunas vazias
+    const globalWeekDataTracker = {}; 
     
     const selectedRegsSet = new Set(selectedRegs);
     const selectedHubsSet = new Set(selectedHubs);
-    const hubsPermitidos = new Set(getHubsPermitidos(currentRegional));
     const termLower = deferredSearchTerm.toLowerCase().trim();
 
     const parseNumFast = (val) => {
@@ -208,11 +258,20 @@ const renderSemaforo = (val, currentViewMode) => {
       const driverId = String(row[0] || "").trim();
       const veiculo = String(row[1] || "").trim() || "NÃO INFORMADO"; 
       const regionalPlanilha = String(row[2] || "").trim(); 
-      const hub = String(row[4] || "").trim(); 
+      const hubRaw = String(row[4] || "").trim(); 
+      const hub = padronizarHubLocal(hubRaw); // Aplica a vacina logo na extração
       
-      if (!hub || !hubsPermitidos.has(hub)) continue;
+      // 🔥 Validação blindada no loop principal
+      if (!hub || !permittedHubsSet.has(sanitizeHubName(hub))) continue;
 
-      const subRegional = MAPA_REGIONAL_COMPLETO[hub] || regionalPlanilha;
+      let subRegional = MAPA_REGIONAL_COMPLETO[hub];
+      if(!subRegional) {
+          const chaves = Object.keys(MAPA_REGIONAL_COMPLETO);
+          const foundKey = chaves.find(k => sanitizeHubName(k) === sanitizeHubName(hub));
+          if(foundKey) subRegional = MAPA_REGIONAL_COMPLETO[foundKey];
+      }
+      subRegional = subRegional || regionalPlanilha;
+
       if (selectedRegsSet.size > 0 && !selectedRegsSet.has(subRegional)) continue;
       if (selectedHubsSet.size > 0 && !selectedHubsSet.has(hub)) continue;
       if (!driverId) continue;
@@ -247,7 +306,6 @@ const renderSemaforo = (val, currentViewMode) => {
         const notaTotal = wkInfo.idxTotal !== null ? parseNumFast(row[wkInfo.idxTotal]) : null;
         const notaD0 = wkInfo.idxD0 !== null ? parseNumFast(row[wkInfo.idxD0]) : null;
 
-        // 🔥 Se tem qualquer dado, marcamos a semana como válida
         if (notaTotal !== null || notaD0 !== null) {
           globalWeekDataTracker[wk] = true; 
         }
@@ -263,7 +321,6 @@ const renderSemaforo = (val, currentViewMode) => {
       }
     }
 
-    // 2.1 Mapear apenas semanas válidas (com dados) para colunas e meses
     const colSemanasFiltradas = colSemanasOriginais
       .filter(w => globalWeekDataTracker[w.week])
       .map(w => ({ id: w.week, label: w.formatado, mes: obterMesDaSemana(w.week) }));
@@ -322,7 +379,7 @@ const renderSemaforo = (val, currentViewMode) => {
     }).sort((a, b) => a.name.localeCompare(b.name));
 
     return { colSemanasFiltradas, colMeses, hubsData, listaHubsUnicos: hubsData.map(h => h.name) };
-  }, [rawData, currentRegional, selectedRegs, selectedHubs, deferredSearchTerm]);
+  }, [rawData, permittedHubsSet, selectedRegs, selectedHubs, deferredSearchTerm]);
 
   const metrics = useMemo(() => {
     if (!processed.hubsData || processed.hubsData.length === 0) {
@@ -365,14 +422,14 @@ const renderSemaforo = (val, currentViewMode) => {
 
   const allPermittedHubs = useMemo(() => {
     if (rawData.length < 2) return [];
-    const hPermitidos = new Set(getHubsPermitidos(currentRegional));
     const sH = new Set();
     for (let i = 1; i < rawData.length; i++) {
-        const h = String(rawData[i][4] || "").trim();
-        if (h && hPermitidos.has(h)) sH.add(h);
+        const hRaw = String(rawData[i][4] || "").trim();
+        const h = padronizarHubLocal(hRaw);
+        if (h && permittedHubsSet.has(sanitizeHubName(h))) sH.add(h);
     }
     return Array.from(sH).sort();
-  }, [rawData, currentRegional]);
+  }, [rawData, permittedHubsSet]);
 
   const handleSelectAllRegs = () => { setSelectedRegs([...listRegs]); setSelectedHubs([]); };
   const handleClearRegs = () => { setSelectedRegs([]); setSelectedHubs([]); };
@@ -419,8 +476,9 @@ const renderSemaforo = (val, currentViewMode) => {
 
   if (loading) return <div className="p-10 text-center animate-pulse font-black text-[#113366] text-xl tracking-widest mt-20">CONSOLIDANDO DADOS DE DS...</div>;
 
-  const filteredRegsOptions = listRegs.filter(reg => reg.toLowerCase().includes(regSearchTerm.toLowerCase()));
-  const filteredHubsOptions = listHubs.filter(hub => hub.toLowerCase().includes(hubSearchTerm.toLowerCase()));
+  // 🔥 Busca Blindada Contra Acentos e Maiúsculas
+  const filteredRegsOptions = listRegs.filter(reg => sanitizeForSearch(reg).includes(sanitizeForSearch(regSearchTerm)));
+  const filteredHubsOptions = listHubs.filter(hub => sanitizeForSearch(hub).includes(sanitizeForSearch(hubSearchTerm)));
   
   const showsEmptyState = selectedRegs.length === 0 && selectedHubs.length === 0 && !searchTerm;
   const activeColumns = viewMode.includes('MONTH') ? processed.colMeses : processed.colSemanasFiltradas;

@@ -15,12 +15,11 @@ import TimeAnalysisCharts from './charts/TimeAnalysisCharts';
 import AtPisoClusterTable from './charts/AtPisoClusterTable';
 import RecusasClusterTable from './charts/RecusasClusterTable'; 
 import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
-import DispoClusterTable from './charts/DispoClusterTable';
-import EstresseClusterTable from './charts/EstresseClusterTable'; 
+import DispoClusterTable from './charts/DispoClusterTable'; 
 import EstudosCapacidade from './charts/EstudosCapacidade';
-import { MapPin, Database, Maximize2, Loader2 } from 'lucide-react';
+import EstresseClusterTable from './charts/EstresseClusterTable'; 
+import { MapPin, Database, Maximize2, Loader2, BrainCircuit } from 'lucide-react';
 
-// APIs PARA O LAZY LOAD
 import { getRecusasData, getAtExpedidaData, getDisponibilidadeClusterData } from '../api/googleSheets';
 
 window.TRADUZ_MES = {
@@ -30,39 +29,33 @@ window.TRADUZ_MES = {
 };
 
 const Visualizations = ({ 
-  activeCategory, 
-  data, 
-  rawData, 
-  dashData, 
-  atPisoData, 
-  baseData, 
-  firstTripsData, 
-  historicoFrotaData,
-  ofertasModalData,
-  filtrosGlobais,
-  atPisoClusterData,
-  atExpedidaData: propAtExpedidaData,
-  recusasData: propRecusasData 
+  activeCategory, data, rawData, dashData, atPisoData, baseData, 
+  firstTripsData, historicoFrotaData, ofertasModalData, filtrosGlobais,
+  atPisoClusterData, atExpedidaData: propAtExpedidaData, recusasData: propRecusasData 
 }) => {
 
-  // 📌 AJUSTE CRÍTICO: Definido fixamente como 'piso' para abrir direto no Acúmulo do Piso
-  const [clusterSubTab, setClusterSubTab] = useState('piso'); 
+  const [clusterSubTab, setClusterSubTab] = useState('conclusoes'); 
 
-  // =================================================================
-  // ESTADOS DO LAZY LOAD (CARGA SOB DEMANDA)
-  // =================================================================
-  const [lazyRecusas, setLazyRecusas] = useState(propRecusasData || []);
-  const [lazyExpedida, setLazyExpedida] = useState(propAtExpedidaData || []);
-  const [lazyDispo, setLazyDispo] = useState([]); 
+ // AGRUPAMENTO DE ESTADOS: Impede o React de renderizar 3x (Travar a tela)
+  const [lazyData, setLazyData] = useState({
+    recusas: propRecusasData || [],
+    expedida: propAtExpedidaData || [],
+    dispo: []
+  });
   const [isLoadingPesados, setIsLoadingPesados] = useState(false);
 
   // =================================================================
-  // MOTOR DE BUSCA SOB DEMANDA DAS BASES PESADAS
+  // MOTOR DE BUSCA SOB DEMANDA (BLINDADO CONTRA LOOP INFINITO)
   // =================================================================
+  const rawDataLen = rawData?.length || 0;
+  const recusasLen = lazyData.recusas?.length || 0;
+  const expedidaLen = lazyData.expedida?.length || 0;
+  const dispoLen = lazyData.dispo?.length || 0;
+
   useEffect(() => {
     const precisaBaixar = 
       (activeCategory === 'estudosCluster' || activeCategory === 'saude') && 
-      (lazyRecusas.length <= 1 || lazyExpedida.length <= 1 || lazyDispo.length <= 1);
+      (recusasLen <= 1 || expedidaLen <= 1 || dispoLen <= 1);
 
     if (precisaBaixar) {
       const fetchDadosPesados = async () => {
@@ -71,13 +64,14 @@ const Visualizations = ({
           const mesesParaBuscar = new Set();
           
           if (rawData && rawData.length > 0) {
-            rawData.forEach(row => {
-              let d = row[3];
+            const len = rawData.length;
+            for(let i=0; i<len; i++) {
+              let d = rawData[i][3];
               if (d && String(d).includes('/')) {
                 const [dia, mes, ano] = String(d).split(' ')[0].split('/');
                 mesesParaBuscar.add(`${mes.padStart(2, '0')}-${ano.length === 2 ? '20'+ano : ano}`);
               }
-            });
+            }
           }
           
           if (mesesParaBuscar.size === 0) {
@@ -91,38 +85,44 @@ const Visualizations = ({
           });
 
           const promessasRecusas = Array.from(mesesParaBuscar).map(mStr => {
-              const [m, y] = mStr.split('-');
-              return getRecusasData(parseInt(m, 10), parseInt(y, 10));
+             const [m, y] = mStr.split('-');
+             return getRecusasData(parseInt(m, 10), parseInt(y, 10));
           });
           const promessasExpedidas = nomesAbasMes.map(abaNome => getAtExpedidaData(abaNome));
 
           const [resultadosRecusas, resultadosExpedidas, dataDispo] = await Promise.all([
-              Promise.all(promessasRecusas),
-              Promise.all(promessasExpedidas),
-              getDisponibilidadeClusterData() 
+             Promise.all(promessasRecusas),
+             Promise.all(promessasExpedidas),
+             getDisponibilidadeClusterData() 
           ]);
 
           let bancoRecusasUnificado = [];
-          resultadosRecusas.forEach(res => {
-              if (res && res.length > 1) {
-                if (bancoRecusasUnificado.length === 0) bancoRecusasUnificado.push(res[0]);
-                bancoRecusasUnificado = bancoRecusasUnificado.concat(res.slice(1));
-              }
-          });
-          setLazyRecusas(bancoRecusasUnificado);
+          if (resultadosRecusas.length > 0 && resultadosRecusas[0] && resultadosRecusas[0].length > 0) {
+            bancoRecusasUnificado.push(resultadosRecusas[0][0]); 
+          }
+          for (let i = 0; i < resultadosRecusas.length; i++) {
+            const res = resultadosRecusas[i];
+            if (res && res.length > 1) {
+              for (let j = 1; j < res.length; j++) bancoRecusasUnificado.push(res[j]);
+            }
+          }
 
           let bancoExpedidasUnificado = [];
-          resultadosExpedidas.forEach(res => {
-              if (res && res.length > 1) {
-                if (bancoExpedidasUnificado.length === 0) bancoExpedidasUnificado.push(res[0]);
-                bancoExpedidasUnificado = bancoExpedidasUnificado.concat(res.slice(1));
-              }
-          });
-          setLazyExpedida(bancoExpedidasUnificado);
-
-          if (dataDispo && dataDispo.length > 1) {
-              setLazyDispo(dataDispo);
+          if (resultadosExpedidas.length > 0 && resultadosExpedidas[0] && resultadosExpedidas[0].length > 0) {
+            bancoExpedidasUnificado.push(resultadosExpedidas[0][0]);
           }
+          for (let i = 0; i < resultadosExpedidas.length; i++) {
+            const res = resultadosExpedidas[i];
+            if (res && res.length > 1) {
+              for (let j = 1; j < res.length; j++) bancoExpedidasUnificado.push(res[j]);
+            }
+          }
+
+          setLazyData({
+            recusas: bancoRecusasUnificado,
+            expedida: bancoExpedidasUnificado,
+            dispo: dataDispo || []
+          });
 
         } catch (error) {
           console.error("Erro no Lazy Load de Dados Pesados:", error);
@@ -133,15 +133,16 @@ const Visualizations = ({
 
       fetchDadosPesados();
     }
-  }, [activeCategory, rawData]);
+  }, [activeCategory, rawDataLen]);
 
   const LoadingOverlay = () => (
     <div className="flex flex-col items-center justify-center p-20 border border-dashed border-slate-300 dark:border-gray-700 rounded-2xl bg-slate-50/50 dark:bg-[#1f232d] min-h-[400px]">
        <Loader2 className="w-12 h-12 animate-spin text-[#EE4D2D] mb-4" />
        <p className="font-black text-[#113366] dark:text-white uppercase tracking-widest text-base">Baixando Planilhas de Cluster...</p>
-       <p className="text-xs text-slate-500 font-bold mt-2">A Fila do Google está processando o histórico pesado. Isso pode levar alguns segundos.</p>
+       <p className="text-xs text-slate-500 font-bold mt-2">O Motor Analítico está consolidando as bases pesadas. Isso pode levar alguns segundos.</p>
     </div>
   );
+
 
   return (
     <div className="space-y-6">
@@ -170,124 +171,8 @@ const Visualizations = ({
       {activeCategory === 'saude' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            {isLoadingPesados ? <LoadingOverlay /> : (
-             <FleetHealthCharts 
-                rawData={rawData} 
-                historicoFrotaData={historicoFrotaData} 
-                firstTripsData={firstTripsData}          
-                recusasData={lazyRecusas} 
-                filtrosGlobais={filtrosGlobais} 
-             />
+             <FleetHealthCharts rawData={rawData} historicoFrotaData={historicoFrotaData} firstTripsData={firstTripsData} recusasData={lazyData.recusas} filtrosGlobais={filtrosGlobais} />
            )}
-        </div>
-      )}
-      
-      {/* ESTUDOS DE CLUSTERS */}
-      {activeCategory === 'estudosCluster' && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           
-           {/* SUB-NAVEGAÇÃO INTERNA */}
-           <div className="flex flex-wrap bg-white dark:bg-[#1f232d] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 gap-1 w-fit">
-              <button onClick={() => setClusterSubTab('piso')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'piso' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
-                Acúmulo (Piso)
-              </button>
-              <button onClick={() => setClusterSubTab('dispo')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'dispo' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
-                Frota Disponível
-              </button>
-              <button onClick={() => setClusterSubTab('recusas')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'recusas' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
-                Recusas Operacionais
-              </button>
-              <button onClick={() => setClusterSubTab('expedida')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'expedida' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
-                Rotas Expedidas
-              </button>
-              {/* Nova Sub-Aba para Cruzamento de Dados e Análise de Estresse */}
-              <button onClick={() => setClusterSubTab('estresse')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'estresse' ? 'bg-[#EE4D2D] text-white shadow-md' : 'text-slate-500 hover:text-[#113366]'}`}>
-                ⚡ Índice de Estresse
-              </button>
-           </div>
-
-           {/* CARD INFORMATIVO */}
-           <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
-               
-               <div className="flex gap-3 items-start">
-                 <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
-                   <MapPin size={16} />
-                 </div>
-                 <div className="flex flex-col gap-1">
-                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Mapas de Calor (Clusters)</h4>
-                   <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-                     Este módulo imersivo detalha as dores e a operação de cada Hub em nível de <strong>Cluster</strong> (Bairros/Regiões). Use as abas superiores para navegar entre os indicadores puros ou a visão unificada de estresse.
-                   </p>
-                 </div>
-               </div>
-
-               <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
-                 <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
-                   <Database size={16} />
-                 </div>
-                 <div className="flex flex-col gap-1">
-                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Estrutura de Análise</h4>
-                   <ul className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed list-disc pl-4 space-y-1">
-                     <li><strong>Disponível:</strong> Frota alocada na ponta.</li>
-                     <li><strong>AT no Piso:</strong> Acúmulo Absoluto.</li>
-                     <li><strong>Recusas:</strong> Insucesso de saídas.</li>
-                     <li><strong>Rotas Expedidas:</strong> Demanda/Vazão real.</li>
-                   </ul>
-                 </div>
-               </div>
-
-               <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
-                 <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
-                   <Maximize2 size={16} />
-                 </div>
-                 <div className="flex flex-col gap-1">
-                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Dicas de Interatividade</h4>
-                   <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-                     Todas as informações podem ser filtradas por <strong>Dia, Semana ou Mês</strong>. Para evitar poluição visual, as tabelas padrões nascem contraídas; basta clicar sobre o nome da Station para expandir e visualizar os Clusters.
-                   </p>
-                 </div>
-               </div>
-
-             </div>
-           </div>
-
-           {/* RENDERIZAÇÃO CONDICIONAL DAS TABELAS INTERNAS */}
-           {clusterSubTab === 'piso' && (
-             <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />
-           )}
-
-           {clusterSubTab === 'dispo' && (
-             isLoadingPesados ? <LoadingOverlay /> : <DispoClusterTable dispoData={lazyDispo} filtrosGlobais={filtrosGlobais} />
-           )}
-
-           {clusterSubTab === 'recusas' && (
-             isLoadingPesados ? <LoadingOverlay /> : <RecusasClusterTable recusasData={lazyRecusas} filtrosGlobais={filtrosGlobais} />
-           )}
-
-           {clusterSubTab === 'expedida' && (
-             isLoadingPesados ? <LoadingOverlay /> : <AtExpedidaClusterTable atExpedidaData={lazyExpedida} filtrosGlobais={filtrosGlobais} />
-           )}
-
-           {/* 🔥 NOVA CONDICIONAL: Cruza as 4 fontes usando o motor sob demanda */}
-           {clusterSubTab === 'estresse' && (
-             isLoadingPesados ? <LoadingOverlay /> : (
-               <EstresseClusterTable 
-                  data={data}
-                 dispoData={lazyDispo}
-                 atPisoClusterData={atPisoClusterData}
-                 recusasData={lazyRecusas}
-                 atExpedidaData={lazyExpedida}
-                 filtrosGlobais={filtrosGlobais}
-               />
-             )
-           )}
-
-        </div>
-      )}
-
-      {activeCategory === 'capacidade' && (
-        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <EstudosCapacidade consolidadoData={rawData} baseData={baseData} />
         </div>
       )}
 
@@ -297,9 +182,66 @@ const Visualizations = ({
         </div>
       )}
 
+      {activeCategory === 'estudosCluster' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <div className="flex flex-wrap bg-white dark:bg-[#1f232d] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 gap-1 w-fit">
+              <button onClick={() => setClusterSubTab('conclusoes')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${clusterSubTab === 'conclusoes' ? 'bg-[#EE4D2D] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>
+                <BrainCircuit size={14} /> Conclusões (Estresse)
+              </button>
+              <button onClick={() => setClusterSubTab('piso')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'piso' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>Acúmulo (Piso)</button>
+              <button onClick={() => setClusterSubTab('dispo')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'dispo' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>Frota Disponível</button>
+              <button onClick={() => setClusterSubTab('recusas')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'recusas' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>Recusas Operacionais</button>
+              <button onClick={() => setClusterSubTab('expedida')} className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${clusterSubTab === 'expedida' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-[#EE4D2D]'}`}>Rotas Expedidas</button>
+           </div>
+
+           <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+               <div className="flex gap-3 items-start">
+                 <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0"><MapPin size={16} /></div>
+                 <div className="flex flex-col gap-1">
+                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Módulos de Cluster</h4>
+                   <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">Análise isolada por zonas geográficas (bairros e regiões). Você pode analisar as matrizes individualmente ou cruzar todas elas na aba <strong className="text-[#EE4D2D]">Conclusões</strong>.</p>
+                 </div>
+               </div>
+               <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+                 <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0"><Database size={16} /></div>
+                 <div className="flex flex-col gap-1">
+                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Estrutura de Análise</h4>
+                   <ul className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed list-disc pl-4 space-y-1">
+                     <li><strong>Disponível:</strong> Frota alocada na ponta.</li>
+                     <li><strong>AT no Piso:</strong> Acúmulo Absoluto.</li>
+                     <li><strong>Recusas:</strong> Insucesso de saídas.</li>
+                     <li><strong>Rotas Expedidas:</strong> Demanda absorvida.</li>
+                   </ul>
+                 </div>
+               </div>
+               <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+                 <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0"><Maximize2 size={16} /></div>
+                 <div className="flex flex-col gap-1">
+                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Dicas de Interatividade</h4>
+                   <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">Todas as informações podem ser filtradas por <strong>Dia, Semana ou Mês</strong> no topo do Dashboard. Altere os filtros principais para gerar novas projeções nas tabelas abaixo.</p>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           {clusterSubTab === 'conclusoes' && (isLoadingPesados ? <LoadingOverlay /> : <EstresseClusterTable dispoData={lazyData.dispo} atExpedidaData={lazyData.expedida} recusasData={lazyData.recusas} atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />)}
+           {clusterSubTab === 'piso' && <AtPisoClusterTable atPisoClusterData={atPisoClusterData} filtrosGlobais={filtrosGlobais} />}
+           {clusterSubTab === 'dispo' && (isLoadingPesados ? <LoadingOverlay /> : <DispoClusterTable dispoData={lazyData.dispo} recusasData={lazyData.recusas} filtrosGlobais={filtrosGlobais} />)}
+           {clusterSubTab === 'recusas' && (isLoadingPesados ? <LoadingOverlay /> : <RecusasClusterTable recusasData={lazyData.recusas} filtrosGlobais={filtrosGlobais} />)}
+           {clusterSubTab === 'expedida' && (isLoadingPesados ? <LoadingOverlay /> : <AtExpedidaClusterTable atExpedidaData={lazyData.expedida} filtrosGlobais={filtrosGlobais} />)}
+        </div>
+      )}
+
       {activeCategory === 'gargalos' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <CapFleetCharts data={data} />
+        </div>
+      )}
+
+      {activeCategory === 'capacidade' && (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <EstudosCapacidade consolidadoData={rawData} baseData={baseData} />
         </div>
       )}
 
@@ -332,7 +274,6 @@ const Visualizations = ({
           Nenhum registro operacional encontrado para os filtros selecionados nesta categoria.
         </div>
       )}
-
     </div>
   );
 };
