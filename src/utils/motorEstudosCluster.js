@@ -1,6 +1,20 @@
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 import { CLUSTERS_POR_HUB } from '../constants/cluster_SPI_SPM'; 
 
+
+
+const padronizarHubLocal = (nome) => {
+  if (!nome) return "";
+  let n = String(nome).trim();
+  let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
+  
+  // ARRUMAR AQUI TAMBÉM!
+  if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
+  if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  
+  return n;
+};
+
 // ==========================================
 // CACHES E SANITIZADORES (ALTA PERFORMANCE)
 // ==========================================
@@ -10,10 +24,16 @@ const fastSanitizeHub = (str) => {
   if (!str) return "";
   let cached = SANITIZE_CACHE.get(str);
   if (cached) return cached;
-  let s = String(str).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  s = s.replace(/[_-]\d+$/, "").replace(/[^A-Z0-9]/g, '');
-  SANITIZE_CACHE.set(str, s);
-  return s;
+
+  // rodando dentro do limpador
+  let s = padronizarHubLocal(str);
+  
+  let sanitized = s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  sanitized = sanitized.replace(/[_-]\d+$/, "");
+  sanitized = sanitized.replace(/[^A-Z0-9]/g, '');
+
+  SANITIZE_CACHE.set(str, sanitized);
+  return sanitized;
 };
 
 const fastSanitizeCluster = (str) => {
@@ -27,11 +47,11 @@ const fastSanitizeCluster = (str) => {
   return cleaned;
 };
 
-// 🔥 CORREÇÃO 1: Identificador universal de datas (Aceita 01/06 ou 1/6)
+// Detecção O(1) de Datas
 const isDateFast = (val) => {
   if (!val) return false;
   const s = String(val).trim();
-  return /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4})/.test(s);
+  return s.length >= 8 && (s.indexOf('-') === 4 || s.indexOf('/') === 2);
 };
 
 const TRUTH_MAP = new Map();
@@ -49,9 +69,11 @@ const resolveClusterName = (hubRaw, clusterRaw) => {
   const hC = fastSanitizeHub(hubRaw);
   const cC = fastSanitizeCluster(clusterRaw);
   if (!cC || cC === "NAOPREENCHIDO" || cC === "SEMCLUSTER") return "SEM CLUSTER";
+  
   const cacheKey = `${hC}|${cC}`;
   let cached = RESOLVER_CACHE.get(cacheKey);
   if (cached) return cached;
+  
   let finalName = "OUTROS / NÃO MAPEADO";
   const truthList = TRUTH_MAP.get(hC);
   if (truthList) {
@@ -93,18 +115,6 @@ const parseNum = (val) => {
   return Number(s.replace(/\./g, '').replace(',', '.')) || 0;
 };
 
-const processInChunks = async (array, processFunction) => {
-  if (!array || array.length <= 1) return;
-  const CHUNK_SIZE = 1500;
-  for (let i = 1; i < array.length; i += CHUNK_SIZE) {
-    const end = Math.min(i + CHUNK_SIZE, array.length);
-    for (let j = i; j < end; j++) {
-      processFunction(array[j], j);
-    }
-    await new Promise(resolve => setTimeout(resolve, 0));
-  }
-};
-
 const buildHeadersAndSortRows = (colTimeSet, aggs, viewMode) => {
   const MESES_ORDEM = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
   const headers = Array.from(colTimeSet).sort((a, b) => {
@@ -141,9 +151,7 @@ export const calcularMatrizDispo = async ({ dispoData, filtrosGlobais, selectedM
   const dataInicioObj = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
   const dataFimObj = dataFim ? new Date(dataFim + 'T23:59:59') : null;
 
-  // 🔥 CORREÇÃO 2: Libera a passagem se a Regional for "Todas" ou "Both"
   const isAll = !currentRegional || ['BOTH', 'TODAS', 'TODOS', 'ALL'].includes(String(currentRegional).toUpperCase());
-  
   const permittedHubsList = isAll ? [] : (getHubsPermitidos(currentRegional) || []);
   const extraPermitted = isAll ? [] : Object.keys(MAPA_REGIONAL_COMPLETO).filter(k => {
     const reg = MAPA_REGIONAL_COMPLETO[k] || "";
@@ -151,66 +159,69 @@ export const calcularMatrizDispo = async ({ dispoData, filtrosGlobais, selectedM
   });
   const permittedHubsSet = new Set([...permittedHubsList, ...extraPermitted].map(fastSanitizeHub));
 
-  await processInChunks(dispoData, (row) => {
-    const hubRaw = String(row[0] || "");
-    if (!hubRaw) return;
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
+  // 🔥 Laço Síncrono (Instantâneo)
+  if (dispoData && dispoData.length > 1) {
+    const len = dispoData.length;
+    for (let i = 1; i < len; i++) {
+      const row = dispoData[i];
+      const hubRaw = padronizarHubLocal(row[0]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
 
-    let dateIdx = 4;
-    for (let k = 4; k <= 8; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
-    
-    let clusterRaw = dateIdx === 4 ? String(row[1] || "") : row.slice(1, dateIdx - 2).join(", ");
-    const finalCluster = resolveClusterName(hubRaw, clusterRaw);
-    if (finalCluster === "SEM CLUSTER") return;
+      let dateIdx = 4;
+      for (let k = 4; k <= 8; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
+      
+      let clusterRaw = dateIdx === 4 ? String(row[1] || "") : row.slice(1, dateIdx - 2).join(", ");
+      const finalCluster = resolveClusterName(hubRaw, clusterRaw);
+      if (finalCluster === "SEM CLUSTER") continue;
 
-    let turnoLinha = String(row[dateIdx - 2] || "").trim().toUpperCase();
-    let turnoConfirmado = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
+      let turnoLinha = String(row[dateIdx - 2] || "").trim().toUpperCase();
+      let turnoConfirmado = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
 
-    const modalRow = String(row[dateIdx - 1] || "").trim().toUpperCase();
-    if (modalRow) modalSet.add(modalRow);
+      const modalRow = String(row[dateIdx - 1] || "").trim().toUpperCase();
+      if (modalRow) modalSet.add(modalRow);
 
-    const dataRaw = row[dateIdx]; 
-    const qtd = parseNum(row[dateIdx + 1]); 
-    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+      const dataRaw = row[dateIdx]; 
+      const qtd = parseNum(row[dateIdx + 1]); 
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
-    if (!dataRaw || qtd === 0) return;
-    
-    // 🔥 CORREÇÃO 3: Filtro frouxo (Loose Match) para aceitar [SPM] cruzando com SPM1
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-    if (turno.length > 0 && !turno.includes(turnoConfirmado)) return;
-    if (selectedModal && !modalRow.includes(selectedModal)) return; 
+      if (!dataRaw || qtd === 0) continue;
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      if (turno.length > 0 && !turno.includes(turnoConfirmado)) continue;
+      if (selectedModal && !modalRow.includes(selectedModal)) continue; 
 
-    const isoDate = parseUniversalDate(dataRaw);
-    if (!isoDate) return;
-    const dObj = new Date(isoDate);
-    if (isNaN(dObj.getTime())) return;
-    if (dataInicioObj && dObj < dataInicioObj) return;
-    if (dataFimObj && dObj > dataFimObj) return;
-    if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) return;
-    if (semana && getISOWeek(isoDate) !== semana) return;
+      const isoDate = parseUniversalDate(dataRaw);
+      if (!isoDate) continue;
+      const dObj = new Date(isoDate);
+      if (isNaN(dObj.getTime())) continue;
+      if (dataInicioObj && dObj < dataInicioObj) continue;
+      if (dataFimObj && dObj > dataFimObj) continue;
+      if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) continue;
+      if (semana && getISOWeek(isoDate) !== semana) continue;
 
-    let dynamicKey = "";
-    if (viewMode === 'dia') dynamicKey = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
-    else if (viewMode === 'semana') dynamicKey = getISOWeek(isoDate);
-    else if (viewMode === 'mes') dynamicKey = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
+      let dynamicKey = "";
+      if (viewMode === 'dia') dynamicKey = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
+      else if (viewMode === 'semana') dynamicKey = getISOWeek(isoDate);
+      else if (viewMode === 'mes') dynamicKey = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
 
-    if (!dynamicKey) return;
+      if (!dynamicKey) continue;
 
-    colTimeSet.add(dynamicKey);
-    stationsSet.add(hubRaw.toUpperCase());
+      colTimeSet.add(dynamicKey);
+      stationsSet.add(hubRaw.toUpperCase());
 
-    if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
-    if (aggs[hC].valoresHub[dynamicKey] === undefined) aggs[hC].valoresHub[dynamicKey] = 0;
-    aggs[hC].valoresHub[dynamicKey] += qtd;
+      if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
+      if (aggs[hC].valoresHub[dynamicKey] === undefined) aggs[hC].valoresHub[dynamicKey] = 0;
+      aggs[hC].valoresHub[dynamicKey] += qtd;
 
-    const clusterCleanKey = fastSanitizeCluster(finalCluster);
-    if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
-    if (aggs[hC].clustersMap[clusterCleanKey].valores[dynamicKey] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[dynamicKey] = 0;
-    aggs[hC].clustersMap[clusterCleanKey].valores[dynamicKey] += qtd;
-  });
+      const clusterCleanKey = fastSanitizeCluster(finalCluster);
+      if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
+      if (aggs[hC].clustersMap[clusterCleanKey].valores[dynamicKey] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[dynamicKey] = 0;
+      aggs[hC].clustersMap[clusterCleanKey].valores[dynamicKey] += qtd;
+    }
+  }
 
   const { headers, rows } = buildHeadersAndSortRows(colTimeSet, aggs, viewMode);
   const modaisUnicos = Array.from(modalSet).sort();
@@ -237,64 +248,70 @@ export const calcularMatrizPiso = async ({ atPisoClusterData, filtrosGlobais, vi
   });
   const permittedHubsSet = new Set([...permittedHubsList, ...extraPermitted].map(fastSanitizeHub));
 
-  await processInChunks(atPisoClusterData, (row) => {
-    const hubRaw = String(row[3] || "").trim();
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
+  if (atPisoClusterData && atPisoClusterData.length > 1) {
+    const len = atPisoClusterData.length;
+    for (let i = 1; i < len; i++) {
+      const row = atPisoClusterData[i];
+      const hubRaw = padronizarHubLocal(row[3]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
 
-    let qtdIdx = 5;
-    for (let k = row.length - 1; k >= 5; k--) {
-       if (row[k] !== undefined && String(row[k]).trim() !== "") { qtdIdx = k; break; }
+      let qtdIdx = 5;
+      for (let k = row.length - 1; k >= 5; k--) {
+         if (row[k] !== undefined && String(row[k]).trim() !== "") { qtdIdx = k; break; }
+      }
+      const clusterRaw = qtdIdx === 5 ? String(row[4] || "") : row.slice(4, qtdIdx).join(", ");
+      const finalCluster = resolveClusterName(hubRaw, clusterRaw);
+      if (finalCluster === "SEM CLUSTER") continue;
+
+      const dataStr = String(row[0] || "").trim();
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+      const qtdAt = parseNum(row[qtdIdx]);
+
+      if (!dataStr || qtdAt === 0) continue;
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+
+      const isoDate = parseUniversalDate(dataStr);
+      const dObj = isoDate ? new Date(isoDate) : null;
+      
+      if (dObj) {
+        if (dataInicioObj && dObj < dataInicioObj) continue;
+        if (dataFimObj && dObj > dataFimObj) continue;
+        if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) continue;
+      }
+      if (semana && getISOWeek(isoDate) !== semana) continue;
+
+      let chaveTempo = "";
+      if (viewMode === 'dia') {
+        if (dObj) chaveTempo = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
+      } else if (viewMode === 'semana') {
+        chaveTempo = getISOWeek(isoDate);
+      } else if (viewMode === 'mes') {
+        if (dObj) chaveTempo = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
+      }
+
+      if (!chaveTempo) continue;
+
+      colTimeSet.add(chaveTempo);
+      stationsSet.add(hubRaw.toUpperCase());
+
+      if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
+      if (aggs[hC].valoresHub[chaveTempo] === undefined) aggs[hC].valoresHub[chaveTempo] = 0;
+      aggs[hC].valoresHub[chaveTempo] += qtdAt;
+
+      const clusterCleanKey = fastSanitizeCluster(finalCluster);
+      if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
+      if (aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] = 0;
+      aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] += qtdAt;
+
+      const nomeUnicoCluster = `${hubRaw.toUpperCase()} - ${finalCluster}`;
+      if (!clusterRankMap[nomeUnicoCluster]) clusterRankMap[nomeUnicoCluster] = 0;
+      clusterRankMap[nomeUnicoCluster] += qtdAt;
     }
-    const clusterRaw = qtdIdx === 5 ? String(row[4] || "") : row.slice(4, qtdIdx).join(", ");
-    const finalCluster = resolveClusterName(hubRaw, clusterRaw);
-    if (finalCluster === "SEM CLUSTER") return;
-
-    const dataStr = String(row[0] || "").trim();
-    const subreg = String(row[2] || "").trim(); 
-    const qtdAt = parseNum(row[qtdIdx]);
-
-    if (!hubRaw || !dataStr || qtdAt === 0) return;
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-
-    const isoDate = parseUniversalDate(dataStr);
-    const dObj = isoDate ? new Date(isoDate) : null;
-    
-    if (dObj) {
-      if (dataInicioObj && dObj < dataInicioObj) return;
-      if (dataFimObj && dObj > dataFimObj) return;
-      if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) return;
-    }
-    if (semana && getISOWeek(isoDate) !== semana) return;
-
-    let chaveTempo = "";
-    if (viewMode === 'dia') {
-      if (dObj) chaveTempo = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
-    } else if (viewMode === 'semana') {
-      chaveTempo = getISOWeek(isoDate);
-    } else if (viewMode === 'mes') {
-      if (dObj) chaveTempo = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
-    }
-
-    if (!chaveTempo) return;
-
-    colTimeSet.add(chaveTempo);
-    stationsSet.add(hubRaw.toUpperCase());
-
-    if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
-    if (aggs[hC].valoresHub[chaveTempo] === undefined) aggs[hC].valoresHub[chaveTempo] = 0;
-    aggs[hC].valoresHub[chaveTempo] += qtdAt;
-
-    const clusterCleanKey = fastSanitizeCluster(finalCluster);
-    if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
-    if (aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] = 0;
-    aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] += qtdAt;
-
-    const nomeUnicoCluster = `${hubRaw.toUpperCase()} - ${finalCluster}`;
-    if (!clusterRankMap[nomeUnicoCluster]) clusterRankMap[nomeUnicoCluster] = 0;
-    clusterRankMap[nomeUnicoCluster] += qtdAt;
-  });
+  }
 
   const { headers, rows } = buildHeadersAndSortRows(colTimeSet, aggs, viewMode);
   const ranking = Object.entries(clusterRankMap).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 12);
@@ -322,70 +339,76 @@ export const calcularMatrizExpedida = async ({ atExpedidaData, filtrosGlobais, s
   });
   const permittedHubsSet = new Set([...permittedHubsList, ...extraPermitted].map(fastSanitizeHub));
 
-  await processInChunks(atExpedidaData, (row) => {
-    const hubRaw = String(row[1] || "").trim(); 
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
+  if (atExpedidaData && atExpedidaData.length > 1) {
+    const len = atExpedidaData.length;
+    for (let i = 1; i < len; i++) {
+      const row = atExpedidaData[i];
+      const hubRaw = padronizarHubLocal(row[1]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
 
-    let dateIdx = 5;
-    for (let k = 5; k <= 9; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
-    
-    const clusterRaw = dateIdx === 5 ? String(row[4] || "") : row.slice(4, dateIdx).join(", ");
-    const finalCluster = resolveClusterName(hubRaw, clusterRaw);
-    if (finalCluster === "SEM CLUSTER") return;
+      let dateIdx = 5;
+      for (let k = 5; k <= 9; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
+      
+      const clusterRaw = dateIdx === 5 ? String(row[4] || "") : row.slice(4, dateIdx).join(", ");
+      const finalCluster = resolveClusterName(hubRaw, clusterRaw);
+      if (finalCluster === "SEM CLUSTER") continue;
 
-    const modalRow = String(row[3] || "NÃO INFORMADO").trim().toUpperCase(); 
-    const dataStr = String(row[dateIdx] || "").trim(); 
-    const tConf = String(row[2] || "").trim().toUpperCase();
-    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+      const modalRow = String(row[3] || "NÃO INFORMADO").trim().toUpperCase(); 
+      const dataStr = String(row[dateIdx] || "").trim(); 
+      const tConf = String(row[2] || "").trim().toUpperCase();
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
-    if (!hubRaw || !dataStr) return;
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-    if (turno.length > 0 && !turno.includes(tConf)) return;
-    if (selectedModal) {
-      if (selectedModal === 'FIORINO' && !modalRow.includes('FIORINO') && !modalRow.includes('UTIL')) return;
-      else if (selectedModal !== 'FIORINO' && !modalRow.includes(selectedModal)) return;
+      if (!dataStr) continue;
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      if (turno.length > 0 && !turno.includes(tConf)) continue;
+      if (selectedModal) {
+        if (selectedModal === 'FIORINO' && !modalRow.includes('FIORINO') && !modalRow.includes('UTIL')) continue;
+        else if (selectedModal !== 'FIORINO' && !modalRow.includes(selectedModal)) continue;
+      }
+
+      const isoDate = parseUniversalDate(dataStr);
+      const dObj = isoDate ? new Date(isoDate) : null;
+      if (dObj) {
+        if (dataInicioObj && dObj < dataInicioObj) continue;
+        if (dataFimObj && dObj > dataFimObj) continue;
+        if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) continue;
+      }
+      if (semana && getISOWeek(isoDate) !== semana) continue;
+
+      let chaveTempo = "";
+      if (viewMode === 'dia') {
+        if (dObj) chaveTempo = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
+      } else if (viewMode === 'semana') {
+        chaveTempo = getISOWeek(isoDate);
+      } else if (viewMode === 'mes') {
+        if (dObj) chaveTempo = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
+      }
+      if (!chaveTempo) continue;
+
+      colTimeSet.add(chaveTempo);
+      stationsSet.add(hubRaw.toUpperCase());
+
+      if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
+      if (aggs[hC].valoresHub[chaveTempo] === undefined) aggs[hC].valoresHub[chaveTempo] = 0;
+      aggs[hC].valoresHub[chaveTempo] += 1;
+
+      const clusterCleanKey = fastSanitizeCluster(finalCluster);
+      if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
+      if (aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] = 0;
+      aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] += 1;
+
+      const nomeUnicoCluster = `${hubRaw.toUpperCase()} - ${finalCluster}`;
+      if (!clusterRankMap[nomeUnicoCluster]) clusterRankMap[nomeUnicoCluster] = 0;
+      clusterRankMap[nomeUnicoCluster] += 1;
+
+      if (!modalRankMap[modalRow]) modalRankMap[modalRow] = 0;
+      modalRankMap[modalRow] += 1;
     }
-
-    const isoDate = parseUniversalDate(dataStr);
-    const dObj = isoDate ? new Date(isoDate) : null;
-    if (dObj) {
-      if (dataInicioObj && dObj < dataInicioObj) return;
-      if (dataFimObj && dObj > dataFimObj) return;
-      if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) return;
-    }
-    if (semana && getISOWeek(isoDate) !== semana) return;
-
-    let chaveTempo = "";
-    if (viewMode === 'dia') {
-      if (dObj) chaveTempo = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
-    } else if (viewMode === 'semana') {
-      chaveTempo = getISOWeek(isoDate);
-    } else if (viewMode === 'mes') {
-      if (dObj) chaveTempo = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
-    }
-    if (!chaveTempo) return;
-
-    colTimeSet.add(chaveTempo);
-    stationsSet.add(hubRaw.toUpperCase());
-
-    if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
-    if (aggs[hC].valoresHub[chaveTempo] === undefined) aggs[hC].valoresHub[chaveTempo] = 0;
-    aggs[hC].valoresHub[chaveTempo] += 1;
-
-    const clusterCleanKey = fastSanitizeCluster(finalCluster);
-    if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
-    if (aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] = 0;
-    aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] += 1;
-
-    const nomeUnicoCluster = `${hubRaw.toUpperCase()} - ${finalCluster}`;
-    if (!clusterRankMap[nomeUnicoCluster]) clusterRankMap[nomeUnicoCluster] = 0;
-    clusterRankMap[nomeUnicoCluster] += 1;
-
-    if (!modalRankMap[modalRow]) modalRankMap[modalRow] = 0;
-    modalRankMap[modalRow] += 1;
-  });
+  }
 
   const { headers, rows } = buildHeadersAndSortRows(colTimeSet, aggs, viewMode);
   const rankingClusters = Object.entries(clusterRankMap).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 10);
@@ -414,71 +437,77 @@ export const calcularMatrizRecusas = async ({ recusasData, filtrosGlobais, selec
   });
   const permittedHubsSet = new Set([...permittedHubsList, ...extraPermitted].map(fastSanitizeHub));
 
-  await processInChunks(recusasData, (row) => {
-    const hubRaw = String(row[4] || "").trim();
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
+  if (recusasData && recusasData.length > 1) {
+    const len = recusasData.length;
+    for (let i = 1; i < len; i++) {
+      const row = recusasData[i];
+      const hubRaw = padronizarHubLocal(row[4]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
 
-    let dateIdx = 8;
-    for (let k = 8; k <= 12; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
-    
-    const clusterRaw = dateIdx === 8 ? String(row[6] || "") : row.slice(6, dateIdx - 1).join(", ");
-    const finalCluster = resolveClusterName(hubRaw, clusterRaw);
-    if (finalCluster === "SEM CLUSTER") return;
+      let dateIdx = 8;
+      for (let k = 8; k <= 12; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
+      
+      const clusterRaw = dateIdx === 8 ? String(row[6] || "") : row.slice(6, dateIdx - 1).join(", ");
+      const finalCluster = resolveClusterName(hubRaw, clusterRaw);
+      if (finalCluster === "SEM CLUSTER") continue;
 
-    const dataStr = String(row[dateIdx] || "").trim();
-    const motivo = String(row[9] || "").trim() || "NÃO INFORMADO";
-    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
-    const tConf = String(row[dateIdx - 1] || "").trim().toUpperCase();
-    const modalRow = String(row[dateIdx + 2] || "").trim().toUpperCase();
+      const dataStr = String(row[dateIdx] || "").trim();
+      const motivo = String(row[9] || "").trim() || "NÃO INFORMADO";
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+      const tConf = String(row[dateIdx - 1] || "").trim().toUpperCase();
+      const modalRow = String(row[dateIdx + 2] || "").trim().toUpperCase();
 
-    if (!hubRaw || !dataStr) return;
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-    if (turno.length > 0 && !turno.includes(tConf)) return;
-    if (selectedModal) {
-      if (selectedModal === 'FIORINO' && !modalRow.includes('FIORINO') && !modalRow.includes('UTIL')) return;
-      else if (selectedModal !== 'FIORINO' && !modalRow.includes(selectedModal)) return;
+      if (!dataStr) continue;
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      if (turno.length > 0 && !turno.includes(tConf)) continue;
+      if (selectedModal) {
+        if (selectedModal === 'FIORINO' && !modalRow.includes('FIORINO') && !modalRow.includes('UTIL')) continue;
+        else if (selectedModal !== 'FIORINO' && !modalRow.includes(selectedModal)) continue;
+      }
+
+      const isoDate = parseUniversalDate(dataStr);
+      const dObj = isoDate ? new Date(isoDate) : null;
+      if (dObj) {
+        if (dataInicioObj && dObj < dataInicioObj) continue;
+        if (dataFimObj && dObj > dataFimObj) continue;
+        if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) continue;
+      }
+      if (semana && getISOWeek(isoDate) !== semana) continue;
+
+      let chaveTempo = "";
+      if (viewMode === 'dia') {
+        if (dObj) chaveTempo = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
+      } else if (viewMode === 'semana') {
+        chaveTempo = getISOWeek(isoDate);
+      } else if (viewMode === 'mes') {
+        if (dObj) chaveTempo = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
+      }
+      if (!chaveTempo) continue;
+
+      colTimeSet.add(chaveTempo);
+      stationsSet.add(hubRaw.toUpperCase());
+
+      if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
+      if (aggs[hC].valoresHub[chaveTempo] === undefined) aggs[hC].valoresHub[chaveTempo] = 0;
+      aggs[hC].valoresHub[chaveTempo] += 1;
+
+      const clusterCleanKey = fastSanitizeCluster(finalCluster);
+      if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
+      if (aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] = 0;
+      aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] += 1;
+
+      const nomeUnicoCluster = `${hubRaw.toUpperCase()} - ${finalCluster}`;
+      if (!clusterRankMap[nomeUnicoCluster]) clusterRankMap[nomeUnicoCluster] = 0;
+      clusterRankMap[nomeUnicoCluster] += 1;
+
+      if (!motivoRankMap[motivo]) motivoRankMap[motivo] = 0;
+      motivoRankMap[motivo] += 1;
     }
-
-    const isoDate = parseUniversalDate(dataStr);
-    const dObj = isoDate ? new Date(isoDate) : null;
-    if (dObj) {
-      if (dataInicioObj && dObj < dataInicioObj) return;
-      if (dataFimObj && dObj > dataFimObj) return;
-      if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) return;
-    }
-    if (semana && getISOWeek(isoDate) !== semana) return;
-
-    let chaveTempo = "";
-    if (viewMode === 'dia') {
-      if (dObj) chaveTempo = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
-    } else if (viewMode === 'semana') {
-      chaveTempo = getISOWeek(isoDate);
-    } else if (viewMode === 'mes') {
-      if (dObj) chaveTempo = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][dObj.getMonth()];
-    }
-    if (!chaveTempo) return;
-
-    colTimeSet.add(chaveTempo);
-    stationsSet.add(hubRaw.toUpperCase());
-
-    if (!aggs[hC]) aggs[hC] = { hub: hubRaw.toUpperCase(), valoresHub: {}, clustersMap: {} };
-    if (aggs[hC].valoresHub[chaveTempo] === undefined) aggs[hC].valoresHub[chaveTempo] = 0;
-    aggs[hC].valoresHub[chaveTempo] += 1;
-
-    const clusterCleanKey = fastSanitizeCluster(finalCluster);
-    if (!aggs[hC].clustersMap[clusterCleanKey]) aggs[hC].clustersMap[clusterCleanKey] = { cluster: finalCluster, valores: {} };
-    if (aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] === undefined) aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] = 0;
-    aggs[hC].clustersMap[clusterCleanKey].valores[chaveTempo] += 1;
-
-    const nomeUnicoCluster = `${hubRaw.toUpperCase()} - ${finalCluster}`;
-    if (!clusterRankMap[nomeUnicoCluster]) clusterRankMap[nomeUnicoCluster] = 0;
-    clusterRankMap[nomeUnicoCluster] += 1;
-
-    if (!motivoRankMap[motivo]) motivoRankMap[motivo] = 0;
-    motivoRankMap[motivo] += 1;
-  });
+  }
 
   const { headers, rows } = buildHeadersAndSortRows(colTimeSet, aggs, viewMode);
   const rankingClusters = Object.entries(clusterRankMap).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 10);
@@ -541,8 +570,13 @@ export const calcularMatrizEstresse = async ({
 
   let totalDispoGlobal = 0;
   if (data && data.length > 0) {
-    for (let i = 0; i < data.length; i++) {
+    const lenData = data.length;
+    for (let i = 1; i < lenData; i++) {
       const row = data[i];
+      // Garante que só puxa os totais da regional correta também (Opcional, mas seguro)
+      const hubRow = padronizarHubLocal(row[4]);
+      if (hubRow && (!isAll && !permittedHubsSet.has(fastSanitizeHub(hubRow)))) continue;
+
       if (!selectedModal) totalDispoGlobal += parseNum(row[24]);
       else {
         if (selectedModal === 'PASSEIO') totalDispoGlobal += parseNum(row[21]);
@@ -553,107 +587,131 @@ export const calcularMatrizEstresse = async ({
     }
   }
 
-  await processInChunks(dispoData, (row) => {
-    const hubRaw = String(row[0] || "");
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
+  if (dispoData && dispoData.length > 1) {
+    const len = dispoData.length;
+    for (let i = 1; i < len; i++) {
+      const row = dispoData[i];
+      const hubRaw = padronizarHubLocal(row[0]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
 
-    let dateIdx = 4;
-    for (let k = 4; k <= 8; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
-    let clusterRaw = dateIdx === 4 ? String(row[1] || "") : row.slice(1, dateIdx - 2).join(", ");
-    
-    const turnoLinha = String(row[dateIdx - 2] || "").trim().toUpperCase();
-    const modalRaw = String(row[dateIdx - 1] || "").trim().toUpperCase();
-    const dataRaw = row[dateIdx];
-    const qtd = parseNum(row[dateIdx + 1]);
-    
-    if (!hubRaw || !dataRaw || qtd === 0) return;
-    let tConf = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
-    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
-    
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-    if (turno.length > 0 && !turno.includes(tConf)) return;
-    if (!isValidDate(dataRaw)) return;
-    if (selectedModal && !modalRow.includes(selectedModal)) return;
+      let dateIdx = 4;
+      for (let k = 4; k <= 8; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
+      let clusterRaw = dateIdx === 4 ? String(row[1] || "") : row.slice(1, dateIdx - 2).join(", ");
+      
+      const turnoLinha = String(row[dateIdx - 2] || "").trim().toUpperCase();
+      const modalRaw = String(row[dateIdx - 1] || "").trim().toUpperCase();
+      const dataRaw = row[dateIdx];
+      const qtd = parseNum(row[dateIdx + 1]);
+      
+      if (!dataRaw || qtd === 0) continue;
+      let tConf = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+      
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      if (turno.length > 0 && !turno.includes(tConf)) continue;
+      if (!isValidDate(dataRaw)) continue;
+      if (selectedModal && !modalRaw.includes(selectedModal)) continue;
 
-    injectAggs(hubRaw, clusterRaw, dataRaw, 'dispo', qtd);
-  });
-
-  await processInChunks(atPisoClusterData, (row) => {
-    if (selectedModal) return; 
-    const hubRaw = String(row[3] || "");
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
-
-    let qtdIdx = 5;
-    for (let k = row.length - 1; k >= 5; k--) {
-       if (row[k] !== undefined && String(row[k]).trim() !== "") { qtdIdx = k; break; }
+      injectAggs(hubRaw, clusterRaw, dataRaw, 'dispo', qtd);
     }
-    const clusterRaw = qtdIdx === 5 ? String(row[4] || "") : row.slice(4, qtdIdx).join(", ");
-    const dataRaw = row[0];
-    const qtd = parseNum(row[qtdIdx]);
-    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+  }
 
-    if (!hubRaw || !dataRaw || qtd === 0) return;
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-    if (!isValidDate(dataRaw)) return;
+  if (atPisoClusterData && atPisoClusterData.length > 1) {
+    const len = atPisoClusterData.length;
+    for (let i = 1; i < len; i++) {
+      if (selectedModal) continue; 
+      const row = atPisoClusterData[i];
+      const hubRaw = padronizarHubLocal(row[3]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
 
-    injectAggs(hubRaw, clusterRaw, dataRaw, 'atPiso', qtd);
-  });
+      let qtdIdx = 5;
+      for (let k = row.length - 1; k >= 5; k--) {
+         if (row[k] !== undefined && String(row[k]).trim() !== "") { qtdIdx = k; break; }
+      }
+      const clusterRaw = qtdIdx === 5 ? String(row[4] || "") : row.slice(4, qtdIdx).join(", ");
+      const dataRaw = row[0];
+      const qtd = parseNum(row[qtdIdx]);
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
-  await processInChunks(recusasData, (row) => {
-    const hubRaw = String(row[4] || "");
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
+      if (!dataRaw || qtd === 0) continue;
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      if (!isValidDate(dataRaw)) continue;
 
-    let dateIdx = 8;
-    for (let k = 8; k <= 12; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
-    const clusterRaw = dateIdx === 8 ? String(row[6] || "") : row.slice(6, dateIdx - 1).join(", ");
-    const tConf = String(row[dateIdx - 1] || "").trim().toUpperCase();
-    const dataRaw = row[dateIdx];
-    const modalRaw = String(row[dateIdx + 2] || "").trim().toUpperCase(); 
-    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
-
-    if (!hubRaw || !dataRaw || !clusterRaw) return;
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-    if (turno.length > 0 && !turno.includes(tConf)) return;
-    if (!isValidDate(dataRaw)) return;
-    if (selectedModal) {
-      if (selectedModal === 'FIORINO' && !modalRow.includes('FIORINO') && !modalRow.includes('UTIL')) return;
-      else if (selectedModal !== 'FIORINO' && !modalRow.includes(selectedModal)) return;
+      injectAggs(hubRaw, clusterRaw, dataRaw, 'atPiso', qtd);
     }
+  }
 
-    injectAggs(hubRaw, clusterRaw, dataRaw, 'recusas', 1);
-  });
+  if (recusasData && recusasData.length > 1) {
+    const len = recusasData.length;
+    for (let i = 1; i < len; i++) {
+      const row = recusasData[i];
+      const hubRaw = padronizarHubLocal(row[4]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
 
-  await processInChunks(atExpedidaData, (row) => {
-    const hubRaw = String(row[1] || "");
-    const hC = fastSanitizeHub(hubRaw);
-    if (!isAll && !permittedHubsSet.has(hC)) return;
+      let dateIdx = 8;
+      for (let k = 8; k <= 12; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
+      const clusterRaw = dateIdx === 8 ? String(row[6] || "") : row.slice(6, dateIdx - 1).join(", ");
+      const tConf = String(row[dateIdx - 1] || "").trim().toUpperCase();
+      const dataRaw = row[dateIdx];
+      const modalRaw = String(row[dateIdx + 2] || "").trim().toUpperCase(); 
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
-    let dateIdx = 5;
-    for (let k = 5; k <= 9; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
-    const tConf = String(row[2] || "").trim().toUpperCase();
-    const modalRaw = String(row[3] || "").trim().toUpperCase();
-    const clusterRaw = dateIdx === 5 ? String(row[4] || "") : row.slice(4, dateIdx).join(", ");
-    const dataRaw = row[dateIdx];
-    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+      if (!dataRaw || !clusterRaw) continue;
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      if (turno.length > 0 && !turno.includes(tConf)) continue;
+      if (!isValidDate(dataRaw)) continue;
+      if (selectedModal) {
+        if (selectedModal === 'FIORINO' && !modalRaw.includes('FIORINO') && !modalRaw.includes('UTIL')) continue;
+        else if (selectedModal !== 'FIORINO' && !modalRaw.includes(selectedModal)) continue;
+      }
 
-    if (!hubRaw || !dataRaw) return;
-    if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) return;
-    if (station.length > 0 && !station.includes(hubRaw)) return;
-    if (turno.length > 0 && !turno.includes(tConf)) return;
-    if (!isValidDate(dataRaw)) return;
-    if (selectedModal) {
-      if (selectedModal === 'FIORINO' && !modalRow.includes('FIORINO') && !modalRow.includes('UTIL')) return;
-      else if (selectedModal !== 'FIORINO' && !modalRow.includes(selectedModal)) return;
+      injectAggs(hubRaw, clusterRaw, dataRaw, 'recusas', 1);
     }
+  }
 
-    injectAggs(hubRaw, clusterRaw, dataRaw, 'expedidas', 1);
-  });
+  if (atExpedidaData && atExpedidaData.length > 1) {
+    const len = atExpedidaData.length;
+    for (let i = 1; i < len; i++) {
+      const row = atExpedidaData[i];
+      const hubRaw = padronizarHubLocal(row[1]);
+      if (!hubRaw) continue;
+      
+      const hC = fastSanitizeHub(hubRaw);
+      if (!isAll && !permittedHubsSet.has(hC)) continue;
+
+      let dateIdx = 5;
+      for (let k = 5; k <= 9; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
+      const tConf = String(row[2] || "").trim().toUpperCase();
+      const modalRaw = String(row[3] || "").trim().toUpperCase();
+      const clusterRaw = dateIdx === 5 ? String(row[4] || "") : row.slice(4, dateIdx).join(", ");
+      const dataRaw = row[dateIdx];
+      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+
+      if (!dataRaw) continue;
+      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
+      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      if (turno.length > 0 && !turno.includes(tConf)) continue;
+      if (!isValidDate(dataRaw)) continue;
+      if (selectedModal) {
+        if (selectedModal === 'FIORINO' && !modalRaw.includes('FIORINO') && !modalRaw.includes('UTIL')) continue;
+        else if (selectedModal !== 'FIORINO' && !modalRaw.includes(selectedModal)) continue;
+      }
+
+      injectAggs(hubRaw, clusterRaw, dataRaw, 'expedidas', 1);
+    }
+  }
 
   const pontosDeAtritoPorCluster = {};
   Object.entries(historicoDiario).forEach(([dKey, valores]) => {

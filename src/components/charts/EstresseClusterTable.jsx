@@ -1,22 +1,43 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, MapPin, AlertTriangle, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, Activity, Car, PackageCheck, UserMinus, ShieldAlert, BarChart2, Layers, ChevronDown } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList } from 'recharts';
-import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 import { CLUSTERS_POR_HUB } from '../../constants/cluster_SPI_SPM'; 
+import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../../constants/regionais';
 
 // ============================================================================
-// 🔥 MOTOR O(1) DE ALTA PERFORMANCE (CACHE E ESQUELETO ESTRITO)
+// CACHES DE ALTA PERFORMANCE & VACINAS
 // ============================================================================
 const SANITIZE_CACHE = new Map();
+const PARSED_DATE_CACHE = new Map();
+
+// 1. PRIMEIRO PADRONIZAMOS O NOME CRU (Arrumado o typo de Ribeirão)
+const padronizarHubLocal = (nome) => {
+  if (!nome) return "";
+  let n = String(nome).trim();
+  let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
+  
+  // OVERRIDES MANUAIS CORRIGIDOS
+  if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
+  if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  
+  return n;
+};
+
+// 2. DEPOIS GERAMOS A CHAVE DO DICIONÁRIO (Sem os overrides aqui dentro)
 const fastSanitizeHub = (str) => {
   if (!str) return "";
   let cached = SANITIZE_CACHE.get(str);
   if (cached) return cached;
-  let s = String(str).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  s = s.replace(/[_-]\d+$/, ""); 
-  s = s.replace(/[^A-Z0-9]/g, '');
-  SANITIZE_CACHE.set(str, s);
-  return s;
+
+  // rodando dentro do limpador
+  let s = padronizarHubLocal(str);
+  
+  let sanitized = s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  sanitized = sanitized.replace(/[_-]\d+$/, "");
+  sanitized = sanitized.replace(/[^A-Z0-9]/g, '');
+
+  SANITIZE_CACHE.set(str, sanitized);
+  return sanitized;
 };
 
 const fastSanitizeCluster = (str) => {
@@ -24,22 +45,22 @@ const fastSanitizeCluster = (str) => {
   const key = `C_${str}`;
   let cached = SANITIZE_CACHE.get(key);
   if (cached) return cached;
+  
   let s = String(str).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   s = s.replace(/[^A-Z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  
   SANITIZE_CACHE.set(key, s);
   return s;
 };
 
+
 const isDateFast = (val) => {
-  if (!val) return false;
-  const s = String(val).trim();
+  if (!val || typeof val !== 'string') return false;
+  const s = val.trim();
   if (s.length < 8) return false;
-  if (s[4] === '-' && s[7] === '-') return true; 
-  if (s[2] === '/' && s[5] === '/') return true; 
-  return false;
+  return (s[4] === '-' && s[7] === '-') || (s[2] === '/' && s[5] === '/'); 
 };
 
-const PARSED_DATE_CACHE = new Map();
 const fastParseDate = (s) => {
   if (!s) return null;
   let str = String(s).trim();
@@ -48,7 +69,10 @@ const fastParseDate = (s) => {
 
   let dStr = str.length > 10 ? str.substring(0,10) : str;
   if (dStr.indexOf('/') !== -1) {
-      dStr = `${dStr.substring(6,10)}-${dStr.substring(3,5)}-${dStr.substring(0,2)}`;
+      const parts = dStr.split('/');
+      if (parts.length === 3) {
+          dStr = `${parts[2].length === 2 ? '20'+parts[2] : parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
   }
   const res = dStr + 'T12:00:00';
   PARSED_DATE_CACHE.set(str, res);
@@ -69,17 +93,24 @@ export default function EstresseClusterTable({
 
   const MODAIS = ['PASSEIO', 'FIORINO', 'MOTO', 'VAN'];
 
-  // 🔥 ESQUELETO ESTRITO: Apenas Hubs da Regional Ativa entram
+  // ==========================================
+  // 1. O ESQUELETO ESTRITO O(1)
+  // ==========================================
   const esqueletoBase = useMemo(() => {
     const permitidos = new Set();
     const mapaLimpoRegs = new Map();
+    const isAll = currentRegional === 'BOTH' || currentRegional === 'TODAS' || currentRegional === 'TODOS' || currentRegional === 'ALL';
     
+    const permittedHubsList = isAll ? [] : (getHubsPermitidos(currentRegional) || []);
+    const permittedSanitized = permittedHubsList.map(fastSanitizeHub);
+
     Object.keys(MAPA_REGIONAL_COMPLETO).forEach(k => {
       const reg = MAPA_REGIONAL_COMPLETO[k] || "";
       const hC = fastSanitizeHub(k);
       mapaLimpoRegs.set(hC, reg);
       
-      if (currentRegional === 'BOTH' || currentRegional === 'TODOS' || reg.toUpperCase().startsWith(currentRegional.toUpperCase())) {
+      // 👇 Agora ele aceita se bater a regional OU se a função de exceção autorizar
+      if (isAll || reg.toUpperCase().includes(String(currentRegional).toUpperCase()) || permittedSanitized.includes(hC)) {
         permitidos.add(hC);
       }
     });
@@ -88,32 +119,39 @@ export default function EstresseClusterTable({
     const resolverCache = new Map();
     let totalClusters = 0;
 
-    Object.entries(CLUSTERS_POR_HUB).forEach(([hubRaw, clusters]) => {
-       const hC = fastSanitizeHub(hubRaw);
-       if (!permitidos.has(hC)) return; 
-       
-       aggsTpl[hC] = { 
-         hub: String(hubRaw).trim().toUpperCase(), 
-         dispo: 0, atPiso: 0, recusas: 0, expedidas: 0,
-         clustersMap: {}
-       };
-       
-       clusters.forEach(cRaw => {
-         const cC = fastSanitizeCluster(cRaw);
-         aggsTpl[hC].clustersMap[cC] = { cluster: cRaw, dispo: 0, atPiso: 0, recusas: 0, expedidas: 0 };
-         resolverCache.set(`${hC}|${cC}`, cC);
-         totalClusters++;
-       });
-       
-       aggsTpl[hC].clustersMap['OUTROS'] = { cluster: 'OUTROS / NÃO MAPEADO', dispo: 0, atPiso: 0, recusas: 0, expedidas: 0 };
-    });
+    if (CLUSTERS_POR_HUB) {
+      Object.entries(CLUSTERS_POR_HUB).forEach(([hubRaw, clusters]) => {
+         const hC = fastSanitizeHub(hubRaw);
+         if (!permitidos.has(hC)) return; // BLOQUEIA SPI EM SPM IMEDIATAMENTE
+         
+         aggsTpl[hC] = { 
+           hub: String(hubRaw).trim().toUpperCase(), 
+           dispo: 0, atPiso: 0, recusas: 0, expedidas: 0,
+           clustersMap: {}
+         };
+         
+         clusters.forEach(cRaw => {
+           const cC = fastSanitizeCluster(cRaw);
+           aggsTpl[hC].clustersMap[cC] = { cluster: cRaw, dispo: 0, atPiso: 0, recusas: 0, expedidas: 0 };
+           resolverCache.set(`${hC}|${cC}`, cC);
+           totalClusters++;
+         });
+         
+         // Gaveta do Lixo para erros
+         aggsTpl[hC].clustersMap['OUTROS'] = { cluster: 'OUTROS / NÃO MAPEADO', dispo: 0, atPiso: 0, recusas: 0, expedidas: 0 };
+      });
+    }
 
-    return { aggsTpl, resolverCache, mapaLimpoRegs, totalClusters };
+
+    return { aggsTpl, resolverCache, mapaLimpoRegs, totalClusters, permitidos };
   }, [currentRegional]);
 
+  // ==========================================
+  // 2. O MOTOR SÍNCRONO (FORÇA BRUTA OTIMIZADA)
+  // ==========================================
   const matrizEstresse = useMemo(() => {
     const { regional = [], station = [], turno = [], dataInicio = '', dataFim = '', semana = '', mes = '' } = filtrosGlobais;
-    const aggs = JSON.parse(JSON.stringify(esqueletoBase.aggsTpl));
+    const aggs = JSON.parse(JSON.stringify(esqueletoBase.aggsTpl)); // Clona o template limpo
     const historicoDiario = {}; 
 
     const dataInicioObj = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
@@ -160,6 +198,7 @@ export default function EstresseClusterTable({
     const injectAggs = (hubRaw, clusterRaw, dataRaw, campo, qtd) => {
       const hC = fastSanitizeHub(hubRaw);
       const cC = fastSanitizeCluster(clusterRaw);
+      
       const resolved = resolveToAgg(hC, cC);
       if (!resolved) return; 
 
@@ -182,19 +221,36 @@ export default function EstresseClusterTable({
       return Number(s) || 0;
     };
 
+    let totalDispoGlobal = 0;
+    if (data && data.length > 0) {
+      const len = data.length;
+      for (let i = 1; i < len; i++) {
+        const row = data[i];
+        
+        // Aplica o filtro de Station também no consolidado para bater o número
+        const hubRaw = String(row[4] || "");
+        if (hubRaw && esqueletoBase.permitidos.has(fastSanitizeHub(hubRaw))) {
+            if (!selectedModal) totalDispoGlobal += parseNumFast(row[24]);
+            else if (selectedModal === 'PASSEIO') totalDispoGlobal += parseNumFast(row[21]);
+            else if (selectedModal === 'FIORINO') totalDispoGlobal += parseNumFast(row[20]);
+            else if (selectedModal === 'MOTO') totalDispoGlobal += parseNumFast(row[22]);
+            else if (selectedModal === 'VAN') totalDispoGlobal += parseNumFast(row[23]);
+        }
+      }
+    }
+
     if (dispoData && dispoData.length > 1) {
       const len = dispoData.length;
       for (let i = 1; i < len; i++) {
         const row = dispoData[i];
-        const hubRaw = String(row[0] || "");
+        const hubRaw = padronizarHubLocal(row[0]);
         if (!hubRaw) continue;
         const hC = fastSanitizeHub(hubRaw);
         if (!aggs[hC]) continue;
 
         let dateIdx = 4;
         for (let k = 4; k <= 8; k++) {
-           const v = row[k];
-           if (v && typeof v === 'string' && (v.indexOf('-') === 4 || v.indexOf('/') === 2)) { dateIdx = k; break; }
+           if (isDateFast(row[k])) { dateIdx = k; break; }
         }
         
         const clusterRaw = dateIdx === 4 ? String(row[1] || "") : row.slice(1, dateIdx - 2).join(", ");
@@ -223,7 +279,7 @@ export default function EstresseClusterTable({
       for (let i = 1; i < len; i++) {
         if (selectedModal) continue; 
         const row = atPisoClusterData[i];
-        const hubRaw = String(row[3] || "");
+        const hubRaw = padronizarHubLocal(row[3])
         if (!hubRaw) continue;
         const hC = fastSanitizeHub(hubRaw);
         if (!aggs[hC]) continue;
@@ -237,7 +293,7 @@ export default function EstresseClusterTable({
         const dataRaw = row[0];
         const qtd = parseNumFast(row[qtdIdx]);
         const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || esqueletoBase.mapaLimpoRegs.get(hC) || ""; 
-
+     
         if (!dataRaw || qtd === 0) continue;
         if (regional.length > 0 && !regional.includes(subreg)) continue;
         if (station.length > 0 && !station.includes(hubRaw)) continue;
@@ -251,15 +307,14 @@ export default function EstresseClusterTable({
       const len = recusasData.length;
       for (let i = 1; i < len; i++) {
         const row = recusasData[i];
-        const hubRaw = String(row[4] || "");
+        const hubRaw = padronizarHubLocal(row[4]);
         if (!hubRaw) continue;
         const hC = fastSanitizeHub(hubRaw);
         if (!aggs[hC]) continue;
 
         let dateIdx = 8;
         for (let k = 8; k <= 12; k++) {
-           const v = row[k];
-           if (v && typeof v === 'string' && (v.indexOf('-') === 4 || v.indexOf('/') === 2)) { dateIdx = k; break; }
+           if (isDateFast(row[k])) { dateIdx = k; break; }
         }
         
         const clusterRaw = dateIdx === 8 ? String(row[6] || "") : row.slice(6, dateIdx - 1).join(", ");
@@ -287,15 +342,14 @@ export default function EstresseClusterTable({
       const len = atExpedidaData.length;
       for (let i = 1; i < len; i++) {
         const row = atExpedidaData[i];
-        const hubRaw = String(row[1] || "");
+        const hubRaw = padronizarHubLocal(row[1]);
         if (!hubRaw) continue;
         const hC = fastSanitizeHub(hubRaw);
         if (!aggs[hC]) continue;
 
         let dateIdx = 5;
         for (let k = 5; k <= 9; k++) {
-           const v = row[k];
-           if (v && typeof v === 'string' && (v.indexOf('-') === 4 || v.indexOf('/') === 2)) { dateIdx = k; break; }
+           if (isDateFast(row[k])) { dateIdx = k; break; }
         }
 
         const tConf = String(row[2] || "").trim().toUpperCase();
@@ -332,7 +386,7 @@ export default function EstresseClusterTable({
       }
     });
 
-    let resumo = { totalDispo: 0, demandaTotal: 0, deficitGeral: 0 };
+    let resumo = { totalDispo: totalDispoGlobal, demandaTotal: 0, deficitGeral: 0 };
 
     const linhas = Object.values(aggs).map(hAgg => {
       const hubDemanda = hAgg.expedidas + hAgg.atPiso + hAgg.recusas;
@@ -340,9 +394,7 @@ export default function EstresseClusterTable({
       const hubDeficit = hubDemanda - hAgg.dispo;
       const hubFrotaReal = hAgg.dispo - hAgg.recusas;
 
-      // 🔥 CORREÇÃO: Puxa o Total da Base processada corretamente (Alocada)
       resumo.demandaTotal += hubDemanda;
-      resumo.totalDispo += hAgg.dispo;
 
       const clustersFiltrados = Object.values(hAgg.clustersMap)
         .filter(c => c.dispo > 0 || c.expedidas > 0 || c.atPiso > 0 || c.recusas > 0)
@@ -431,10 +483,9 @@ export default function EstresseClusterTable({
 
   return (
     <div className="flex flex-col gap-6">
-    
-
+      
       {/* CONTROLES E TABELA EXPANSÍVEL (SANFONA) */}
-      <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden flex flex-col mt-4">
         <div className="p-5 border-b border-slate-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50 dark:bg-[#15171e]">
           <div className="flex items-center gap-2">
             <Activity className="text-[#EE4D2D]" size={20} />
@@ -468,7 +519,7 @@ export default function EstresseClusterTable({
 
         {/* 🔥 Tabela com rolagem interna ajustada e thead com background pra não vazar e z-index alto */}
         <div className="overflow-auto w-full custom-scrollbar max-h-[60vh] min-h-[400px] border-b border-slate-200 dark:border-gray-700">
-          <table className="w-full border-collapse text-center">
+          <table className="w-full border-collapse text-center relative">
             <thead className="text-white tracking-widest text-[10px] uppercase font-black">
               <tr>
                 <th className="p-3 text-left w-[200px] bg-[#113366] cursor-pointer hover:bg-white/10 transition-colors sticky top-0 left-0 z-[50] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]" onClick={() => requestSort('hub')}>Station / Cluster</th>
@@ -510,7 +561,7 @@ export default function EstresseClusterTable({
                       {/* LINHAS FILHAS - CLUSTERS */}
                       {isOpen && rowHub.clusters.map((c, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors bg-white dark:bg-[#1f232d]">
-                          <td className="p-3 text-left text-slate-600 dark:text-gray-300 flex items-center gap-2 pl-10 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-[30] bg-white/90 dark:bg-[#1f232d]/90 backdrop-blur-sm shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                          <td className="p-3 text-left text-slate-600 dark:text-gray-300 flex items-center gap-2 pl-10 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-[30] bg-white/90 dark:bg-[#1f232d]/90 backdrop-blur-sm">
                             <Layers size={11} className="text-slate-400 shrink-0" /> 
                             <span className={`truncate text-[10px] tracking-wider uppercase ${c.cluster === 'OUTROS / NÃO MAPEADO' ? 'text-red-500' : ''}`}>{c.cluster}</span>
                           </td>
@@ -534,10 +585,10 @@ export default function EstresseClusterTable({
         </div>
 
         <div className="px-4 py-3 border-t border-[#113366] flex justify-between items-center bg-slate-50 dark:bg-[#15171e] shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="text-[9px] font-black text-[#113366] dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-gray-800 px-2 py-1 rounded border border-slate-200 dark:border-gray-700 shadow-sm">
-              Station: {filteredAndSortedRows.length}
-            </div>
+          <div className="text-[9px] font-black text-[#113366] dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-gray-800 px-2 py-1 rounded border border-slate-200 dark:border-gray-700 shadow-sm flex items-center gap-2">
+            <span>Station: {filteredAndSortedRows.length}</span>
+            <span className="h-3 w-px bg-slate-200"></span>
+            <span className="text-[#EE4D2D]">Clusters Mapeados: {esqueletoBase.totalClusters}</span>
           </div>
           <div className="flex items-center gap-2">
             <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-1 rounded bg-white dark:bg-gray-800 text-[#113366] hover:bg-slate-200 disabled:opacity-30 shadow-sm border border-slate-200"><ChevronLeft size={14}/></button>

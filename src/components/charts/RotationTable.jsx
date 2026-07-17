@@ -10,7 +10,7 @@ const STATUS_MAP = {
   'INDISP': { icon: <Slash size={10} />, color: 'bg-slate-100 text-slate-400 dark:bg-gray-700 dark:text-gray-500', label: 'Indisponível' }
 };
 
-// 🔥 VACINA CONTRA ERROS DE DIGITAÇÃO NA PLANILHA
+
 const padronizarHubLocal = (nome) => {
   if (!nome) return "";
   let n = String(nome).trim();

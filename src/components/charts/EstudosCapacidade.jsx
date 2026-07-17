@@ -10,8 +10,18 @@ import {
 
 import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
+// 🔥 VACINA INJETADA: HIGIENIZADOR INTELIGENTE DE HUBS
+const padronizarHubLocal = (nome) => {
+  if (!nome) return "";
+  let n = String(nome).trim();
+  let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
+  if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
+  if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  return n;
+};
+
 // ============================================================================
-// FORMATADORES NUMÉRICOS (O QUE TINHA SUMIDO!)
+// FORMATADORES NUMÉRICOS
 // ============================================================================
 const formatInt = (v) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v);
 const formatK = (v) => v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + 'k' : formatInt(v);
@@ -169,7 +179,7 @@ export default function EstudosCapacidade({ consolidadoData, baseData }) {
 
     if (consolidadoData) {
       consolidadoData.forEach(row => {
-        const st = String(row[COL.STATION]).trim();
+        const st = padronizarHubLocal(row[COL.STATION]);
         const reg = MAPA_REGIONAL_COMPLETO[st] || String(row[COL.REGIONAL]).trim();
         if (reg && reg !== 'undefined' && reg !== 'Regional') regionaisSet.add(reg);
         if (st && st !== 'undefined' && st !== 'Station') stationsSet.add(st);
@@ -199,7 +209,8 @@ export default function EstudosCapacidade({ consolidadoData, baseData }) {
     const mapBaseCaps = {};
     if (baseData) {
       baseData.forEach(r => {
-        const key = `${String(r[0]).trim().toLowerCase()}|${String(r[1]).trim().toLowerCase()}`;
+        const stClean = padronizarHubLocal(r[0]).toLowerCase();
+        const key = `${stClean}|${String(r[1]).trim().toLowerCase()}`;
         mapBaseCaps[key] = { capHub: Number(r[2]) || 0, capFleet: Number(r[3]) || 0 };
       });
     }
@@ -212,7 +223,7 @@ export default function EstudosCapacidade({ consolidadoData, baseData }) {
       const dObj = parseDate(row[COL.DATA]);
       if (isNaN(dObj.getTime()) || dObj.getTime() === 0) return;
 
-      const st = String(row[COL.STATION]).trim();
+      const st = padronizarHubLocal(row[COL.STATION]);
       const reg = MAPA_REGIONAL_COMPLETO[st] || String(row[COL.REGIONAL]).trim();
       const tur = String(row[COL.TURNO]).trim();
 
@@ -321,7 +332,7 @@ export default function EstudosCapacidade({ consolidadoData, baseData }) {
     const distPie = [
       { name: '< 100%', value: diasAbaixo, fill: '#10b981' }, 
       { name: '100% - 110%', value: diasAte110, fill: '#f59e0b' },  
-      { name: '> 110%', value: diasEstouro, fill: '#ef4444' }      
+      { name: '> 110%', value: diasEstouro, fill: '#ef4444' }       
     ].filter(i => i.value > 0);
 
     return { kpiAtual: formattedKpiAtual, kpiAnterior: formattedKpiAnterior, aggs: aggsFormatados, wowData, distPie };

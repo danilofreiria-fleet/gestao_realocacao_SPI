@@ -6,6 +6,18 @@ const TRADUZ_MES = { '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI',
 const NAMES_MESES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const MODAL_OPTIONS = ['Passeio', 'Fiorino', 'Moto', 'Van'];
 
+// 🔥 VACINA CONTRA ERROS DE DIGITAÇÃO E SUFIXOS
+const padronizarHubLocal = (nome) => {
+  if (!nome) return "";
+  let n = String(nome).trim();
+  let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
+  
+  if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
+  if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  
+  return n;
+};
+
 // CACHE GLOBAL DE DATAS 
 const DATE_CACHE = {};
 const getCachedParsedDate = (rawDate) => {
@@ -60,11 +72,11 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
 
   const [modaisEvol, setModaisEvol] = useState(MODAL_OPTIONS);
   const [modaisConv, setModaisConv] = useState(MODAL_OPTIONS);
-  const [modaisRec, setModaisRec] = useState(MODAL_OPTIONS); // FILTRO PARA RECUSAS
+  const [modaisRec, setModaisRec] = useState(MODAL_OPTIONS); 
   
   const [isEvolMenuOpen, setIsEvolMenuOpen] = useState(false);
   const [isConvMenuOpen, setIsConvMenuOpen] = useState(false);
-  const [isRecMenuOpen, setIsRecMenuOpen] = useState(false); // MENU DE FILTRO
+  const [isRecMenuOpen, setIsRecMenuOpen] = useState(false); 
   
   const evolMenuRef = useRef(null);
   const convMenuRef = useRef(null);
@@ -158,7 +170,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
 
     if (historicoFrotaData && historicoFrotaData.length > 1) {
       historicoFrotaData.slice(1).forEach(row => {
-        const hubRow = String(row[3] || "").trim();
+        const hubRow = padronizarHubLocal(String(row[3] || "").trim());
         if (hasSt && !station.includes(hubRow)) return;
 
         const dInfo = getCachedParsedDate(row[2]);
@@ -197,8 +209,9 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     let prevOfertas = 0, prevRoteirizadas = 0;
 
     (rawData || []).slice(1).forEach(row => {
+      const hubRaw = padronizarHubLocal(String(row[4] || "").trim());
       if (hasReg && !regional.includes(row[1])) return;
-      if (hasSt && !station.includes(row[4])) return;
+      if (hasSt && !station.includes(hubRaw)) return;
       if (hasTurn && !turno.includes(row[5])) return;
 
       const dInfo = getCachedParsedDate(row[3]);
@@ -218,7 +231,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     let prevRecusas = 0;
 
     (recusasData || []).slice(1).forEach(row => {
-      const hub = String(row[COL_REC_HUB] || "").trim();
+      const hub = padronizarHubLocal(String(row[COL_REC_HUB] || "").trim());
       const reg = String(row[COL_REC_REG] || "").trim();
       const trn = String(row[COL_REC_TURNO] || "").trim();
       
@@ -273,8 +286,9 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     const hasTurn = turno.length > 0;
 
     (rawData || []).slice(1).forEach(row => {
+      const hubRaw = padronizarHubLocal(String(row[4] || "").trim());
       if (hasReg && !regional.includes(row[1])) return;
-      if (hasSt && !station.includes(row[4])) return;
+      if (hasSt && !station.includes(hubRaw)) return;
       if (hasTurn && !turno.includes(row[5])) return;
 
       const dInfo = getCachedParsedDate(row[3]);
@@ -309,7 +323,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     });
 
     (recusasData || []).slice(1).forEach(row => {
-      const hub = String(row[COL_REC_HUB] || "").trim();
+      const hub = padronizarHubLocal(String(row[COL_REC_HUB] || "").trim());
       const reg = String(row[COL_REC_REG] || "").trim();
       const trn = String(row[COL_REC_TURNO] || "").trim();
       const modal = String(row[COL_REC_MODAL] || "").trim().toUpperCase();
@@ -391,8 +405,9 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
     const hasSt = station.length > 0;
 
     firstTripsData.slice(1).forEach(row => {
+      const hubRaw = padronizarHubLocal(String(row[2] || "").trim());
       if (hasReg && !regional.includes(row[0])) return; 
-      if (hasSt && !station.includes(row[2])) return; 
+      if (hasSt && !station.includes(hubRaw)) return; 
 
       dateCols.forEach(col => {
         const val = parseNum(row[col.idx]);
@@ -479,7 +494,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
   };
 
   const topVisibleModal = [...MODAL_OPTIONS].reverse().find(s => modaisEvol.includes(s));
-  const topVisibleRecModal = [...MODAL_OPTIONS].reverse().find(s => modaisRec.includes(s)); // 🔥 Determina o topo visual das Recusas
+  const topVisibleRecModal = [...MODAL_OPTIONS].reverse().find(s => modaisRec.includes(s)); 
 
   const renderVarPill = (valor, invertColors = false) => {
     if (isNaN(valor) || valor === 0) return null;
@@ -805,7 +820,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
                 <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold' }} />
 
                 {modaisRec.includes('Passeio') && <Bar dataKey="p_rec" stackId="a" name="Recusas Passeio" fill="#113366" maxBarSize={60} radius={topVisibleRecModal === 'Passeio' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="p_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisRec.includes('Fiorinos') && <Bar dataKey="u_rec" stackId="a" name="Recusas Fiorino" fill="#3b82f6" maxBarSize={60} radius={topVisibleRecModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="u_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
+                {modaisRec.includes('Fiorino') && <Bar dataKey="u_rec" stackId="a" name="Recusas Fiorino" fill="#3b82f6" maxBarSize={60} radius={topVisibleRecModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="u_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
                 {modaisRec.includes('Moto') && <Bar dataKey="m_rec" stackId="a" name="Recusas Moto" fill="#F5A623" maxBarSize={60} radius={topVisibleRecModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="m_rec" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
                 {modaisRec.includes('Van') && <Bar dataKey="v_rec" stackId="a" name="Recusas Van" fill="#8b5cf6" maxBarSize={60} radius={topVisibleRecModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="v_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
               </BarChart>
