@@ -7,7 +7,7 @@ import {
 
 export default function Premissas() {
   return (
-    // 🔥 max-w-[1600px] garante que fique gigante, mas sem deformar no Ultrawide!
+    // max-w-[1600px] garante que fique gigante, mas sem deformar no Ultrawide!
     <div className="flex flex-col h-full gap-6 w-full max-w-[1600px] mx-auto pb-10 pt-2 xl:pt-6 px-2 lg:px-6">
       
       {/* HEADER */}

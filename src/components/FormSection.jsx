@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2, AlertTriangle, CalendarDays } from 'lucide-react';
 
-// 🔥 IMPORTANDO A FONTE ÚNICA DE VERDADE
+
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
 // ===================================================================
-// TODOS OS CAMPOS EDITÁVEIS AGORA SÃO OBRIGATÓRIOS
+// TODOS OS CAMPOS EDITÁVEIS SÃO OBRIGATÓRIOS
 // ===================================================================
 
 export const FORM_FIELDS = [

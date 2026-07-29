@@ -9,7 +9,7 @@ import { Loader2 } from 'lucide-react';
 export default function Login() {
   const navigate = useNavigate();
   
-  // 🔥 NOVO: Estado para controlar o carregamento visual do botão
+  //Estado para controlar o carregamento visual do botão
   const [isLoading, setIsLoading] = useState(false);
 
   const fazerLogin = useGoogleLogin({
@@ -33,7 +33,7 @@ export default function Login() {
           localStorage.setItem("userEmail", emailLogado);
           localStorage.setItem("spiTokenTime", Date.now().toString()); 
           
-          // 🔥 MÁGICA DE PERFORMANCE: Dispara as duas buscas no Google Sheets AO MESMO TEMPO
+          // Dispara as duas buscas no Google Sheets AO MESMO TEMPO
           const [infoUsuario, isGestor] = await Promise.all([
             buscarPermissoesUsuario(emailLogado, token),
             verificarAcessoGestor(emailLogado, token)
@@ -96,7 +96,7 @@ export default function Login() {
             disabled={isLoading}
             className={`w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold py-4 px-4 rounded-xl shadow-sm transition-all ${isLoading ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
           >
-            {/* 🔥 NOVO: Condicional que troca o ícone do Google pelo Spinner girando */}
+            {/* Condicional que troca o ícone do Google pelo Spinner girando */}
             {isLoading ? (
               <>
                 <Loader2 className="animate-spin text-[#EE4D2D]" size={20} />

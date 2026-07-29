@@ -16,7 +16,7 @@ const ABA_NOME = "CONSOLIDADO-GESTÃO-SPI_REALOCAÇÃO";
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 let activeRequests = 0;
-let globalRateLimitPause = false; // 🔥 O "Sinal Vermelho" Global
+let globalRateLimitPause = false; // O "Sinal Vermelho" Global
 const MAX_CONCURRENT_REQUESTS = 2; // Baixamos para 2 para máxima segurança
 
 const fetchWithQueue = async (url, options, retries = 5) => {
