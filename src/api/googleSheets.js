@@ -759,3 +759,31 @@ export const getDisponibilidadeClusterData = async () => {
     return [];
   }
 };
+
+
+
+export const getBaseDSHubData = async () => {
+  try {
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    // Puxa o ID da nova planilha configurada no .env
+    const idPlanilha = import.meta.env.VITE_PLANILHA_DS_HUB; 
+
+    if (!idPlanilha) {
+      console.error("Aviso: VITE_PLANILHA_DS_HUB não encontrada no .env");
+      return [];
+    }
+
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/Base!A:ZZ`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.values || [];
+  } catch (error) {
+    console.error("Erro ao buscar a aba Base do DS do Hub:", error);
+    return [];
+  }
+};
