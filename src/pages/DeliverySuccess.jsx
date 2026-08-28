@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
-import { getDeliverySuccessData, getBaseDSHubData } from '../api/googleSheets';
+import { getDeliverySuccessData, getBaseDSHubData, getOfertasDriversData } from '../api/googleSheets';
 import { getHubsPermitidos, MAPA_REGIONAL_COMPLETO } from '../constants/regionais';
-import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck, Activity, Users, LayoutDashboard, Layers, Eraser } from 'lucide-react';
+import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck, Users, LayoutDashboard, Layers, Eraser } from 'lucide-react';
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -10,7 +10,7 @@ const MESES = [
   { value: '10', label: 'Outubro' }, { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' }
 ];
 
-// 🔥 VACINA CONTRA ERROS DE DIGITAÇÃO E SUFIXOS DO BIGQUERY
+// PADRONIZAR HUBS (RIBEIRÃO ESTAÇÃO E SUMARÉ NOVA VENEZA)
 const padronizarHubLocal = (nome) => {
   if (!nome) return "";
   let n = String(nome).trim();
@@ -48,14 +48,20 @@ const getISOWeek = (isoDate) => {
 
 export default function DeliverySuccess() {
   const [loading, setLoading] = useState(true);
+  
+  // BASES DE DADOS
   const [rawData, setRawData] = useState([]);
   const [baseData, setBaseData] = useState([]); 
+  const [ofertasData, setOfertasData] = useState([]); 
+
+  // ESTADOS DE UI E NAVEGAÇÃO
+  const [activeTab, setActiveTab] = useState('drivers'); // 'drivers' ou 'hubs'
+  const [filtrosAbertos, setFiltrosAbertos] = useState(true);
+  
   const [expandedHubs, setExpandedHubs] = useState({});
+  const [expandedOfertas, setExpandedOfertas] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [hubDownload, setHubDownload] = useState('');
-  
-  // NAVEGAÇÃO DE ABAS
-  const [activeTab, setActiveTab] = useState('drivers'); // 'drivers' ou 'hubs'
 
   // CONTROLES DE TEMPO DE EXIBIÇÃO
   const [driverViewMode, setDriverViewMode] = useState('TOTAL'); 
@@ -70,9 +76,10 @@ export default function DeliverySuccess() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [hubSearchTerm, setHubSearchTerm] = useState('');
   
-  // 🔥 NOVOS FILTROS DE TEMPO
+  // FILTROS DE TEMPO E MODAL
   const [semanaFilter, setSemanaFilter] = useState('');
   const [mesFilter, setMesFilter] = useState('');
+  const [veiculoFilter, setVeiculoFilter] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
 
@@ -101,14 +108,16 @@ export default function DeliverySuccess() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [dataDS, dataBase] = await Promise.all([
+        const [dataDS, dataBase, dataOfertas] = await Promise.all([
             getDeliverySuccessData(),
-            getBaseDSHubData()
+            getBaseDSHubData(),
+            getOfertasDriversData()
         ]);
         if (dataDS && dataDS.length > 1) setRawData(dataDS); 
         if (dataBase && dataBase.length > 1) setBaseData(dataBase);
+        if (dataOfertas && dataOfertas.length > 1) setOfertasData(dataOfertas);
       } catch (e) {
-        console.error("Erro ao carregar notas de DS:", e);
+        console.error("Erro ao carregar dados do Dashboard:", e);
       } finally {
         setLoading(false);
       }
@@ -127,7 +136,6 @@ export default function DeliverySuccess() {
 
   const renderSemaforo = (val, isD0) => {
     if (val === null || val === undefined || val === '') return '-';
-    
     const num = Number(val);
 
     if (isD0) {
@@ -181,12 +189,21 @@ export default function DeliverySuccess() {
     setSelectedHubs(prev => prev.includes(hub) ? prev.filter(h => h !== hub) : [...prev, hub]);
   };
 
+  const toggleHub = (hubName) => setExpandedHubs(prev => ({ ...prev, [hubName]: !prev[hubName] }));
+  const toggleOfertas = (hubName) => setExpandedOfertas(prev => ({ ...prev, [hubName]: !prev[hubName] }));
+
+  const handleSelectAllRegs = () => { setSelectedRegs([...listRegs]); setSelectedHubs([]); };
+  const handleClearRegs = () => { setSelectedRegs([]); setSelectedHubs([]); };
+  const handleSelectAllHubs = () => setSelectedHubs([...listHubs]);
+  const handleClearHubs = () => setSelectedHubs([]);
+
   const limparTodosFiltros = () => {
     setSelectedRegs([]);
     setSelectedHubs([]);
     setSearchTerm('');
     setSemanaFilter('');
     setMesFilter('');
+    setVeiculoFilter('');
     setDataInicio('');
     setDataFim('');
   };
@@ -224,25 +241,22 @@ export default function DeliverySuccess() {
     return map;
   }, []);
 
-  const { listRegs, listHubs, availableWeeks } = useMemo(() => {
-    if (rawData.length < 2) return { listRegs: [], listHubs: [], availableWeeks: [] };
+  const { listRegs, listHubs, listVehicles, availableWeeks } = useMemo(() => {
+    if (rawData.length < 2) return { listRegs: [], listHubs: [], listVehicles: [], availableWeeks: [] };
     
     const setR = new Set();
     const setH = new Set();
+    const setV = new Set();
     const weeksSet = new Set();
     const len = rawData.length;
     
-    // Descobre a semana real de hoje para travar o filtro
     const currentWeekStr = getISOWeek(new Date().toISOString());
     const currentWeekNum = parseInt(currentWeekStr.replace(/\D/g, ''), 10);
 
-    // Extrai semanas do rawData (Headers) e barra colunas fantasmas do futuro
     rawData[0].forEach(h => {
         const match = String(h).trim().toUpperCase().match(/W\d+/);
         if (match) {
             const weekNum = parseInt(match[0].replace(/\D/g, ''), 10);
-            // Trava: Só inclui semanas até a semana atual (Impede colunas vazias do futuro)
-            // A regra "currentWeekNum < 5" é uma tolerância para viradas de ano (Janeiro)
             if (weekNum <= currentWeekNum || currentWeekNum < 5) {
                 weeksSet.add(match[0]);
             }
@@ -250,6 +264,9 @@ export default function DeliverySuccess() {
     });
 
     for (let i = 1; i < len; i++) {
+      const veiculoRaw = String(rawData[i][1] || "").trim();
+      if (veiculoRaw) setV.add(veiculoRaw);
+
       const hubRaw = String(rawData[i][4] || "").trim(); 
       const hub = padronizarHubLocal(hubRaw); 
       const cleanHubName = sanitizeHubName(hub);
@@ -266,15 +283,16 @@ export default function DeliverySuccess() {
     return { 
       listRegs: Array.from(setR).sort(), 
       listHubs: Array.from(setH).sort(),
+      listVehicles: Array.from(setV).sort(),
       availableWeeks: Array.from(weeksSet).sort()
     };
   }, [rawData, permittedHubsSet, selectedRegs, SANITIZED_REGIONAL_MAP]);
 
   // =========================================================
-  // MOTOR 1: VISÃO CONDUTORES (Apenas Tabela de Drivers)
+  // MOTOR 1: VISÃO CONDUTORES
   // =========================================================
   const processedDrivers = useMemo(() => {
-    if (rawData.length < 2 || (selectedRegs.length === 0 && selectedHubs.length === 0 && !deferredSearchTerm)) {
+    if (rawData.length < 2 || (selectedRegs.length === 0 && selectedHubs.length === 0 && !searchTerm && !veiculoFilter)) {
         return { colSemanasFiltradas: [], colMeses: [], hubsData: [] };
     }
 
@@ -302,7 +320,6 @@ export default function DeliverySuccess() {
       .filter(w => w.idxTotal !== null || w.idxD0 !== null)
       .sort((a, b) => a.week.localeCompare(b.week));
 
-    // 🔥 APLICA OS FILTROS DE TEMPO NAS COLUNAS (Semana e Mês)
     if (semanaFilter) {
       colSemanasOriginais = colSemanasOriginais.filter(w => w.week === semanaFilter);
     }
@@ -325,11 +342,8 @@ export default function DeliverySuccess() {
       if (val === null || val === undefined || val === '') return null;
       if (typeof val === 'number') return val;
       let s = String(val).trim().replace(/%/g, '');
-      if (s.includes(',')) {
-        s = s.replace(/\./g, '').replace(',', '.');
-      } else if (/\.\d{3}$/.test(s)) {
-        s = s.replace(/\./g, '');
-      }
+      if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+      else if (/\.\d{3}$/.test(s)) s = s.replace(/\./g, '');
       const n = Number(s);
       return isNaN(n) ? null : n;
     };
@@ -349,6 +363,7 @@ export default function DeliverySuccess() {
 
       if (selectedRegsSet.size > 0 && !selectedRegsSet.has(subRegional)) continue;
       if (selectedHubsSet.size > 0 && !selectedHubsSet.has(hub)) continue;
+      if (veiculoFilter && veiculo.toUpperCase() !== veiculoFilter.toUpperCase()) continue;
       if (!driverId) continue;
       if (termLower && !driverId.toLowerCase().includes(termLower)) continue;
 
@@ -448,16 +463,18 @@ export default function DeliverySuccess() {
     }).sort((a, b) => a.name.localeCompare(b.name));
 
     return { colSemanasFiltradas, colMeses, hubsData };
-  }, [rawData, permittedHubsSet, selectedRegs, selectedHubs, deferredSearchTerm, SANITIZED_REGIONAL_MAP, semanaFilter, mesFilter]);
-
+  }, [rawData, permittedHubsSet, selectedRegs, selectedHubs, deferredSearchTerm, SANITIZED_REGIONAL_MAP, semanaFilter, mesFilter, veiculoFilter]);
 
   // =========================================================
-  // MOTOR 2: VISÃO KPIs HUB (Tabela de Operações do Hub)
+  // MOTOR 2: VISÃO KPIs HUB + OFERTAS
   // =========================================================
   const processedHubKPIs = useMemo(() => {
-    if (!baseData || baseData.length < 2 || (selectedRegs.length === 0 && selectedHubs.length === 0)) return [];
+    if ((!baseData || baseData.length < 2) && (!ofertasData || ofertasData.length < 2)) {
+       return { timeColumns: [], hubsData: [] };
+    }
 
     const aggs = {};
+    const timeColsMap = new Map();
     const selectedRegsSet = new Set(selectedRegs);
     const selectedHubsSet = new Set(selectedHubs);
 
@@ -465,11 +482,8 @@ export default function DeliverySuccess() {
       if (val === null || val === undefined || val === '') return null;
       if (typeof val === 'number') return val;
       let s = String(val).trim().replace(/%/g, '');
-      if (s.includes(',')) {
-        s = s.replace(/\./g, '').replace(',', '.');
-      } else if (/\.\d{3}$/.test(s)) {
-        s = s.replace(/\./g, '');
-      }
+      if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+      else if (/\.\d{3}$/.test(s)) s = s.replace(/\./g, '');
       const n = Number(s);
       return isNaN(n) ? null : n;
     };
@@ -477,109 +491,197 @@ export default function DeliverySuccess() {
     const dataInicioObj = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
     const dataFimObj = dataFim ? new Date(dataFim + 'T23:59:59') : null;
 
-    for (let i = 1; i < baseData.length; i++) {
-      const row = baseData[i];
-      const hubRaw = String(row[0] || "").trim();
-      const hub = padronizarHubLocal(hubRaw);
-      const cleanHubName = sanitizeHubName(hub);
+    const initAgg = (hub, subRegional, timeKey, timeSort) => {
+        if (!aggs[hub]) aggs[hub] = { hub, subRegional, timeData: {} };
+        if (!aggs[hub].timeData[timeKey]) {
+            aggs[hub].timeData[timeKey] = {
+                sumE: 0, sumF: 0, sumV: 0, countV: 0, sumR: 0, countR: 0, sumM: 0, countM: 0, sumX: 0, countX: 0, sumG: 0, sumH: 0,
+                ofertasTotais: 0, ofertasMoto: 0, ofertasPasseio: 0, ofertasUtil: 0, ofertasVan: 0
+            };
+            if (!timeColsMap.has(timeKey)) timeColsMap.set(timeKey, { id: timeKey, label: timeKey, sortValue: timeSort });
+        }
+        return aggs[hub].timeData[timeKey];
+    };
 
-      if (!hub || !permittedHubsSet.has(cleanHubName)) continue;
+    // 1. Processa a Base PCP (Total Carregado, DS, Reut, etc)
+    if (baseData && baseData.length > 1) {
+      for (let i = 1; i < baseData.length; i++) {
+        const row = baseData[i];
+        const hubRaw = String(row[0] || "").trim();
+        const hub = padronizarHubLocal(hubRaw);
+        const cleanHubName = sanitizeHubName(hub);
 
-      let subRegional = MAPA_REGIONAL_COMPLETO[hub] || SANITIZED_REGIONAL_MAP[cleanHubName];
-      if (selectedRegsSet.size > 0 && !selectedRegsSet.has(subRegional)) continue;
-      if (selectedHubsSet.size > 0 && !selectedHubsSet.has(hub)) continue;
+        if (!hub || !permittedHubsSet.has(cleanHubName)) continue;
 
-      const dateStr = String(row[2] || "").trim();
-      const isoDate = parseUniversalDate(dateStr);
-      if (!isoDate) continue;
+        let subRegional = MAPA_REGIONAL_COMPLETO[hub] || SANITIZED_REGIONAL_MAP[cleanHubName];
+        if (selectedRegsSet.size > 0 && !selectedRegsSet.has(subRegional)) continue;
+        if (selectedHubsSet.size > 0 && !selectedHubsSet.has(hub)) continue;
 
-      const dObj = new Date(isoDate);
-      if (isNaN(dObj.getTime())) continue;
+        const dateStr = String(row[2] || "").trim();
+        const isoDate = parseUniversalDate(dateStr);
+        if (!isoDate) continue;
 
-      // 🔥 APLICA OS 4 FILTROS GLOBAIS DE DATA AQUI
-      if (dataInicioObj && dObj < dataInicioObj) continue;
-      if (dataFimObj && dObj > dataFimObj) continue;
-      if (mesFilter && String(dObj.getMonth() + 1).padStart(2, '0') !== mesFilter) continue;
-      if (semanaFilter && getISOWeek(isoDate) !== semanaFilter) continue;
+        const dObj = new Date(isoDate);
+        if (isNaN(dObj.getTime())) continue;
 
-      let timeKey = "";
-      let timeSort = 0;
+        if (dataInicioObj && dObj < dataInicioObj) continue;
+        if (dataFimObj && dObj > dataFimObj) continue;
+        if (mesFilter && String(dObj.getMonth() + 1).padStart(2, '0') !== mesFilter) continue;
+        if (semanaFilter && getISOWeek(isoDate) !== semanaFilter) continue;
 
-      if (hubTimeView === 'dia') {
-        timeKey = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}/${dObj.getFullYear()}`;
-        timeSort = dObj.getTime();
-      } else if (hubTimeView === 'semana') {
-        timeKey = getISOWeek(isoDate);
-        timeSort = dObj.getFullYear() * 100 + parseInt(timeKey.replace(/\D/g, ''));
-      } else if (hubTimeView === 'mes') {
-        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        timeKey = `${meses[dObj.getMonth()]} ${dObj.getFullYear()}`;
-        timeSort = dObj.getFullYear() * 100 + dObj.getMonth();
+        let timeKey = ""; let timeSort = 0;
+
+        if (hubTimeView === 'dia') {
+          timeKey = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}/${dObj.getFullYear()}`;
+          timeSort = dObj.getTime();
+        } else if (hubTimeView === 'semana') {
+          timeKey = getISOWeek(isoDate);
+          timeSort = dObj.getFullYear() * 100 + parseInt(timeKey.replace(/\D/g, ''));
+        } else if (hubTimeView === 'mes') {
+          const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+          timeKey = `${meses[dObj.getMonth()]} ${dObj.getFullYear()}`;
+          timeSort = dObj.getFullYear() * 100 + dObj.getMonth();
+        }
+
+        const td = initAgg(hub, subRegional, timeKey, timeSort);
+        
+        const carregados = parseNumFast(row[4]); // E: Pacotes Carregados
+        const entregues = parseNumFast(row[5]);  // F: Pacotes Entregues
+        const dsD0 = parseNumFast(row[21]); // V
+        const reut = parseNumFast(row[12]); // M
+        const spr = parseNumFast(row[17]);  // R
+        const totalCarregado = parseNumFast(row[6]); // G
+        const driversUnicos = parseNumFast(row[7]); // H
+        const atPiso = parseNumFast(row[23]); // X
+
+        if (carregados !== null) { td.sumE += carregados; }
+        if (entregues !== null) { td.sumF += entregues; }
+        if (dsD0 !== null) { td.sumV += dsD0; td.countV++; }
+        if (reut !== null) { td.sumM += reut; td.countM++; }
+        if (spr !== null) { td.sumR += spr; td.countR++; }
+        if (totalCarregado !== null) { td.sumG += totalCarregado; }
+        if (driversUnicos !== null) { td.sumH += driversUnicos; }
+        if (atPiso !== null) { td.sumX += atPiso; td.countX++; }
       }
-
-      const aggKey = `${hub}|${timeKey}`;
-      if (!aggs[aggKey]) {
-        aggs[aggKey] = {
-          hub, subRegional, timeKey, timeSort,
-          sumCarregados: 0, sumEntregues: 0, 
-          sumD0: 0, countD0: 0,
-          sumReut: 0, countReut: 0,
-          sumSpr: 0, countSpr: 0,
-          sumMoto: 0, countMoto: 0
-        };
-      }
-
-      const stats = aggs[aggKey];
-      
-      const carregados = parseNumFast(row[4]); // E: Pacotes Carregados
-      const entregues = parseNumFast(row[5]);  // F: Pacotes Entregues
-      
-      const dsD0 = parseNumFast(row[21]); // V
-      const reut = parseNumFast(row[12]); // M
-      const spr = parseNumFast(row[17]);  // R
-      const moto = parseNumFast(row[19]); // T
-
-      if (carregados !== null) { stats.sumCarregados += carregados; }
-      if (entregues !== null) { stats.sumEntregues += entregues; }
-      if (dsD0 !== null) { stats.sumD0 += dsD0; stats.countD0++; }
-      if (reut !== null) { stats.sumReut += reut; stats.countReut++; }
-      if (spr !== null) { stats.sumSpr += spr; stats.countSpr++; }
-      if (moto !== null) { stats.sumMoto += moto; stats.countMoto++; }
     }
 
-    return Object.values(aggs).map(item => ({
-      hub: item.hub,
-      subRegional: item.subRegional,
-      periodo: item.timeKey,
-      timeSort: item.timeSort,
-      dsTotal: item.sumCarregados > 0 ? Number(((item.sumEntregues / item.sumCarregados) * 100).toFixed(2)) : null,
-      dsD0: item.countD0 > 0 ? Number((item.sumD0 / item.countD0).toFixed(2)) : null,
-      reut: item.countReut > 0 ? Number((item.sumReut / item.countReut).toFixed(2)) : null,
-      spr: item.countSpr > 0 ? Number((item.sumSpr / item.countSpr).toFixed(2)) : null,
-      moto: item.countMoto > 0 ? Number((item.sumMoto / item.countMoto).toFixed(2)) : null,
-    })).sort((a, b) => {
-      if (a.hub !== b.hub) return a.hub.localeCompare(b.hub);
-      return b.timeSort - a.timeSort; 
-    });
+// 2. Processa a Base de Ofertas (Leitura Matricial a partir da Coluna G)
+    if (ofertasData && ofertasData.length > 0) {
+      let headersOfertas = []; //  O Gabarito de datas que vai mudar a cada mês lido
 
-  }, [baseData, hubTimeView, selectedRegs, selectedHubs, permittedHubsSet, SANITIZED_REGIONAL_MAP, semanaFilter, mesFilter, dataInicio, dataFim]);
+      for (let i = 0; i < ofertasData.length; i++) {
+        const row = ofertasData[i];
+        
+        // DETECTA CABEÇALHO: Se a linha for o cabeçalho do mês, atualiza o gabarito e pula!
+        if (String(row[0] || "").toUpperCase().includes("DRIVER ID")) {
+            headersOfertas = row;
+            continue; 
+        }
 
-  const handleSelectAllRegs = () => { setSelectedRegs([...listRegs]); setSelectedHubs([]); };
-  const handleClearRegs = () => { setSelectedRegs([]); setSelectedHubs([]); };
-  const handleSelectAllHubs = () => setSelectedHubs([...listHubs]);
-  const handleClearHubs = () => setSelectedHubs([]);
+        const hubRaw = String(row[4] || "").trim(); // Coluna E (Índice 4)
+        const hub = padronizarHubLocal(hubRaw);
+        const cleanHubName = sanitizeHubName(hub);
 
-  const toggleHub = (hubName) => setExpandedHubs(prev => ({ ...prev, [hubName]: !prev[hubName] }));
+        if (!hub || !permittedHubsSet.has(cleanHubName)) continue;
+
+        let subRegional = MAPA_REGIONAL_COMPLETO[hub] || SANITIZED_REGIONAL_MAP[cleanHubName];
+        if (selectedRegsSet.size > 0 && !selectedRegsSet.has(subRegional)) continue;
+        if (selectedHubsSet.size > 0 && !selectedHubsSet.has(hub)) continue;
+
+        const modal = String(row[1] || "").toUpperCase(); // Coluna B (Índice 1)
+        const VALID_STATUS = ["AM", "AM OU SD", "PM", "SD"];
+
+        for (let k = 6; k < row.length; k++) {
+          const val = String(row[k] || "").trim().toUpperCase();
+          
+          if (VALID_STATUS.includes(val)) {
+            // Lê as datas usando o gabarito exato do mês que está sendo lido
+            const dateStr = String(headersOfertas[k] || "").trim();
+            const isoDate = parseUniversalDate(dateStr);
+            
+            if (!isoDate) continue;
+
+            const dObj = new Date(isoDate);
+            if (isNaN(dObj.getTime())) continue;
+
+            // Filtros de Tempo Globais
+            if (dataInicioObj && dObj < dataInicioObj) continue;
+            if (dataFimObj && dObj > dataFimObj) continue;
+            if (mesFilter && String(dObj.getMonth() + 1).padStart(2, '0') !== mesFilter) continue;
+            if (semanaFilter && getISOWeek(isoDate) !== semanaFilter) continue;
+
+            let timeKey = ""; let timeSort = 0;
+
+            if (hubTimeView === 'dia') {
+              timeKey = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}/${dObj.getFullYear()}`;
+              timeSort = dObj.getTime();
+            } else if (hubTimeView === 'semana') {
+              timeKey = getISOWeek(isoDate);
+              timeSort = dObj.getFullYear() * 100 + parseInt(timeKey.replace(/\D/g, ''));
+            } else if (hubTimeView === 'mes') {
+              const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+              timeKey = `${meses[dObj.getMonth()]} ${dObj.getFullYear()}`;
+              timeSort = dObj.getFullYear() * 100 + dObj.getMonth();
+            }
+
+            const td = initAgg(hub, subRegional, timeKey, timeSort);
+            td.ofertasTotais++;
+
+            if (modal.includes('MOTO')) td.ofertasMoto++;
+            else if (modal.includes('PASS') || modal.includes('CARRO')) td.ofertasPasseio++;
+            else if (modal.includes('VAN')) td.ofertasVan++;
+            else if (modal.includes('FIORINO') || modal.includes('UTIL')) td.ofertasUtil++;
+          }
+        }
+      }
+    }
+
+    const timeColumns = Array.from(timeColsMap.values()).sort((a,b) => a.sortValue - b.sortValue);
+
+    const hubsData = Object.values(aggs).map(item => {
+      const kpis = {
+        dsTotal: {}, dsD0: {}, spr: {}, reut: {}, atPiso: {}, totalCarregado: {}, driversUnicos: {},
+        ofertasTotais: {}, ofertasMoto: {}, ofertasPasseio: {}, ofertasUtil: {}, ofertasVan: {}
+      };
+      timeColumns.forEach(tc => {
+        const tk = tc.id;
+        const td = item.timeData[tk];
+        if (!td) {
+           kpis.dsTotal[tk] = null; kpis.dsD0[tk] = null; kpis.spr[tk] = null;
+           kpis.reut[tk] = null; kpis.atPiso[tk] = null; kpis.totalCarregado[tk] = null; kpis.driversUnicos[tk] = null;
+           kpis.ofertasTotais[tk] = null; kpis.ofertasMoto[tk] = null; kpis.ofertasPasseio[tk] = null; kpis.ofertasUtil[tk] = null; kpis.ofertasVan[tk] = null;
+           return;
+        }
+        kpis.dsTotal[tk] = td.sumE > 0 ? Number(((td.sumF / td.sumE) * 100).toFixed(2)) : null;
+        kpis.dsD0[tk] = td.countV > 0 ? Number((td.sumV / td.countV).toFixed(2)) : null;
+        kpis.spr[tk] = td.countR > 0 ? Number((td.sumR / td.countR).toFixed(2)) : null;
+        kpis.reut[tk] = td.countM > 0 ? Number((td.sumM / td.countM).toFixed(2)) : null;
+        kpis.atPiso[tk] = td.countX > 0 ? Number((td.sumX / td.countX).toFixed(2)) : null;
+        kpis.totalCarregado[tk] = td.sumG > 0 ? td.sumG : null;
+        kpis.driversUnicos[tk] = td.sumH > 0 ? td.sumH : null;
+        
+        kpis.ofertasTotais[tk] = td.ofertasTotais > 0 ? td.ofertasTotais : null;
+        kpis.ofertasMoto[tk] = td.ofertasMoto > 0 ? td.ofertasMoto : null;
+        kpis.ofertasPasseio[tk] = td.ofertasPasseio > 0 ? td.ofertasPasseio : null;
+        kpis.ofertasUtil[tk] = td.ofertasUtil > 0 ? td.ofertasUtil : null;
+        kpis.ofertasVan[tk] = td.ofertasVan > 0 ? td.ofertasVan : null;
+      });
+      return { hub: item.hub, subRegional: item.subRegional, kpis };
+    }).sort((a, b) => a.hub.localeCompare(b.hub));
+
+    return { timeColumns, hubsData };
+  }, [baseData, ofertasData, hubTimeView, selectedRegs, selectedHubs, permittedHubsSet, SANITIZED_REGIONAL_MAP, semanaFilter, mesFilter, dataInicio, dataFim]);
 
   const exportarHubCSV = () => {
     if (!hubDownload) return alert("Por favor, selecione um Hub antes de baixar.");
+    const activeColumns = driverViewMode.includes('MONTH') ? processedDrivers.colMeses : processedDrivers.colSemanasFiltradas;
     if (!activeColumns || activeColumns.length === 0) return alert("Matriz vazia.");
     
     const hubRef = processedDrivers.hubsData.find(h => h.name === hubDownload);
     if (!hubRef) return alert("Nenhum dado filtrado correspondente para este Hub.");
 
     const colHeaders = activeColumns.map(c => c.label);
-    const headersCSV = ["Driver ID", "Veículo", "Subregional", "HUB", "Visão Exportada", ...colHeaders];
+    const headersCSV = ["Driver ID", "Veículo", "SubRegional", "HUB", "Visão Exportada", ...colHeaders];
     
     const linhasCSV = hubRef.drivers.map(d => {
       const notasArr = activeColumns.map(col => {
@@ -609,170 +711,223 @@ export default function DeliverySuccess() {
   const filteredRegsOptions = listRegs.filter(reg => sanitizeForSearch(reg).includes(sanitizeForSearch(regSearchTerm)));
   const filteredHubsOptions = listHubs.filter(hub => sanitizeForSearch(hub).includes(sanitizeForSearch(hubSearchTerm)));
   
-  const showsEmptyState = selectedRegs.length === 0 && selectedHubs.length === 0 && !searchTerm;
+  const showsEmptyState = selectedRegs.length === 0 && selectedHubs.length === 0 && !searchTerm && !veiculoFilter;
   const activeColumns = driverViewMode.includes('MONTH') ? processedDrivers.colMeses : processedDrivers.colSemanasFiltradas;
 
- return (
-    <div className="flex flex-col h-full gap-6 animate-in fade-in duration-300">
+  const getFiltrosResumo = () => {
+    let tags = [];
+    if (selectedRegs.length > 0) tags.push(`${selectedRegs.length} Subregionais`);
+    if (selectedHubs.length > 0) tags.push(`${selectedHubs.length} Hubs`);
+    if (veiculoFilter) tags.push(`Veículo: ${veiculoFilter}`);
+    if (searchTerm) tags.push(`ID: ${searchTerm}`);
+    if (semanaFilter) tags.push(`Semana ${semanaFilter}`);
+    if (mesFilter) {
+      const mesNome = MESES.find(m => m.value === mesFilter)?.label;
+      if (mesNome) tags.push(`Mês: ${mesNome}`);
+    }
+    if (dataInicio || dataFim) tags.push('Filtro Diário');
+
+    if (tags.length === 0) return "Nenhum filtro ativo";
+    return `Filtrando por: ${tags.join(" | ")}`;
+  };
+
+  return (
+    <div className="flex flex-col h-full gap-4 animate-in fade-in duration-300">
       
-      {/* 1. PAINEL DE CONTROLE / FILTROS GLOBAIS */}
-      <div className="bg-white dark:bg-[#1f232d] p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0 flex flex-col gap-6">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-100 dark:border-gray-800 pb-4">
+      {/* CABEÇALHO DO PAINEL DE FILTROS E BOTÃO DE RECOLHER */}
+      <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0 mt-4">
+        <div 
+          onClick={() => setFiltrosAbertos(!filtrosAbertos)}
+          className="p-5 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-gray-800/50 transition-colors rounded-t-2xl select-none"
+        >
           <div>
             <h2 className="text-2xl font-black text-[#113366] dark:text-white uppercase tracking-tight flex items-center gap-2">
               <Award className="text-[#EE4D2D]" size={26} /> Delivery Success (DS)
             </h2>
-            <p className="text-xs font-bold text-slate-400 uppercase mt-1">Acompanhamento de performance de entrega na Malha e Condutor</p>
-          </div>
-          <button 
-            onClick={limparTodosFiltros} 
-            className="flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-600 dark:text-gray-300 px-4 py-2 rounded-xl text-[11px] font-black uppercase transition-colors shadow-sm"
-          >
-            <Eraser size={14} /> Limpar Todos os Filtros
-          </button>
-        </div>
-
-       {/* LINHA 1 DE FILTROS: LOCAIS */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-4 flex flex-col gap-2 relative" ref={dropdownRegRef}>
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><Filter size={12}/> 1. Subregional</label>
-                <div onClick={() => setDropdownRegOpen(!dropdownRegOpen)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold flex justify-between items-center cursor-pointer hover:border-slate-300 dark:hover:border-gray-600 transition-all select-none">
-                  <span className="truncate pr-4 text-slate-700 dark:text-gray-200">{selectedRegs.length === 0 ? "Todas as Subregionais" : `${selectedRegs.length} reg(s): ${selectedRegs.join(', ')}`}</span>
-                  <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownRegOpen ? 'rotate-180' : ''}`} />
-                </div>
-                {dropdownRegOpen && (
-                  <div className="absolute top-[100%] left-0 w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-xl mt-1 shadow-xl z-50 max-h-64 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5">
-                    <div className="p-1 sticky top-0 bg-white dark:bg-[#1f232d] z-10 flex flex-col gap-1 border-b border-slate-100 dark:border-gray-800">
-                      <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} /><input type="text" placeholder="Buscar subregional..." value={regSearchTerm} onChange={(e) => setRegSearchTerm(e.target.value)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white text-xs font-bold pl-8 pr-2.5 py-2 rounded-lg border border-slate-200 dark:border-gray-700 outline-none focus:border-[#EE4D2D] transition-all"/></div>
-                      <div className="flex justify-between items-center px-1 py-1"><button type="button" onClick={handleSelectAllRegs} className="text-[10px] font-black uppercase text-[#113366] dark:text-blue-400 hover:opacity-70 transition-colors">Selecionar Todas</button><button type="button" onClick={handleClearRegs} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors">Limpar Filtro</button></div>
-                    </div>
-                    {filteredRegsOptions.length === 0 ? (<div className="text-center p-4 text-xs font-bold text-slate-400">Nenhuma subregional.</div>) : (
-                      filteredRegsOptions.map(reg => {
-                        const isChecked = selectedRegs.includes(reg);
-                        return (<div key={`filter-reg-${reg}`} onClick={() => toggleRegSelection(reg)} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${isChecked ? 'bg-blue-50 dark:bg-blue-900/20 text-[#113366] dark:text-blue-400' : 'text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800'}`}><span className="truncate">{reg}</span>{isChecked && <Check size={14} className="text-[#113366] dark:text-blue-400 shrink-0" />}</div>);
-                      })
-                    )}
-                  </div>
-                )}
-            </div>
-
-            <div className="md:col-span-4 flex flex-col gap-2 relative" ref={dropdownRef}>
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><MapPin size={12}/> 2. Station (HUB)</label>
-                <div onClick={() => setDropdownOpen(!dropdownOpen)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold flex justify-between items-center cursor-pointer hover:border-slate-300 dark:hover:border-gray-600 transition-all select-none">
-                  <span className="truncate pr-4 text-slate-700 dark:text-gray-200">{selectedHubs.length === 0 ? "Todos os HUBs" : `${selectedHubs.length} HUB(s): ${selectedHubs.join(', ')}`}</span>
-                  <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
-                </div>
-                {dropdownOpen && (
-                  <div className="absolute top-[100%] left-0 w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-xl mt-1 shadow-xl z-50 max-h-64 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5">
-                    <div className="p-1 sticky top-0 bg-white dark:bg-[#1f232d] z-10 flex flex-col gap-1 border-b border-slate-100 dark:border-gray-800">
-                      <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} /><input type="text" placeholder="Buscar hub..." value={hubSearchTerm} onChange={(e) => setHubSearchTerm(e.target.value)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white text-xs font-bold pl-8 pr-2.5 py-2 rounded-lg border border-slate-200 dark:border-gray-700 outline-none focus:border-[#EE4D2D] transition-all"/></div>
-                      <div className="flex justify-between items-center px-1 py-1"><button type="button" onClick={handleSelectAllHubs} className="text-[10px] font-black uppercase text-[#EE4D2D] hover:text-[#D0011B] transition-colors">Selecionar Todos</button><button type="button" onClick={handleClearHubs} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors">Limpar Filtro</button></div>
-                    </div>
-                    {filteredHubsOptions.length === 0 ? (<div className="text-center p-4 text-xs font-bold text-slate-400">Nenhum HUB correspondente.</div>) : (
-                      filteredHubsOptions.map(hub => {
-                        const isChecked = selectedHubs.includes(hub);
-                        return (<div key={`filter-${hub}`} onClick={() => toggleHubSelection(hub)} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${isChecked ? 'bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D]' : 'text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800'}`}><span className="truncate">{hub}</span>{isChecked && <Check size={14} className="text-[#EE4D2D] shrink-0" />}</div>);
-                      })
-                    )}
-                  </div>
-                )}
-            </div>
-
-            <div className="md:col-span-4 flex flex-col gap-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><Search size={12}/> Ou busque direto (Motoristas)</label>
-                <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} /><input type="text" placeholder="ID do Motorista..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 pl-10 pr-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#113366] transition-all"/></div>
-            </div>
-        </div>
-
-        {/* LINHA 2 DE FILTROS: TEMPO */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-2">
-            <div className="md:col-span-3 flex flex-col gap-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarDays size={12}/> 3. Semana</label>
-                <select
-                  value={semanaFilter}
-                  onChange={(e) => setSemanaFilter(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
-                >
-                  <option value="">Todas as Semanas</option>
-                  {availableWeeks.map(w => <option key={w} value={w}>{w.replace('W', 'W-')}</option>)}
-                </select>
-            </div>
-            <div className="md:col-span-3 flex flex-col gap-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarDays size={12}/> 4. Mês</label>
-                <select
-                  value={mesFilter}
-                  onChange={(e) => setMesFilter(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
-                >
-                  <option value="">Todos os Meses</option>
-                  {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
-            </div>
-            <div className="md:col-span-3 flex flex-col gap-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarCheck size={12}/> 5. Data Início</label>
-                <input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
-                />
-            </div>
-            <div className="md:col-span-3 flex flex-col gap-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1 flex-wrap">
-                   <CalendarCheck size={12} className="shrink-0"/> 6. Data Fim <span className="text-[#EE4D2D] normal-case text-[9px] font-bold ml-auto">(Apenas p/ Aba 2)</span>
-                </label>
-                <input
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
-                />
-            </div>
-        </div>
-      </div>
-
-      {/* BANNER DE STORYTELLING TOTALMENTE REESCRITO */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
-        <div className="flex gap-3 items-start">
-          <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
-            <Users size={16} />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <h4 className="text-xs font-black text-[#113366] dark:text-blue-400 uppercase tracking-wider">Visão 1: Performance de Condutores</h4>
-            <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed mt-1">
-              Focado no microgerenciamento. A nota do Hub exibida na primeira aba é a <strong>Média Simples</strong> de todos os motoristas. O algoritmo não avalia o tamanho da rota (se o condutor levou 10 ou 100 pacotes, o peso da nota dele na média será exatamente o mesmo).
+            <p className="text-xs font-bold text-slate-400 uppercase mt-1 flex items-center gap-2">
+              <span>Acompanhamento de performance na Malha e Condutor</span>
+              {!filtrosAbertos && (
+                <>
+                  <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                  <span className="text-[#EE4D2D]">{getFiltrosResumo()}</span>
+                </>
+              )}
             </p>
           </div>
+          
+          <div className="flex items-center gap-3">
+             <button 
+                onClick={(e) => { e.stopPropagation(); limparTodosFiltros(); }} 
+                className="flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-600 dark:text-gray-300 px-4 py-2 rounded-xl text-[11px] font-black uppercase transition-colors shadow-sm"
+             >
+                <Eraser size={14} /> Limpar Filtros
+             </button>
+             <button className="flex items-center justify-center gap-1.5 bg-[#113366] hover:bg-blue-900 text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase transition-colors shadow-sm">
+                {filtrosAbertos ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                {filtrosAbertos ? 'Recolher Painel' : 'Expandir Painel'}
+             </button>
+          </div>
         </div>
 
-        <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
-          <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
-            <Database size={16} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <h4 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Visão 2: KPIs Globais por Hub</h4>
-            <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-              Focado no resultado oficial. O DS Total aqui é a <strong>Média Ponderada</strong>, calculada somando a volumetria bruta de pacotes (<em className="text-slate-600 dark:text-gray-300">Entregues ÷ Carregados</em>) da própria base de controle no Data Suite. Essa é a métrica real do Hub, livre de distorções.
-            </p>
-          </div>
-        </div>
+        {/* PAINEL DE CONTROLE / FILTROS GLOBAIS (CONTEÚDO SANFONA) */}
+        {filtrosAbertos && (
+          <div className="p-6 pt-0 flex flex-col gap-6 animate-in slide-in-from-top-4 duration-300">
+            <div className="h-px w-full bg-slate-100 dark:bg-gray-800 mb-2"></div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div className="md:col-span-3 flex flex-col gap-2 relative" ref={dropdownRegRef}>
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><Filter size={12}/> 1. Subregional</label>
+                    <div onClick={() => setDropdownRegOpen(!dropdownRegOpen)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold flex justify-between items-center cursor-pointer hover:border-slate-300 dark:hover:border-gray-600 transition-all select-none">
+                      <span className="truncate pr-4 text-slate-700 dark:text-gray-200">{selectedRegs.length === 0 ? "Todas as Subregionais" : `${selectedRegs.length} reg(s): ${selectedRegs.join(', ')}`}</span>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownRegOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {dropdownRegOpen && (
+                      <div className="absolute top-[100%] left-0 w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-xl mt-1 shadow-xl z-50 max-h-64 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5">
+                        <div className="p-1 sticky top-0 bg-white dark:bg-[#1f232d] z-10 flex flex-col gap-1 border-b border-slate-100 dark:border-gray-800">
+                          <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} /><input type="text" placeholder="Buscar subregional..." value={regSearchTerm} onChange={(e) => setRegSearchTerm(e.target.value)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white text-xs font-bold pl-8 pr-2.5 py-2 rounded-lg border border-slate-200 dark:border-gray-700 outline-none focus:border-[#EE4D2D] transition-all"/></div>
+                          <div className="flex justify-between items-center px-1 py-1"><button type="button" onClick={handleSelectAllRegs} className="text-[10px] font-black uppercase text-[#113366] dark:text-blue-400 hover:opacity-70 transition-colors">Selecionar Todas</button><button type="button" onClick={handleClearRegs} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors">Limpar Filtro</button></div>
+                        </div>
+                        {filteredRegsOptions.length === 0 ? (<div className="text-center p-4 text-xs font-bold text-slate-400">Nenhuma subregional.</div>) : (
+                          filteredRegsOptions.map(reg => {
+                            const isChecked = selectedRegs.includes(reg);
+                            return (<div key={`filter-reg-${reg}`} onClick={() => toggleRegSelection(reg)} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${isChecked ? 'bg-blue-50 dark:bg-blue-900/20 text-[#113366] dark:text-blue-400' : 'text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800'}`}><span className="truncate">{reg}</span>{isChecked && <Check size={14} className="text-[#113366] dark:text-blue-400 shrink-0" />}</div>);
+                          })
+                        )}
+                      </div>
+                    )}
+                </div>
 
-        <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
-          <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
-            <Target size={16} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Metas & Farol</h4>
-            <div className="flex flex-col gap-2 mt-2">
-              <span className="inline-flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-gray-300">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></div> Meta DS Total: <strong className="text-slate-800 dark:text-white text-sm">98%</strong>
-              </span>
-              <span className="inline-flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-gray-300">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></div> Meta DS D-0: <strong className="text-slate-800 dark:text-white text-sm">95%</strong>
-              </span>
+                <div className="md:col-span-3 flex flex-col gap-2 relative" ref={dropdownRef}>
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><MapPin size={12}/> 2. Station (HUB)</label>
+                    <div onClick={() => setDropdownOpen(!dropdownOpen)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold flex justify-between items-center cursor-pointer hover:border-slate-300 dark:hover:border-gray-600 transition-all select-none">
+                      <span className="truncate pr-4 text-slate-700 dark:text-gray-200">{selectedHubs.length === 0 ? "Todos os HUBs" : `${selectedHubs.length} HUB(s): ${selectedHubs.join(', ')}`}</span>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {dropdownOpen && (
+                      <div className="absolute top-[100%] left-0 w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-xl mt-1 shadow-xl z-50 max-h-64 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5">
+                        <div className="p-1 sticky top-0 bg-white dark:bg-[#1f232d] z-10 flex flex-col gap-1 border-b border-slate-100 dark:border-gray-800">
+                          <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} /><input type="text" placeholder="Buscar hub..." value={hubSearchTerm} onChange={(e) => setHubSearchTerm(e.target.value)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white text-xs font-bold pl-8 pr-2.5 py-2 rounded-lg border border-slate-200 dark:border-gray-700 outline-none focus:border-[#EE4D2D] transition-all"/></div>
+                          <div className="flex justify-between items-center px-1 py-1"><button type="button" onClick={handleSelectAllHubs} className="text-[10px] font-black uppercase text-[#EE4D2D] hover:text-[#D0011B] transition-colors">Selecionar Todos</button><button type="button" onClick={handleClearHubs} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors">Limpar Filtro</button></div>
+                        </div>
+                        {filteredHubsOptions.length === 0 ? (<div className="text-center p-4 text-xs font-bold text-slate-400">Nenhum HUB correspondente.</div>) : (
+                          filteredHubsOptions.map(hub => {
+                            const isChecked = selectedHubs.includes(hub);
+                            return (<div key={`filter-${hub}`} onClick={() => toggleHubSelection(hub)} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${isChecked ? 'bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D]' : 'text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800'}`}><span className="truncate">{hub}</span>{isChecked && <Check size={14} className="text-[#EE4D2D] shrink-0" />}</div>);
+                          })
+                        )}
+                      </div>
+                    )}
+                </div>
+
+                <div className="md:col-span-3 flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><Truck size={12}/> 3. Modal / Veículo</label>
+                    <select
+                      value={veiculoFilter}
+                      onChange={(e) => setVeiculoFilter(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
+                    >
+                      <option value="">Todos os Modais</option>
+                      {listVehicles.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                </div>
+
+                <div className="md:col-span-3 flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><Search size={12}/> Busca Condutor</label>
+                    <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} /><input type="text" placeholder="ID do Motorista..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 pl-10 pr-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#113366] transition-all"/></div>
+                </div>
+            </div>
+
+            {/* LINHA 2 DE FILTROS: TEMPO */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-2">
+                <div className="md:col-span-3 flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarDays size={12}/> 4. Semana</label>
+                    <select
+                      value={semanaFilter}
+                      onChange={(e) => setSemanaFilter(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
+                    >
+                      <option value="">Todas as Semanas</option>
+                      {availableWeeks.map(w => <option key={w} value={w}>{w.replace('W', 'W-')}</option>)}
+                    </select>
+                </div>
+                <div className="md:col-span-3 flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarDays size={12}/> 5. Mês</label>
+                    <select
+                      value={mesFilter}
+                      onChange={(e) => setMesFilter(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
+                    >
+                      <option value="">Todos os Meses</option>
+                      {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                </div>
+                <div className="md:col-span-3 flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarCheck size={12}/> 6. Data Início</label>
+                    <input
+                      type="date"
+                      value={dataInicio}
+                      onChange={(e) => setDataInicio(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
+                    />
+                </div>
+                <div className="md:col-span-3 flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1 flex-wrap">
+                       <CalendarCheck size={12} className="shrink-0"/> 7. Data Fim <span className="text-[#EE4D2D] normal-case text-[9px] font-bold ml-auto">(Apenas p/ Aba 2)</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={dataFim}
+                      onChange={(e) => setDataFim(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
+                    />
+                </div>
+            </div>
+            
+            {/* BANNER DE STORYTELLING */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 mt-2">
+              <div className="flex gap-3 items-start">
+                <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
+                  <Users size={16} />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <h4 className="text-xs font-black text-[#113366] dark:text-blue-400 uppercase tracking-wider">Visão 1: Performance de Condutores</h4>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed mt-1">
+                    Focado no microgerenciamento. A nota do Hub exibida na primeira aba é a <strong>Média Simples</strong> de todos os motoristas. O algoritmo não avalia o tamanho da rota (se o condutor levou 10 ou 100 pacotes, o peso da nota dele na média será exatamente o mesmo).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+                  <Database size={16} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Visão 2: KPIs Globais do Station</h4>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
+                    Focado no resultado oficial. O DS Total aqui é a <strong>Média Ponderada</strong>, calculada somando a volumetria bruta de pacotes (<em className="text-slate-600 dark:text-gray-300">Entregues ÷ Carregados</em>) da própria base de controle de PCP da malha. Essa é a métrica real do Hub, livre de distorções.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+                <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
+                  <Target size={16} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Metas & Farol</h4>
+                  <div className="flex flex-col gap-2 mt-2">
+                    <span className="inline-flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-gray-300">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></div> Meta DS Total: <strong className="text-slate-800 dark:text-white text-sm">98%</strong>
+                    </span>
+                    <span className="inline-flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-gray-300">
+                      <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></div> Meta DS D-0: <strong className="text-slate-800 dark:text-white text-sm">95%</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* TOGGLE DE ABAS PRINCIPAIS */}
@@ -814,7 +969,6 @@ export default function DeliverySuccess() {
               </button>
             </div>
 
-            {}
             <div className={`flex items-center gap-3 bg-white dark:bg-[#1f232d] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 transition-opacity ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
               <select
                 value={hubDownload}
@@ -958,46 +1112,111 @@ export default function DeliverySuccess() {
                 <div className="overflow-x-auto w-full h-full custom-scrollbar">
                   <table className="w-full border-collapse text-center">
                       <thead className="bg-[#113366] text-white">
-                        <tr className="tracking-widest text-[10px] uppercase font-black sticky top-0 z-20">
-                            <th className="p-4 text-left shadow-sm min-w-[200px]">STATION (HUB)</th>
-                            <th className="p-4 shadow-sm border-l border-white/20">PERÍODO</th>
-                            <th className="p-4 shadow-sm border-l border-white/20" title="Delivery Success Geral Ponderado">DS TOTAL</th>
-                            <th className="p-4 shadow-sm border-l border-white/20" title="Delivery Success no Mesmo Dia">DS D-0</th>
-                            <th className="p-4 shadow-sm border-l border-white/20">ADERÊNCIA SPR</th>
-                            <th className="p-4 shadow-sm border-l border-white/20">REUTILIZAÇÃO</th>
-                            <th className="p-4 shadow-sm border-l border-white/20">SHARE MOTO</th>
+                        <tr className="tracking-widest text-[10px] uppercase font-black">
+                            {/* Canto superior esquerdo: Fixado no Topo E na Esquerda (Z-50) */}
+                            <th className="p-4 text-left shadow-sm min-w-[250px] sticky left-0 top-0 bg-[#113366] z-50 border-r border-white/20">
+                                STATION (HUB) / KPI
+                            </th>
+                            <th className="p-4 shadow-sm border-r border-white/20 sticky left-[250px] top-0 bg-[#113366] z-50">
+                                VISÃO
+                            </th>
+                            
+                            {/* Datas na horizontal: Fixadas apenas no Topo (Z-40) */}
+                            {processedHubKPIs.timeColumns.map(col => (
+                               <th key={col.id} className="p-4 shadow-sm border-r border-white/20 min-w-[85px] sticky top-0 bg-[#113366] z-40">
+                                   {col.label}
+                               </th>
+                            ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-black text-sm">
-                        {processedHubKPIs.length === 0 ? (
-                            <tr><td colSpan={7} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado para o período.</td></tr>
+                      <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-black text-sm relative z-0">
+                        {processedHubKPIs.hubsData.length === 0 ? (
+                            <tr><td colSpan={processedHubKPIs.timeColumns.length + 2} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado para o período.</td></tr>
                         ) : (
-                            processedHubKPIs.map((row, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
-                                <td className="p-4 text-left text-[#113366] dark:text-blue-400 font-black border-r border-slate-200 dark:border-gray-700 flex items-center gap-2">
-                                  <Layers size={16} className="text-[#EE4D2D] shrink-0" />
-                                  <span className="truncate" title={row.hub}>{row.hub}</span>
-                                </td>
-                                <td className="p-4 text-xs font-bold text-slate-600 dark:text-gray-300 border-r border-slate-200 dark:border-gray-700 uppercase tracking-wider">
-                                  {row.periodo}
-                                </td>
-                                <td className={`p-4 border-r border-slate-200 dark:border-gray-700 ${row.dsTotal !== null && row.dsTotal < 98 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                                  {renderSemaforo(row.dsTotal, false)}
-                                </td>
-                                <td className={`p-4 border-r border-slate-200 dark:border-gray-700 ${row.dsD0 !== null && row.dsD0 < 95 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                                  {renderSemaforo(row.dsD0, true)}
-                                </td>
-                                <td className="p-4 text-[#113366] dark:text-blue-300 font-bold border-r border-slate-200 dark:border-gray-700">
-                                  {row.spr !== null ? `${row.spr}%` : '-'}
-                                </td>
-                                <td className="p-4 text-[#113366] dark:text-blue-300 font-bold border-r border-slate-200 dark:border-gray-700">
-                                  {row.reut !== null ? `${row.reut}%` : '-'}
-                                </td>
-                                <td className="p-4 text-[#113366] dark:text-blue-300 font-bold">
-                                  {row.moto !== null ? `${row.moto}%` : '-'}
-                                </td>
-                              </tr>
-                            ))
+                            processedHubKPIs.hubsData.map((row) => {
+                              const isOpen = !!expandedHubs[row.hub];
+                              return (
+                                <React.Fragment key={row.hub}>
+                                  <tr onClick={() => toggleHub(row.hub)} className="cursor-pointer bg-slate-100 dark:bg-gray-800 hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors h-[50px]">
+                                     <td className="p-4 text-left text-[#113366] dark:text-blue-400 font-black border-r border-slate-200 dark:border-gray-700 flex items-center gap-2 sticky left-0 z-20 bg-slate-100 dark:bg-gray-800">
+                                       {isOpen ? <ChevronDown size={18} className="text-[#EE4D2D]"/> : <ChevronRight size={18} className="text-slate-400"/>}
+                                       <Layers size={16} className="text-[#EE4D2D] shrink-0" />
+                                       <span className="truncate" title={row.hub}>{row.hub}</span>
+                                     </td>
+                                     <td className="p-4 text-xs font-black text-[#113366] dark:text-white uppercase border-r border-slate-200 dark:border-gray-700 sticky left-[250px] z-20 bg-slate-100 dark:bg-gray-800">TOTAL STATION</td>
+                                     {processedHubKPIs.timeColumns.map(col => (
+                                        <td key={col.id} className="p-4 border-r border-slate-200 dark:border-gray-700 bg-slate-50/50 dark:bg-gray-800/50">-</td>
+                                     ))}
+                                  </tr>
+
+                                  {isOpen && [
+                                     { key: 'dsTotal', label: 'Delivery Success (Total)', format: 'semaforo', isD0: false },
+                                     { key: 'dsD0', label: 'Delivery Success (D-0)', format: 'semaforo', isD0: true },
+                                     { key: 'spr', label: 'Aderência SPR', format: 'percent', color: 'text-[#113366] dark:text-blue-400' },
+                                     { key: 'reut', label: 'Reutilização', format: 'percent', color: 'text-indigo-600 dark:text-indigo-400' },
+                                     { key: 'atPiso', label: '% AT no Piso', format: 'percent', color: 'text-orange-500' },
+                                     { key: 'totalCarregado', label: 'Total Carregado', format: 'number', color: 'text-slate-700 dark:text-slate-300' },
+                                     { key: 'driversUnicos', label: 'Drivers Únicos', format: 'number', color: 'text-slate-700 dark:text-slate-300' },
+                                     { key: 'ofertasTotais', label: 'Ofertas de Drivers', format: 'expandable', color: 'text-[#113366] dark:text-blue-400' }
+                                  ].map(kpi => {
+                                      if (kpi.format === 'expandable') {
+                                          const isOfExpanded = !!expandedOfertas[row.hub];
+                                          return (
+                                              <React.Fragment key={`${row.hub}-${kpi.key}`}>
+                                                  <tr onClick={(e) => { e.stopPropagation(); toggleOfertas(row.hub); }} className="bg-slate-50 dark:bg-[#1a1d24] hover:bg-slate-100 dark:hover:bg-gray-800/50 transition-colors cursor-pointer">
+                                                      <td className="p-3 text-left pl-12 font-black text-slate-800 dark:text-gray-200 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-20 bg-slate-50 dark:bg-[#1a1d24] flex items-center gap-1.5">
+                                                          {isOfExpanded ? <ChevronDown size={14} className="text-[#EE4D2D]"/> : <ChevronRight size={14} className="text-slate-400"/>}
+                                                          {kpi.label}
+                                                      </td>
+                                                      <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 sticky left-[250px] z-20 bg-slate-50 dark:bg-[#1a1d24]">KPI</td>
+                                                      {processedHubKPIs.timeColumns.map(col => {
+                                                          const val = row.kpis[kpi.key][col.id];
+                                                          return <td key={col.id} className="p-3 border-r border-slate-100 dark:border-gray-800">{val ? <span className={`font-black ${kpi.color}`}>{val.toLocaleString('pt-BR')}</span> : '-'}</td>;
+                                                      })}
+                                                  </tr>
+                                                  {isOfExpanded && [
+                                                      { key: 'ofertasMoto', label: '↳ Moto' },
+                                                      { key: 'ofertasPasseio', label: '↳ Passeio' },
+                                                      { key: 'ofertasUtil', label: '↳ Utilitário' },
+                                                      { key: 'ofertasVan', label: '↳ Van' }
+                                                  ].map(subKpi => (
+                                                      <tr key={`${row.hub}-${subKpi.key}`} className="bg-white dark:bg-[#15171e] hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                          <td className="p-3 text-left pl-20 font-bold text-slate-600 dark:text-gray-400 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-20 bg-white dark:bg-[#15171e]">{subKpi.label}</td>
+                                                          <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 sticky left-[250px] z-20 bg-white dark:bg-[#15171e]">MODAL</td>
+                                                          {processedHubKPIs.timeColumns.map(col => {
+                                                              const val = row.kpis[subKpi.key][col.id];
+                                                              return <td key={col.id} className="p-3 border-r border-slate-100 dark:border-gray-800 font-bold text-slate-700 dark:text-gray-300">{val ? val.toLocaleString('pt-BR') : '-'}</td>;
+                                                          })}
+                                                      </tr>
+                                                  ))}
+                                              </React.Fragment>
+                                          );
+                                      }
+
+                                      return (
+                                        <tr key={`${row.hub}-${kpi.key}`} className="bg-white dark:bg-[#15171e] hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+                                           <td className="p-3 text-left pl-12 font-black text-slate-800 dark:text-gray-200 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-20 bg-white dark:bg-[#15171e]">{kpi.label}</td>
+                                           <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 sticky left-[250px] z-20 bg-white dark:bg-[#15171e]">KPI</td>
+                                           {processedHubKPIs.timeColumns.map(col => {
+                                               const val = row.kpis[kpi.key][col.id];
+                                               if (val === null || val === undefined) return <td key={col.id} className="p-3 border-r border-slate-100 dark:border-gray-800">-</td>;
+
+                                               let content;
+                                               if (kpi.format === 'semaforo') {
+                                                   content = renderSemaforo(val, kpi.isD0 ? 'D0' : 'TOTAL'); 
+                                               } else if (kpi.format === 'percent') {
+                                                   content = <span className={`font-black ${kpi.color}`}>{val}%</span>;
+                                               } else if (kpi.format === 'number') {
+                                                   content = <span className={`font-black ${kpi.color}`}>{val.toLocaleString('pt-BR')}</span>;
+                                               }
+                                               return <td key={col.id} className={`p-3 border-r border-slate-100 dark:border-gray-800 ${kpi.format === 'semaforo' && val < 95 ? 'bg-red-50/20 dark:bg-red-900/5' : ''}`}>{content}</td>;
+                                           })}
+                                        </tr>
+                                      );
+                                  })}
+                                </React.Fragment>
+                              );
+                            })
                         )}
                       </tbody>
                   </table>

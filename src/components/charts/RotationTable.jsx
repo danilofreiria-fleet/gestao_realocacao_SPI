@@ -31,7 +31,7 @@ export default function RotationTable() {
   const [hubDropdownOpen, setHubDropdownOpen] = useState(false);
   const [hubSearchTerm, setHubSearchTerm] = useState('');
 
-  // 🔥 NOVO ESTADO PARA DOWNLOAD DO HUB
+  // DOWNLOAD DO HUB
   const [hubDownload, setHubDownload] = useState('');
 
   const [selectedModal, setSelectedModal] = useState('ALL');
@@ -241,7 +241,7 @@ export default function RotationTable() {
     setSortConfig(prev => ({ direction: prev.direction === 'desc' ? 'asc' : 'desc' }));
   };
 
-  // 🔥 FUNÇÃO DE DOWNLOAD DO HUB EM CSV
+  // FUNÇÃO DE DOWNLOAD DO HUB EM CSV
   const exportarHubCSV = () => {
     if (!hubDownload) return alert("Por favor, selecione uma Station antes de baixar.");
     if (rawData.length < 2) return alert("Nenhum dado base carregado ainda.");

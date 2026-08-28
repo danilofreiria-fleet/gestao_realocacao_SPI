@@ -787,3 +787,76 @@ export const getBaseDSHubData = async () => {
     return [];
   }
 };
+
+
+
+// ============================================================================
+// BUSCA A BASE DE OFERTAS DE DRIVERS (Disponibilidade SPI e SPM)
+// ============================================================================
+export const getOfertasDriversData = async () => {
+    try {
+        const token = localStorage.getItem("spiToken");
+        if (!token) throw new Error("Usuário não autenticado.");
+
+        const regEscolhida = localStorage.getItem("selectedRegional");
+        
+        const idSPI = import.meta.env.VITE_CONSOLIDADO_DISPO_SPI;
+        const idSPM = import.meta.env.VITE_CONSOLIDADO_DISPO_SPM;
+
+        if (!idSPI || !idSPM) return [];
+
+        const getMetaAba = async (idPlanilha) => {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}?fields=sheets.properties`;
+            const response = await fetchWithQueue(url, { headers: { "Authorization": `Bearer ${token}` } });
+            if (!response.ok) return [];
+            const data = await response.json();
+            return data.sheets ? data.sheets.map(s => s.properties.title) : [];
+        };
+
+        const abasSPI = await getMetaAba(idSPI);
+        const abasSPM = await getMetaAba(idSPM);
+
+        const fetchAllAbas = async (idPlanilha, nomesAbas) => {
+            if (nomesAbas.length === 0) return [];
+            
+            const requests = nomesAbas.map(aba => {
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/'${encodeURIComponent(aba)}'!A:ZZ`;
+                return fetchWithQueue(url, { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } })
+                       .then(res => res.json())
+                       .catch(() => null); 
+            });
+            
+            const respostas = await Promise.all(requests);
+            let dadosCompletos = [];
+            
+            respostas.forEach((r) => {
+                if (r && r.values && r.values.length > 0) {
+                    // 🔥 AGORA MANTEMOS O CABEÇALHO DE TODAS AS ABAS!
+                    dadosCompletos = dadosCompletos.concat(r.values); 
+                }
+            });
+            return dadosCompletos;
+        };
+
+        let result = [];
+
+        if (regEscolhida === 'SPI' || regEscolhida === 'SPO') {
+            result = await fetchAllAbas(idSPI, abasSPI);
+        } else if (regEscolhida === 'SPM' || regEscolhida === 'SPC') {
+            result = await fetchAllAbas(idSPM, abasSPM);
+        } else {
+            const [resSPI, resSPM] = await Promise.all([
+                fetchAllAbas(idSPI, abasSPI),
+                fetchAllAbas(idSPM, abasSPM)
+            ]);
+            // 🔥 Sem fatiamento (slice), empilhamos todos os dados
+            result = resSPI.concat(resSPM);
+        }
+
+        return result;
+
+    } catch (error) {
+        console.error("Erro Crítico ao buscar Ofertas de Drivers:", error);
+        return [];
+    }
+};
