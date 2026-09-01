@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
-import { getDeliverySuccessData, getBaseDSHubData, getOfertasDriversData } from '../api/googleSheets';
+import { getDeliverySuccessData, getBaseDSHubData, getOfertasDriversData, getCadastroFrotaData, uploadCadastroSPX } from '../api/googleSheets';
 import { getHubsPermitidos, MAPA_REGIONAL_COMPLETO } from '../constants/regionais';
-import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck, Users, LayoutDashboard, Layers, Eraser } from 'lucide-react';
+import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck, Users, LayoutDashboard, Layers, Eraser, Upload, Loader2 } from 'lucide-react';
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -10,7 +10,6 @@ const MESES = [
   { value: '10', label: 'Outubro' }, { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' }
 ];
 
-// PADRONIZAR HUBS (RIBEIRÃO ESTAÇÃO E SUMARÉ NOVA VENEZA)
 const padronizarHubLocal = (nome) => {
   if (!nome) return "";
   let n = String(nome).trim();
@@ -22,7 +21,6 @@ const padronizarHubLocal = (nome) => {
   return n;
 };
 
-// Funções de Tempo e Parsing
 const parseUniversalDate = (dateStr) => {
   if (!dateStr) return null;
   let s = String(dateStr).trim().split('T')[0].split(' ')[0];
@@ -48,24 +46,28 @@ const getISOWeek = (isoDate) => {
 
 export default function DeliverySuccess() {
   const [loading, setLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   
   // BASES DE DADOS
   const [rawData, setRawData] = useState([]);
   const [baseData, setBaseData] = useState([]); 
   const [ofertasData, setOfertasData] = useState([]); 
+  const [cadastroRawData, setCadastroRawData] = useState([]); 
 
   // ESTADOS DE UI E NAVEGAÇÃO
-  const [activeTab, setActiveTab] = useState('drivers'); // 'drivers' ou 'hubs'
+  const [activeTab, setActiveTab] = useState('drivers'); 
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   
   const [expandedHubs, setExpandedHubs] = useState({});
   const [expandedOfertas, setExpandedOfertas] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  
   const [hubDownload, setHubDownload] = useState('');
+  const [hubUpload, setHubUpload] = useState('');
 
   // CONTROLES DE TEMPO DE EXIBIÇÃO
   const [driverViewMode, setDriverViewMode] = useState('TOTAL'); 
-  const [hubTimeView, setHubTimeView] = useState('dia'); // 'dia', 'semana', 'mes'
+  const [hubTimeView, setHubTimeView] = useState('dia'); 
 
   // FILTROS GLOBAIS
   const [selectedRegs, setSelectedRegs] = useState([]);
@@ -76,12 +78,13 @@ export default function DeliverySuccess() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [hubSearchTerm, setHubSearchTerm] = useState('');
   
-  // FILTROS DE TEMPO E MODAL
   const [semanaFilter, setSemanaFilter] = useState('');
   const [mesFilter, setMesFilter] = useState('');
   const [veiculoFilter, setVeiculoFilter] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  
+  const [selectedClassificacao, setSelectedClassificacao] = useState('ALL'); // 🔥 NOVO FILTRO
 
   const dropdownRegRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -108,14 +111,16 @@ export default function DeliverySuccess() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [dataDS, dataBase, dataOfertas] = await Promise.all([
+        const [dataDS, dataBase, dataOfertas, dataCadastro] = await Promise.all([
             getDeliverySuccessData(),
             getBaseDSHubData(),
-            getOfertasDriversData()
+            getOfertasDriversData().catch(() => []),
+            getCadastroFrotaData().catch(() => []) 
         ]);
         if (dataDS && dataDS.length > 1) setRawData(dataDS); 
         if (dataBase && dataBase.length > 1) setBaseData(dataBase);
         if (dataOfertas && dataOfertas.length > 1) setOfertasData(dataOfertas);
+        if (dataCadastro && dataCadastro.length > 1) setCadastroRawData(dataCadastro);
       } catch (e) {
         console.error("Erro ao carregar dados do Dashboard:", e);
       } finally {
@@ -124,6 +129,18 @@ export default function DeliverySuccess() {
     };
     loadData();
   }, []);
+
+  const cadastroMap = useMemo(() => {
+    const map = new Map();
+    if (!cadastroRawData || cadastroRawData.length < 2) return map;
+    for (let i = 1; i < cadastroRawData.length; i++) {
+        const row = cadastroRawData[i];
+        const id = String(row[0]).trim();
+        const nome = String(row[1] || "").trim();
+        if (id) map.set(id, nome);
+    }
+    return map;
+  }, [cadastroRawData]);
 
   const obterMesDaSemana = (weekStr) => {
     const w = parseInt(String(weekStr).replace(/\D/g, ''), 10);
@@ -134,6 +151,7 @@ export default function DeliverySuccess() {
     return mes.charAt(0).toUpperCase() + mes.slice(1);
   };
 
+  // 🔥 RENDER SEMAFAFORO ATUALIZADO COM A COR AMARELA NO D-0
   const renderSemaforo = (val, isD0) => {
     if (val === null || val === undefined || val === '') return '-';
     const num = Number(val);
@@ -143,6 +161,13 @@ export default function DeliverySuccess() {
         return (
           <div className="flex items-center gap-1.5 justify-center text-emerald-600 dark:text-emerald-400 font-black">
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
+            {num}%
+          </div>
+        );
+      } else if (num >= 90) { // 🔥 COR AMARELA (RISCO) ENTRE 90 E 94.9%
+        return (
+          <div className="flex items-center gap-1.5 justify-center text-yellow-600 dark:text-yellow-400 font-black">
+            <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]"></div>
             {num}%
           </div>
         );
@@ -206,6 +231,7 @@ export default function DeliverySuccess() {
     setVeiculoFilter('');
     setDataInicio('');
     setDataFim('');
+    setSelectedClassificacao('ALL');
   };
 
   const sanitizeHubName = (hubName) => {
@@ -375,7 +401,8 @@ export default function DeliverySuccess() {
 
       let driverAgg = hubAgg.driversMap[driverId];
       if (!driverAgg) {
-        driverAgg = { id: driverId, veiculo, regional: subRegional, notasTotal: {}, notasD0: {} };
+        const nomeMotorista = cadastroMap.get(driverId) || ""; 
+        driverAgg = { id: driverId, nome: nomeMotorista, veiculo, regional: subRegional, notasTotal: {}, notasD0: {} };
         for (let w = 0; w < weeksCount; w++) {
           const wk = colSemanasOriginais[w].week;
           driverAgg.notasTotal[wk] = { soma: 0, qtd: 0 };
@@ -413,8 +440,8 @@ export default function DeliverySuccess() {
     });
     const colMeses = Object.values(monthMap);
 
-    const hubsData = Object.values(aggs).map(h => {
-      const driversFinal = Object.values(h.driversMap).map(d => {
+    let hubsData = Object.values(aggs).map(h => {
+      let driversFinal = Object.values(h.driversMap).map(d => {
         const scoresTotal = {}; const scoresD0 = {};
         
         colSemanasFiltradas.forEach(sem => {
@@ -434,8 +461,38 @@ export default function DeliverySuccess() {
             scoresMesD0[m.id] = qD > 0 ? Number((sD / qD).toFixed(2)) : null;
         });
 
-        return { id: d.id, veiculo: d.veiculo, regional: d.regional, scoresTotal, scoresD0, scoresMesTotal, scoresMesD0 };
-      }).sort((a, b) => a.id.localeCompare(b.id));
+        return { id: d.id, nome: d.nome, veiculo: d.veiculo, regional: d.regional, scoresTotal, scoresD0, scoresMesTotal, scoresMesD0 };
+      });
+
+      // 🔥 FILTRO DE CLASSIFICAÇÃO DS (Analisa a coluna mais recente visível)
+      if (selectedClassificacao !== 'ALL') {
+          const colsToUse = driverViewMode.includes('MONTH') ? colMeses : colSemanasFiltradas;
+          const refCol = colsToUse.length > 0 ? colsToUse[colsToUse.length - 1].id : null;
+          
+          if (refCol) {
+             driversFinal = driversFinal.filter(d => {
+                let val = null;
+                if (driverViewMode === 'TOTAL') val = d.scoresTotal[refCol];
+                else if (driverViewMode === 'D0') val = d.scoresD0[refCol];
+                else if (driverViewMode === 'MONTH_TOTAL') val = d.scoresMesTotal[refCol];
+                else if (driverViewMode === 'MONTH_D0') val = d.scoresMesD0[refCol];
+
+                if (val === null || val === undefined) return false;
+
+                const isD0 = driverViewMode.includes('D0');
+                const isVerde = isD0 ? val >= 95 : val >= 98;
+                const isAmarelo = isD0 ? (val >= 90 && val < 95) : (val >= 95 && val < 98);
+                const isVermelho = isD0 ? val < 90 : val < 95;
+
+                if (selectedClassificacao === 'VERDE') return isVerde;
+                if (selectedClassificacao === 'AMARELO') return isAmarelo;
+                if (selectedClassificacao === 'VERMELHO') return isVermelho;
+                return true;
+             });
+          }
+      }
+
+      driversFinal.sort((a, b) => a.id.localeCompare(b.id));
 
       const mediasTotal = {}; const mediasD0 = {}; const mediasMesTotal = {}; const mediasMesD0 = {};
       
@@ -460,10 +517,10 @@ export default function DeliverySuccess() {
       });
 
       return { name: h.name, subRegional: h.subRegional, mediasTotal, mediasD0, mediasMesTotal, mediasMesD0, drivers: driversFinal };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    }).filter(h => h.drivers.length > 0).sort((a, b) => a.name.localeCompare(b.name));
 
     return { colSemanasFiltradas, colMeses, hubsData };
-  }, [rawData, permittedHubsSet, selectedRegs, selectedHubs, deferredSearchTerm, SANITIZED_REGIONAL_MAP, semanaFilter, mesFilter, veiculoFilter]);
+  }, [rawData, permittedHubsSet, selectedRegs, selectedHubs, deferredSearchTerm, SANITIZED_REGIONAL_MAP, semanaFilter, mesFilter, veiculoFilter, cadastroMap, driverViewMode, selectedClassificacao]);
 
   // =========================================================
   // MOTOR 2: VISÃO KPIs HUB + OFERTAS
@@ -503,7 +560,6 @@ export default function DeliverySuccess() {
         return aggs[hub].timeData[timeKey];
     };
 
-    // 1. Processa a Base PCP (Total Carregado, DS, Reut, etc)
     if (baseData && baseData.length > 1) {
       for (let i = 1; i < baseData.length; i++) {
         const row = baseData[i];
@@ -545,14 +601,14 @@ export default function DeliverySuccess() {
 
         const td = initAgg(hub, subRegional, timeKey, timeSort);
         
-        const carregados = parseNumFast(row[4]); // E: Pacotes Carregados
-        const entregues = parseNumFast(row[5]);  // F: Pacotes Entregues
-        const dsD0 = parseNumFast(row[21]); // V
-        const reut = parseNumFast(row[12]); // M
-        const spr = parseNumFast(row[17]);  // R
-        const totalCarregado = parseNumFast(row[6]); // G
-        const driversUnicos = parseNumFast(row[7]); // H
-        const atPiso = parseNumFast(row[23]); // X
+        const carregados = parseNumFast(row[4]); 
+        const entregues = parseNumFast(row[5]);  
+        const dsD0 = parseNumFast(row[21]); 
+        const reut = parseNumFast(row[12]); 
+        const spr = parseNumFast(row[17]);  
+        const totalCarregado = parseNumFast(row[6]); 
+        const driversUnicos = parseNumFast(row[7]); 
+        const atPiso = parseNumFast(row[23]); 
 
         if (carregados !== null) { td.sumE += carregados; }
         if (entregues !== null) { td.sumF += entregues; }
@@ -565,20 +621,18 @@ export default function DeliverySuccess() {
       }
     }
 
-// 2. Processa a Base de Ofertas (Leitura Matricial a partir da Coluna G)
     if (ofertasData && ofertasData.length > 0) {
-      let headersOfertas = []; //  O Gabarito de datas que vai mudar a cada mês lido
+      let headersOfertas = []; 
 
       for (let i = 0; i < ofertasData.length; i++) {
         const row = ofertasData[i];
         
-        // DETECTA CABEÇALHO: Se a linha for o cabeçalho do mês, atualiza o gabarito e pula!
         if (String(row[0] || "").toUpperCase().includes("DRIVER ID")) {
             headersOfertas = row;
             continue; 
         }
 
-        const hubRaw = String(row[4] || "").trim(); // Coluna E (Índice 4)
+        const hubRaw = String(row[4] || "").trim(); 
         const hub = padronizarHubLocal(hubRaw);
         const cleanHubName = sanitizeHubName(hub);
 
@@ -588,14 +642,13 @@ export default function DeliverySuccess() {
         if (selectedRegsSet.size > 0 && !selectedRegsSet.has(subRegional)) continue;
         if (selectedHubsSet.size > 0 && !selectedHubsSet.has(hub)) continue;
 
-        const modal = String(row[1] || "").toUpperCase(); // Coluna B (Índice 1)
+        const modal = String(row[1] || "").toUpperCase(); 
         const VALID_STATUS = ["AM", "AM OU SD", "PM", "SD"];
 
         for (let k = 6; k < row.length; k++) {
           const val = String(row[k] || "").trim().toUpperCase();
           
           if (VALID_STATUS.includes(val)) {
-            // Lê as datas usando o gabarito exato do mês que está sendo lido
             const dateStr = String(headersOfertas[k] || "").trim();
             const isoDate = parseUniversalDate(dateStr);
             
@@ -604,7 +657,6 @@ export default function DeliverySuccess() {
             const dObj = new Date(isoDate);
             if (isNaN(dObj.getTime())) continue;
 
-            // Filtros de Tempo Globais
             if (dataInicioObj && dObj < dataInicioObj) continue;
             if (dataFimObj && dObj > dataFimObj) continue;
             if (mesFilter && String(dObj.getMonth() + 1).padStart(2, '0') !== mesFilter) continue;
@@ -672,6 +724,101 @@ export default function DeliverySuccess() {
     return { timeColumns, hubsData };
   }, [baseData, ofertasData, hubTimeView, selectedRegs, selectedHubs, permittedHubsSet, SANITIZED_REGIONAL_MAP, semanaFilter, mesFilter, dataInicio, dataFim]);
 
+  const handleFileUpload = async (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    if (!hubUpload) {
+      alert("Por favor, selecione para qual HUB você está enviando esta base (no seletor azul).");
+      event.target.value = null;
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      let allExtractedData = [];
+
+      const readFileAsText = (file) => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = (e) => reject(e);
+          reader.readAsText(file, 'utf-8');
+        });
+      };
+
+      const parseCSVLine = (line, separator) => {
+         const result = [];
+         let cur = '';
+         let inQuotes = false;
+         for (let i = 0; i < line.length; i++) {
+             const char = line[i];
+             if (char === '"') inQuotes = !inQuotes;
+             else if (char === separator && !inQuotes) {
+                 result.push(cur);
+                 cur = '';
+             } else {
+                 cur += char;
+             }
+         }
+         result.push(cur);
+         return result;
+      };
+
+      for (let f = 0; f < files.length; f++) {
+        const text = await readFileAsText(files[f]);
+        const rows = text.split('\n');
+        if (rows.length < 2) continue; 
+
+        const headerLine = rows[0];
+        const sep = headerLine.split(';').length > headerLine.split(',').length ? ';' : ','; 
+
+        for(let i = 1; i < rows.length; i++) {
+            if(!rows[i].trim()) continue;
+            
+            const cols = parseCSVLine(rows[i], sep);
+            const clean = (val) => val ? String(val).trim().replace(/(^"|"$)/g, '') : '';
+            
+            const driverId = clean(cols[0]); 
+            if(!driverId || isNaN(Number(driverId))) continue;
+
+            allExtractedData.push({
+               driverId: driverId,
+               nome: clean(cols[1]),       
+               telefone: clean(cols[8]),   
+               cpf: clean(cols[10]),       
+               placa: clean(cols[45]),     
+               status: clean(cols[51]),    
+               hub: hubUpload              
+            });
+        }
+      }
+
+      const uniqueDataMap = new Map();
+      allExtractedData.forEach(item => {
+          uniqueDataMap.set(item.driverId, item); 
+      });
+      const finalDataToUpload = Array.from(uniqueDataMap.values());
+
+      if (finalDataToUpload.length === 0) {
+          alert("Nenhum dado válido encontrado. Verifique se os arquivos são as exportações corretas do SPX.");
+          return;
+      }
+
+      await uploadCadastroSPX(finalDataToUpload, hubUpload);
+      alert(`Sucesso! A base de cadastro do Hub ${hubUpload} foi atualizada com ${finalDataToUpload.length} motoristas únicos (lidos de ${files.length} arquivo(s))!`);
+      
+      getCadastroFrotaData().then(data => setCadastroRawData(data || []));
+
+    } catch (err) {
+      alert("Falha ao processar ou salvar base: " + err.message);
+    } finally {
+      setIsUploading(false);
+      event.target.value = null; 
+    }
+  };
+
   const exportarHubCSV = () => {
     if (!hubDownload) return alert("Por favor, selecione um Hub antes de baixar.");
     const activeColumns = driverViewMode.includes('MONTH') ? processedDrivers.colMeses : processedDrivers.colSemanasFiltradas;
@@ -681,7 +828,7 @@ export default function DeliverySuccess() {
     if (!hubRef) return alert("Nenhum dado filtrado correspondente para este Hub.");
 
     const colHeaders = activeColumns.map(c => c.label);
-    const headersCSV = ["Driver ID", "Veículo", "SubRegional", "HUB", "Visão Exportada", ...colHeaders];
+    const headersCSV = ["Driver ID", "Nome", "Veículo", "SubRegional", "HUB", "Visão Exportada", ...colHeaders];
     
     const linhasCSV = hubRef.drivers.map(d => {
       const notasArr = activeColumns.map(col => {
@@ -692,7 +839,7 @@ export default function DeliverySuccess() {
         else if (driverViewMode === 'MONTH_D0') val = d.scoresMesD0[col.id];
         return val !== null ? `${val}%` : "-";
       });
-      return [d.id, d.veiculo, d.regional, hubDownload, driverViewMode, ...notasArr].join(",");
+      return [d.id, d.nome, d.veiculo, d.regional, hubDownload, driverViewMode, ...notasArr].join(",");
     });
 
     const csvContent = "\uFEFF" + [headersCSV.join(","), ...linhasCSV].join("\n");
@@ -725,6 +872,7 @@ export default function DeliverySuccess() {
       const mesNome = MESES.find(m => m.value === mesFilter)?.label;
       if (mesNome) tags.push(`Mês: ${mesNome}`);
     }
+    if (selectedClassificacao !== 'ALL') tags.push(`DS: ${selectedClassificacao}`);
     if (dataInicio || dataFim) tags.push('Filtro Diário');
 
     if (tags.length === 0) return "Nenhum filtro ativo";
@@ -837,7 +985,7 @@ export default function DeliverySuccess() {
                 </div>
             </div>
 
-            {/* LINHA 2 DE FILTROS: TEMPO */}
+            {/* LINHA 2 DE FILTROS: TEMPO & CLASSIFICAÇÃO */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-2">
                 <div className="md:col-span-3 flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarDays size={12}/> 4. Semana</label>
@@ -862,17 +1010,21 @@ export default function DeliverySuccess() {
                     </select>
                 </div>
                 <div className="md:col-span-3 flex flex-col gap-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarCheck size={12}/> 6. Data Início</label>
-                    <input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><Target size={12}/> 6. Classificação DS</label>
+                    <select
+                      value={selectedClassificacao}
+                      onChange={(e) => setSelectedClassificacao(e.target.value)}
                       className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
-                    />
+                    >
+                      <option value="ALL">Qualquer DS</option>
+                      <option value="VERDE">Melhores </option>
+                      <option value="AMARELO">Risco (SOMENTE PARA DS TOTAL)</option>
+                      <option value="VERMELHO">Ofensores </option>
+                    </select>
                 </div>
                 <div className="md:col-span-3 flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1 flex-wrap">
-                       <CalendarCheck size={12} className="shrink-0"/> 7. Data Fim <span className="text-[#EE4D2D] normal-case text-[9px] font-bold ml-auto">(Apenas p/ Aba 2)</span>
+                       <CalendarCheck size={12} className="shrink-0"/> 7. Data Fim <span className="text-[#EE4D2D] normal-case text-[9px] font-bold ml-auto">(Apenas Aba 2)</span>
                     </label>
                     <input
                       type="date"
@@ -884,32 +1036,48 @@ export default function DeliverySuccess() {
             </div>
             
             {/* BANNER DE STORYTELLING */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 mt-2">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 mt-2">
               <div className="flex gap-3 items-start">
                 <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
-                  <Users size={16} />
+                  <Upload size={16} />
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <h4 className="text-xs font-black text-[#113366] dark:text-blue-400 uppercase tracking-wider">Visão 1: Performance de Condutores</h4>
+                  <h4 className="text-xs font-black text-[#113366] dark:text-blue-400 uppercase tracking-wider">Origem & Atualização</h4>
                   <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed mt-1">
-                    Focado no microgerenciamento. A nota do Hub exibida na primeira aba é a <strong>Média Simples</strong> de todos os motoristas. O algoritmo não avalia o tamanho da rota (se o condutor levou 10 ou 100 pacotes, o peso da nota dele na média será exatamente o mesmo).
+                    Para exibir os nomes e manter a base em dia, acesse o <strong>SPX</strong> (<em>Gestão de Equipe &gt; Perfil de motorista &gt; Exportar</em>). Selecione o Hub no painel abaixo e clique em <strong>Importar SPX</strong>.
+                    <br/><br/>
+                    <span className="text-[10px] bg-slate-200 dark:bg-gray-800 text-slate-600 dark:text-gray-300 px-2 py-0.5 rounded font-bold">
+                      Uso do Banco de Dados: {((cadastroMap.size / 1400000) * 100).toFixed(2).replace('.', ',')}% (Capacidade para 1.4M de condutores)
+                    </span>
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+              <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
+                <div className="p-2 bg-slate-200 dark:bg-gray-800 text-slate-700 dark:text-slate-300 rounded-lg shrink-0">
+                  <Users size={16} />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <h4 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Visão 1: Condutores</h4>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed mt-1">
+                    Focado no microgerenciamento. A nota do Hub exibida na primeira aba é a <strong>Média Simples</strong> de todos os motoristas. O algoritmo não avalia o tamanho da rota.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
                 <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
                   <Database size={16} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <h4 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Visão 2: KPIs Globais do Station</h4>
+                  <h4 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Visão 2: KPIs do Station</h4>
                   <p className="text-xs text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-                    Focado no resultado oficial. O DS Total aqui é a <strong>Média Ponderada</strong>, calculada somando a volumetria bruta de pacotes (<em className="text-slate-600 dark:text-gray-300">Entregues ÷ Carregados</em>) da própria base de controle de PCP da malha. Essa é a métrica real do Hub, livre de distorções.
+                    Focado no resultado oficial. O DS Total aqui é a <strong>Média Ponderada</strong>, calculada somando a volumetria bruta de pacotes (<em className="text-slate-600 dark:text-gray-300">Entregues ÷ Carregados</em>).
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-3 items-start border-t md:border-t-0 md:border-l border-slate-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+              <div className="flex gap-3 items-start border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-gray-700 pt-4 lg:pt-0 lg:pl-6">
                 <div className="p-2 bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] rounded-lg shrink-0">
                   <Target size={16} />
                 </div>
@@ -969,21 +1137,45 @@ export default function DeliverySuccess() {
               </button>
             </div>
 
-            <div className={`flex items-center gap-3 bg-white dark:bg-[#1f232d] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 transition-opacity ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-              <select
-                value={hubDownload}
-                onChange={(e) => setHubDownload(e.target.value)}
-                className="bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg py-2 px-3 text-[11px] font-bold outline-none cursor-pointer min-w-[200px]"
-              >
-                <option value="">Selecione o Hub para Download...</option>
-                {processedDrivers.hubsData.map(h => <option key={`dl-${h.name}`} value={h.name}>{h.name}</option>)}
-              </select>
-              <button
-                onClick={exportarHubCSV}
-                className="flex items-center gap-1.5 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-colors shadow-sm shrink-0"
-              >
-                <Download size={14} /> Baixar CSV
-              </button>
+            <div className={`flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto transition-opacity ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded-xl border border-blue-200 dark:border-blue-800 w-full md:w-auto">
+                <select 
+                  value={hubUpload} 
+                  onChange={(e) => setHubUpload(e.target.value)}
+                  disabled={isUploading}
+                  className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold py-2 px-3 rounded-lg border border-blue-200 dark:border-blue-800 outline-none cursor-pointer flex-1 min-w-[150px] text-[#113366] dark:text-blue-400 disabled:opacity-50"
+                >
+                  <option value="">1. HUB do Upload...</option>
+                  {listHubs.map(h => <option key={`ul-${h}`} value={h}>{h}</option>)}
+                </select>
+                
+                <input type="file" accept=".csv" id="spx-upload-ds" className="hidden" onChange={handleFileUpload} disabled={isUploading} multiple />
+                <button 
+                  onClick={() => document.getElementById('spx-upload-ds').click()}
+                  disabled={isUploading}
+                  className="flex items-center justify-center gap-1.5 bg-[#113366] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all shadow-sm shrink-0 w-full md:w-auto disabled:opacity-50"
+                >
+                  {isUploading ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
+                  {isUploading ? 'Enviando...' : '2. Importar SPX'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#15171e] p-1.5 rounded-xl border border-slate-200 dark:border-gray-700 w-full md:w-auto">
+                <select
+                  value={hubDownload}
+                  onChange={(e) => setHubDownload(e.target.value)}
+                  className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg py-2 px-3 text-[11px] font-bold outline-none cursor-pointer flex-1 min-w-[150px]"
+                >
+                  <option value="">Baixar Base Station...</option>
+                  {processedDrivers.hubsData.map(h => <option key={`dl-${h.name}`} value={h.name}>{h.name}</option>)}
+                </select>
+                <button
+                  onClick={exportarHubCSV}
+                  className="flex items-center justify-center gap-1.5 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-colors shadow-sm shrink-0 w-full md:w-auto"
+                >
+                  <Download size={14} /> Baixar CSV
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1003,7 +1195,7 @@ export default function DeliverySuccess() {
                 <table className="w-full border-collapse text-center">
                     <thead className={driverViewMode.includes('MONTH') ? (driverViewMode === 'MONTH_TOTAL' ? 'bg-indigo-600 text-white' : 'bg-orange-500 text-white') : (driverViewMode === 'TOTAL' ? 'bg-[#113366] text-white' : 'bg-[#EE4D2D] text-white')}>
                     <tr className="tracking-widest text-[10px] uppercase font-black sticky top-0 z-20">
-                        <th className="p-4 text-left min-w-[250px] shadow-sm">SUBREGIONAL / STATION / DRIVER</th>
+                        <th className="p-4 text-left min-w-[200px] shadow-sm">SUBREGIONAL / STATION / DRIVER</th>
                         <th className="p-4 shadow-sm">VEÍCULO</th>
                         {activeColumns.map(col => (
                           <th key={col.id} className="p-4 min-w-[85px] bg-white/10 border-l border-white/20 shadow-sm">{col.label}</th>
@@ -1013,7 +1205,7 @@ export default function DeliverySuccess() {
 
                     <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-black text-sm relative z-0">
                     {processedDrivers.hubsData.length === 0 ? (
-                        <tr><td colSpan={activeColumns.length + 2} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado.</td></tr>
+                        <tr><td colSpan={activeColumns.length + 2} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado com esse filtro de classificação.</td></tr>
                     ) : (
                         processedDrivers.hubsData.map(hub => {
                         const isOpen = !!expandedHubs[hub.name];
@@ -1043,8 +1235,11 @@ export default function DeliverySuccess() {
 
                             {isOpen && hub.drivers.map(driver => (
                                 <tr key={`${hub.name}-${driver.id}`} className="bg-white dark:bg-[#15171e] text-xs text-slate-600 dark:text-gray-400 transition-colors hover:bg-slate-50">
-                                  <td className="p-3 text-left pl-12 font-black flex items-center gap-2 text-slate-800 dark:text-gray-200 border-r border-slate-100 dark:border-gray-800">
+                                  <td className="px-4 py-2 text-left pl-12 sticky left-0 z-20 bg-white dark:bg-[#15171e] border-r border-slate-100 dark:border-gray-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                    <div className="flex items-center gap-1.5 font-black text-[#113366] dark:text-blue-400 text-[12px] truncate max-w-[190px] leading-tight">
                                       <User size={13} className="text-slate-400 shrink-0" /> {driver.id}
+                                    </div>
+                                    {driver.nome && <div className="text-[10px] text-slate-500 font-bold truncate max-w-[190px] leading-tight pl-5" title={driver.nome}>{driver.nome}</div>}
                                   </td>
                                   <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 whitespace-nowrap">
                                       <span className="flex items-center justify-center gap-1"><Truck size={12}/> {driver.veiculo}</span>
@@ -1113,7 +1308,6 @@ export default function DeliverySuccess() {
                   <table className="w-full border-collapse text-center">
                       <thead className="bg-[#113366] text-white">
                         <tr className="tracking-widest text-[10px] uppercase font-black">
-                            {/* Canto superior esquerdo: Fixado no Topo E na Esquerda (Z-50) */}
                             <th className="p-4 text-left shadow-sm min-w-[250px] sticky left-0 top-0 bg-[#113366] z-50 border-r border-white/20">
                                 STATION (HUB) / KPI
                             </th>
@@ -1121,7 +1315,6 @@ export default function DeliverySuccess() {
                                 VISÃO
                             </th>
                             
-                            {/* Datas na horizontal: Fixadas apenas no Topo (Z-40) */}
                             {processedHubKPIs.timeColumns.map(col => (
                                <th key={col.id} className="p-4 shadow-sm border-r border-white/20 min-w-[85px] sticky top-0 bg-[#113366] z-40">
                                    {col.label}

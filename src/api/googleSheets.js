@@ -860,3 +860,89 @@ export const getOfertasDriversData = async () => {
         return [];
     }
 };
+
+
+
+
+// ============================================================================
+// UPLOAD E ATUALIZAÇÃO DA BASE DE CADASTRO SPX (Rodízio)
+// ============================================================================
+export const uploadCadastroSPX = async (dadosNovos, hubAlvo) => {
+    try {
+      const token = localStorage.getItem("spiToken");
+      if (!token) throw new Error("Usuário não autenticado.");
+
+      const idPlanilha = import.meta.env.VITE_PLANILHA_CADASTRO_FROTA;
+      if (!idPlanilha) throw new Error("Variável VITE_PLANILHA_CADASTRO_FROTA não encontrada no .env");
+
+      // 1. Lê a base atual inteira
+      const resGet = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/CADASTRO!A:G`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      
+      let baseAtual = [];
+      if (resGet.ok) {
+         const json = await resGet.json();
+         baseAtual = json.values || [];
+      }
+
+      const cabecalho = baseAtual.length > 0 ? baseAtual[0] : ["Driver ID", "Nome", "Telefone", "CPF", "Placa", "Status SPX", "Hub"];
+      
+      // 2. Filtra a base, removendo TODOS os dados antigos do HUB que estamos atualizando
+      const baseLimpa = baseAtual.slice(1).filter(row => {
+          const rowHub = String(row[6] || "").trim(); // Coluna G (índice 6) é o Hub
+          return rowHub !== hubAlvo;
+      });
+
+      // 3. Monta as linhas novas com o Array limpo que veio do React
+      const linhasNovas = dadosNovos.map(d => [d.driverId, d.nome, d.telefone, d.cpf, d.placa, d.status, d.hub]);
+      
+      // 4. Junta tudo (Cabeçalho + Base Antiga de outros hubs + Base Nova do hub atual)
+      const baseFinal = [cabecalho, ...baseLimpa, ...linhasNovas];
+
+      // 5. Limpa a aba inteira no Sheets (para evitar que sobrem dados velhos no fundo)
+      await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/CADASTRO!A:G:clear`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      // 6. Insere a Base Atualizada
+      const resUpdate = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/CADASTRO!A1:G?valueInputOption=USER_ENTERED`, {
+          method: "PUT",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ values: baseFinal })
+      });
+
+      if (!resUpdate.ok) throw new Error("Falha ao salvar a nova base no Google Sheets.");
+      
+      return { success: true, totalInserido: linhasNovas.length };
+    } catch (error) {
+      console.error("Erro Crítico no Upload SPX:", error);
+      throw error;
+    }
+};
+
+
+
+
+// ============================================================================
+// BUSCA A BASE DE CADASTRO SPX (Para pegar nomes e placas)
+// ============================================================================
+export const getCadastroFrotaData = async () => {
+    try {
+        const token = localStorage.getItem("spiToken");
+        const idPlanilha = import.meta.env.VITE_PLANILHA_CADASTRO_FROTA;
+        if (!token || !idPlanilha) return [];
+
+        const res = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${idPlanilha}/values/CADASTRO!A:G`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        
+        if (!res.ok) return [];
+        const json = await res.json();
+        return json.values || [];
+    } catch (error) {
+        console.error("Erro ao buscar cadastro da frota:", error);
+        return [];
+    }
+};
