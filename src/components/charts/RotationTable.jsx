@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin, ChevronDown, Download, Database, Lightbulb, TrendingUp, TrendingDown, Minus, Upload, Loader2, Target } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Search, CheckCircle, AlertTriangle, XCircle, Slash, Truck, ChevronLeft, ChevronRight, ArrowUpDown, Filter, CalendarDays, Calendar, MapPin, ChevronDown, Download, Database, Lightbulb, TrendingUp, TrendingDown, Minus, Upload, Loader2, Target, RefreshCw } from 'lucide-react';
 import { getRodagemData, getDeliverySuccessData, uploadCadastroSPX, getCadastroFrotaData } from '../../api/googleSheets'; 
 import { getHubsPermitidos } from '../../constants/regionais';
 
@@ -42,8 +42,6 @@ export default function RotationTable() {
   const [selectedTrips, setSelectedTrips] = useState('ALL'); 
   const [selectedClassificacao, setSelectedClassificacao] = useState('ALL'); 
   
-  // LÓGICA D-1: O painel sempre inicia olhando para a "data de ontem".
-  // Isso evita que no dia 01 de cada mês a tela fique vazia procurando uma aba que ainda não existe.
   const dataReferencia = new Date();
   dataReferencia.setDate(dataReferencia.getDate() - 1);
 
@@ -60,30 +58,31 @@ export default function RotationTable() {
 
   const regEscolhida = localStorage.getItem("selectedRegional");
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const monthStr = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][targetMonth - 1];
-        const tabName = `${monthStr}-${targetYear}`;
-        
-        const [dataRodizio, dataDS, dataCadastro] = await Promise.all([
-            getRodagemData(tabName),
-            getDeliverySuccessData().catch(() => []),
-            getCadastroFrotaData().catch(() => []) 
-        ]);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const monthStr = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'][targetMonth - 1];
+      const tabName = `${monthStr}-${targetYear}`;
+      
+      const [dataRodizio, dataDS, dataCadastro] = await Promise.all([
+          getRodagemData(tabName),
+          getDeliverySuccessData().catch(() => []),
+          getCadastroFrotaData().catch(() => []) 
+      ]);
 
-        setRawData(dataRodizio || []);
-        setDsRawData(dataDS || []);
-        setCadastroRawData(dataCadastro || []);
-      } catch (error) {
-        console.error("Erro ao carregar rodízio, DS ou Cadastro:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+      setRawData(dataRodizio || []);
+      setDsRawData(dataDS || []);
+      setCadastroRawData(dataCadastro || []);
+    } catch (error) {
+      console.error("Erro ao carregar rodízio, DS ou Cadastro:", error);
+    } finally {
+      setLoading(false);
+    }
   }, [targetMonth, targetYear]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const cadastroMap = useMemo(() => {
     const map = new Map();
@@ -330,28 +329,41 @@ export default function RotationTable() {
     return { headers: activeDateCols, rows: finalRows, availableTrips: availableTripsList, wksPast };
   }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedHubs, selectedModal, selectedStatus, selectedTrips, selectedClassificacao, sortConfig, regEscolhida, dsMap, cadastroMap]);
 
-
-  // MOTOR DE CÁLCULO PARA OS CARDS E CURVA ABC
+// MOTOR DE MÉDIAS DIÁRIAS (Tornando os cards proporcionais ao período selecionado)
   const summaryMetrics = useMemo(() => {
     let rodou = 0;
     let recusou = 0;
     let dispo = 0;
+    let indisp = 0;
 
-    // Varre os motoristas que estão visíveis na tela e os dias ativos no filtro
     matrix.rows.forEach(row => {
       matrix.headers.forEach(col => {
         const st = row.days[col.label];
         if (st === 'RODOU') rodou++;
         else if (st === 'RECUSOU') recusou++;
         else if (st === 'DISPO') dispo++;
+        else indisp++; // Tudo que não for ação ativa é Indisponível
       });
     });
 
-    const totalPossivel = rodou + recusou + dispo;
-    const taxaUtilizacao = totalPossivel > 0 ? ((rodou / totalPossivel) * 100).toFixed(1) : 0;
-    const taxaRecusa = totalPossivel > 0 ? ((recusou / totalPossivel) * 100).toFixed(1) : 0;
+    const numDias = matrix.headers.length || 1; // Evita divisão por zero
+    
+    const avgRodou = (rodou / numDias).toFixed(1).replace('.0', '');
+    const avgRecusou = (recusou / numDias).toFixed(1).replace('.0', '');
+    const avgDispo = (dispo / numDias).toFixed(1).replace('.0', '');
+    const avgIndisp = (indisp / numDias).toFixed(1).replace('.0', '');
 
-    // Isola os Top 20% que mais rodaram no período (Curva A)
+    const acionamentos = rodou + recusou + dispo;
+    const totalGeral = acionamentos + indisp;
+
+    const taxaUtilizacao = acionamentos > 0 ? ((rodou / acionamentos) * 100).toFixed(1) : 0;
+    const taxaRecusa = acionamentos > 0 ? ((recusou / acionamentos) * 100).toFixed(1) : 0;
+    
+    // Taxa de Ociosidade (Disponíveis sobre o total de acionamentos ativos)
+    const taxaOciosidade = acionamentos > 0 ? ((dispo / acionamentos) * 100).toFixed(1) : 0;
+    // Taxa de Indisponibilidade (Indisponíveis sobre o tamanho total da frota do painel)
+    const taxaIndisp = totalGeral > 0 ? ((indisp / totalGeral) * 100).toFixed(1) : 0;
+
     const sorted = [...matrix.rows].sort((a,b) => b.total - a.total).filter(d => d.total > 0);
     const topCount = Math.max(1, Math.floor(sorted.length * 0.20));
     const topDrivers = sorted.slice(0, topCount);
@@ -367,7 +379,11 @@ export default function RotationTable() {
     
     const dsMedioTop = dsQtd > 0 ? (dsSoma / dsQtd).toFixed(1) : null;
 
-    return { rodou, recusou, dispo, taxaUtilizacao, taxaRecusa, topCount, dsMedioTop };
+    return { 
+      avgRodou, avgRecusou, avgDispo, avgIndisp, 
+      taxaUtilizacao, taxaRecusa, taxaOciosidade, taxaIndisp, 
+      topCount, dsMedioTop 
+    };
   }, [matrix]);
 
   useEffect(() => {
@@ -477,7 +493,8 @@ export default function RotationTable() {
       await uploadCadastroSPX(finalDataToUpload, hubUpload);
       alert(`Sucesso! A base de cadastro do Hub ${hubUpload} foi atualizada com ${finalDataToUpload.length} motoristas únicos (lidos de ${files.length} arquivo(s))!`);
       
-      getCadastroFrotaData().then(data => setCadastroRawData(data || []));
+      // Força a re-leitura do Google Sheets no exato momento
+      fetchData();
 
     } catch (err) {
       alert("Falha ao processar ou salvar base: " + err.message);
@@ -592,7 +609,7 @@ export default function RotationTable() {
           <div className="p-6 pt-0 flex flex-col gap-6 animate-in slide-in-from-top-4 duration-300">
             <div className="h-px w-full bg-slate-100 dark:bg-gray-800 mb-2"></div>
             
-           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
               
               <div className="flex gap-3 items-start">
                 <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-[#113366] dark:text-blue-400 rounded-lg shrink-0">
@@ -635,7 +652,7 @@ export default function RotationTable() {
                     A matriz reflete exatamente os filtros aplicados (Modal, Status, Classificação).<br/><br/>
                     As colunas de <strong>Histórico (W-1 a W-3)</strong> mostram o DS recente. A coluna de <strong>Evolução</strong> compara a semana atual focada com a média destas 3 anteriores.
                     <br/><br/>
-                    <span className="italic text-[11px] text-slate-800">
+                    <span className="italic text-[9px] text-slate-400">
                       Algoritmo de DS por Matheus Alcântara - SPO3
                     </span>
                   </p>
@@ -649,7 +666,7 @@ export default function RotationTable() {
                 <div className="flex flex-col gap-1">
                   <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider">Entendendo a Curva ABC</h4>
                   <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium leading-relaxed">
-                    O card inferior calcula a qualidade do seu "núcleo duro" de condutores.<br/><br/>
+                    O card inferior calcula a qualidade da sua <strong>base principal</strong> de condutores.<br/><br/>
                     O sistema isola os <strong>Top 20%</strong> que mais trabalharam no período e mostra a nota de DS deles. Responde à pergunta central gerencial: <em>"Estou priorizando escalas para os motoristas certos?"</em>
                   </p>
                 </div>
@@ -668,14 +685,39 @@ export default function RotationTable() {
           </div>
           
           <div className="flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto">
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#15171e] p-2 rounded-xl border border-slate-200 dark:border-gray-700 w-full md:w-auto">
+              <button 
+                onClick={fetchData}
+                className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2.5 rounded-lg text-[11px] font-black uppercase transition-all shadow-sm shrink-0 w-full md:w-auto"
+                title="Recarregar dados da planilha"
+              >
+                <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Atualizar
+              </button>
+
+              <select 
+                value={hubDownload} 
+                onChange={(e) => setHubDownload(e.target.value)}
+                className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-slate-200 dark:border-gray-700 outline-none cursor-pointer flex-1 min-w-[150px]"
+              >
+                <option value="">Baixar Station...</option>
+                {hubsDisponiveis.map(h => <option key={`dl-${h}`} value={h}>{h}</option>)}
+              </select>
+              <button 
+                onClick={exportarHubCSV}
+                className="flex items-center justify-center gap-1.5 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2.5 rounded-lg text-[11px] font-black uppercase transition-all shadow-sm shrink-0 w-full md:w-auto"
+              >
+                <Download size={14}/> CSV
+              </button>
+            </div>
+
             <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 p-2 rounded-xl border border-blue-200 dark:border-blue-800 w-full md:w-auto">
               <select 
                 value={hubUpload} 
                 onChange={(e) => setHubUpload(e.target.value)}
                 disabled={isUploading}
-                className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-blue-200 dark:border-blue-800 outline-none cursor-pointer flex-1 min-w-[180px] text-[#113366] dark:text-blue-400 disabled:opacity-50"
+                className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-blue-200 dark:border-blue-800 outline-none cursor-pointer flex-1 min-w-[150px] text-[#113366] dark:text-blue-400 disabled:opacity-50"
               >
-                <option value="">1. HUB do Upload (SPX)...</option>
+                <option value="">HUB Upload...</option>
                 {hubsDisponiveis.map(h => <option key={`ul-${h}`} value={h}>{h}</option>)}
               </select>
               
@@ -686,24 +728,7 @@ export default function RotationTable() {
                 className="flex items-center justify-center gap-1.5 bg-[#113366] hover:bg-blue-900 text-white px-4 py-2.5 rounded-lg text-[11px] font-black uppercase transition-all shadow-sm shrink-0 w-full md:w-auto disabled:opacity-50"
               >
                 {isUploading ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
-                {isUploading ? 'Enviando...' : '2. Importar SPX'}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#15171e] p-2 rounded-xl border border-slate-200 dark:border-gray-700 w-full md:w-auto">
-              <select 
-                value={hubDownload} 
-                onChange={(e) => setHubDownload(e.target.value)}
-                className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-slate-200 dark:border-gray-700 outline-none cursor-pointer flex-1 min-w-[180px]"
-              >
-                <option value="">Baixar Base Station...</option>
-                {hubsDisponiveis.map(h => <option key={`dl-${h}`} value={h}>{h}</option>)}
-              </select>
-              <button 
-                onClick={exportarHubCSV}
-                className="flex items-center justify-center gap-1.5 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2.5 rounded-lg text-[11px] font-black uppercase transition-all shadow-sm shrink-0 w-full md:w-auto"
-              >
-                <Download size={14}/> Baixar CSV
+                {isUploading ? 'Enviando...' : 'Importar SPX'}
               </button>
             </div>
           </div>
@@ -887,10 +912,9 @@ export default function RotationTable() {
         )}
       </div>
 
-
-    '{/* 🔥 CARDS DE RESUMO OPERACIONAL E CURVA ABC */}
+      {/* CARDS DE RESUMO OPERACIONAL E CURVA ABC */}
       {matrix.rows.length > 0 && selectedHubs.length > 0 && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-2 animate-in fade-in slide-in-from-bottom-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-2 animate-in fade-in slide-in-from-bottom-4">
           
           {/* Card 1: Engajamento / Rodou */}
           <div className="bg-white dark:bg-[#1f232d] p-4 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative overflow-hidden">
@@ -904,8 +928,11 @@ export default function RotationTable() {
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Viagens (Rodou)</span>
             </div>
             <div className="flex items-end gap-3 relative z-10">
-                <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{summaryMetrics.rodou}</span>
-                <div className="flex flex-col mb-0.5">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{summaryMetrics.avgRodou}</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">MÉDIA / DIA</span>
+                </div>
+                <div className="flex flex-col mb-0.5 ml-auto">
                   <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5">
                       <TrendingUp size={10} /> {summaryMetrics.taxaUtilizacao}% Ocupação
                   </span>
@@ -925,8 +952,11 @@ export default function RotationTable() {
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Recusas na Base</span>
             </div>
             <div className="flex items-end gap-3 relative z-10">
-                <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{summaryMetrics.recusou}</span>
-                <div className="flex flex-col mb-0.5">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{summaryMetrics.avgRecusou}</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">MÉDIA / DIA</span>
+                </div>
+                <div className="flex flex-col mb-0.5 ml-auto">
                   <span className={`text-[10px] font-bold flex items-center gap-0.5 ${summaryMetrics.taxaRecusa > 5 ? 'text-[#D0011B]' : 'text-slate-400'}`}>
                       <TrendingDown size={10} /> {summaryMetrics.taxaRecusa}% Taxa Geral
                   </span>
@@ -946,16 +976,43 @@ export default function RotationTable() {
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ociosidade Ativa</span>
             </div>
             <div className="flex items-end gap-3 relative z-10">
-                <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{summaryMetrics.dispo}</span>
-                <div className="flex flex-col mb-0.5">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase">
-                      Disp. sem Rota
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{summaryMetrics.avgDispo}</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">MÉDIA / DIA</span>
+                </div>
+                <div className="flex flex-col mb-0.5 ml-auto">
+                  <span className="text-[10px] font-bold text-yellow-500 flex items-center gap-0.5">
+                      <AlertTriangle size={10} /> {summaryMetrics.taxaOciosidade}% Base Ativa
                   </span>
                 </div>
             </div>
           </div>
 
-          {/* Card 4: Insight Curva ABC */}
+          {/* Card 4: Indisponíveis (Ocultos/Folgas) */}
+          <div className="bg-white dark:bg-[#1f232d] p-4 rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col relative overflow-hidden">
+            <div className="absolute -right-4 -top-4 text-slate-50 opacity-50 dark:opacity-5 transform rotate-12">
+                <Slash size={80} />
+            </div>
+            <div className="flex items-center gap-2 mb-2 relative z-10">
+                <div className="p-1.5 bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 rounded-md">
+                  <Slash size={14} strokeWidth={3} />
+                </div>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Indisponíveis</span>
+            </div>
+            <div className="flex items-end gap-3 relative z-10">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-[#113366] dark:text-white leading-none">{summaryMetrics.avgIndisp}</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">MÉDIA / DIA</span>
+                </div>
+                <div className="flex flex-col mb-0.5 ml-auto">
+                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-0.5">
+                      <Slash size={10} /> {summaryMetrics.taxaIndisp}% Frota Total
+                  </span>
+                </div>
+            </div>
+          </div>
+
+          {/* Card 5: Insight Curva ABC */}
           <div className="bg-gradient-to-br from-[#113366] to-blue-900 p-4 rounded-xl shadow-sm border border-[#113366] flex flex-col relative overflow-hidden">
             <div className="absolute -right-4 -top-4 text-white opacity-5 transform rotate-12">
                 <Target size={80} />
@@ -974,7 +1031,7 @@ export default function RotationTable() {
                       <span className="text-[10px] text-blue-200 font-bold uppercase mb-0.5">DS Médio</span>
                     </div>
                     <p className="text-[9px] text-blue-100/70 font-medium leading-tight mt-1">
-                      Qualidade D-0 do grupo (<strong className="text-white">Top 20%</strong>) que mais roda no período selecionado.
+                      Qualidade D-0 da base principal (<strong className="text-white">Top 20%</strong>) no período.
                     </p>
                   </>
                 ) : (
@@ -982,10 +1039,11 @@ export default function RotationTable() {
                 )}
             </div>
           </div>
+
         </div>
-      )}'
+      )}
 
-
+      {/* TABELA DE CALOR / MATRIZ */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden flex flex-col relative">
         <div className="overflow-auto custom-scrollbar w-full max-h-[55vh] min-h-[300px]">
           <table className="w-full border-collapse text-center">

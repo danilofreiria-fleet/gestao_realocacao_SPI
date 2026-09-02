@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useDeferredValue, useCallback } from 'react';
 import { getDeliverySuccessData, getBaseDSHubData, getOfertasDriversData, getCadastroFrotaData, uploadCadastroSPX } from '../api/googleSheets';
 import { getHubsPermitidos, MAPA_REGIONAL_COMPLETO } from '../constants/regionais';
-import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck, Users, LayoutDashboard, Layers, Eraser, Upload, Loader2 } from 'lucide-react';
+import { Database, Lightbulb, Target, Award, ChevronDown, ChevronRight, Download, Search, MapPin, Truck, User, AlertCircle, Check, Filter, Zap, CalendarDays, CalendarCheck, Users, LayoutDashboard, Layers, Eraser, Upload, Loader2, RefreshCw } from 'lucide-react';
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -84,13 +84,33 @@ export default function DeliverySuccess() {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   
-  const [selectedClassificacao, setSelectedClassificacao] = useState('ALL'); // 🔥 NOVO FILTRO
+  const [selectedClassificacao, setSelectedClassificacao] = useState('ALL');
 
   const dropdownRegRef = useRef(null);
   const dropdownRef = useRef(null);
   
   const currentRegional = localStorage.getItem("selectedRegional");
   const deferredSearchTerm = useDeferredValue(searchTerm);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [dataDS, dataBase, dataOfertas, dataCadastro] = await Promise.all([
+          getDeliverySuccessData(),
+          getBaseDSHubData(),
+          getOfertasDriversData().catch(() => []),
+          getCadastroFrotaData().catch(() => []) 
+      ]);
+      if (dataDS && dataDS.length > 1) setRawData(dataDS); 
+      if (dataBase && dataBase.length > 1) setBaseData(dataBase);
+      if (dataOfertas && dataOfertas.length > 1) setOfertasData(dataOfertas);
+      if (dataCadastro && dataCadastro.length > 1) setCadastroRawData(dataCadastro);
+    } catch (e) {
+      console.error("Erro ao carregar dados do Dashboard:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -108,27 +128,8 @@ export default function DeliverySuccess() {
   }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [dataDS, dataBase, dataOfertas, dataCadastro] = await Promise.all([
-            getDeliverySuccessData(),
-            getBaseDSHubData(),
-            getOfertasDriversData().catch(() => []),
-            getCadastroFrotaData().catch(() => []) 
-        ]);
-        if (dataDS && dataDS.length > 1) setRawData(dataDS); 
-        if (dataBase && dataBase.length > 1) setBaseData(dataBase);
-        if (dataOfertas && dataOfertas.length > 1) setOfertasData(dataOfertas);
-        if (dataCadastro && dataCadastro.length > 1) setCadastroRawData(dataCadastro);
-      } catch (e) {
-        console.error("Erro ao carregar dados do Dashboard:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   const cadastroMap = useMemo(() => {
     const map = new Map();
@@ -151,7 +152,6 @@ export default function DeliverySuccess() {
     return mes.charAt(0).toUpperCase() + mes.slice(1);
   };
 
-  // 🔥 RENDER SEMAFAFORO ATUALIZADO COM A COR AMARELA NO D-0
   const renderSemaforo = (val, isD0) => {
     if (val === null || val === undefined || val === '') return '-';
     const num = Number(val);
@@ -164,7 +164,7 @@ export default function DeliverySuccess() {
             {num}%
           </div>
         );
-      } else if (num >= 90) { // 🔥 COR AMARELA (RISCO) ENTRE 90 E 94.9%
+      } else if (num >= 90) { 
         return (
           <div className="flex items-center gap-1.5 justify-center text-yellow-600 dark:text-yellow-400 font-black">
             <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]"></div>
@@ -464,7 +464,7 @@ export default function DeliverySuccess() {
         return { id: d.id, nome: d.nome, veiculo: d.veiculo, regional: d.regional, scoresTotal, scoresD0, scoresMesTotal, scoresMesD0 };
       });
 
-      // 🔥 FILTRO DE CLASSIFICAÇÃO DS (Analisa a coluna mais recente visível)
+      // 🔥 FILTRO DE CLASSIFICAÇÃO DS
       if (selectedClassificacao !== 'ALL') {
           const colsToUse = driverViewMode.includes('MONTH') ? colMeses : colSemanasFiltradas;
           const refCol = colsToUse.length > 0 ? colsToUse[colsToUse.length - 1].id : null;
@@ -809,7 +809,7 @@ export default function DeliverySuccess() {
       await uploadCadastroSPX(finalDataToUpload, hubUpload);
       alert(`Sucesso! A base de cadastro do Hub ${hubUpload} foi atualizada com ${finalDataToUpload.length} motoristas únicos (lidos de ${files.length} arquivo(s))!`);
       
-      getCadastroFrotaData().then(data => setCadastroRawData(data || []));
+      fetchData();
 
     } catch (err) {
       alert("Falha ao processar ou salvar base: " + err.message);
@@ -853,7 +853,19 @@ export default function DeliverySuccess() {
     document.body.removeChild(link);
   };
 
-  if (loading) return <div className="p-10 text-center animate-pulse font-black text-[#113366] text-xl tracking-widest mt-20">CONSOLIDANDO DADOS DE DS E HUB...</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-in fade-in duration-300">
+        <Loader2 size={48} className="text-[#EE4D2D] animate-spin" />
+        <h2 className="text-xl font-black text-[#113366] dark:text-blue-400 uppercase tracking-widest animate-pulse text-center">
+          Carregando informações de DS...
+        </h2>
+        <p className="text-xs font-bold text-slate-400 text-center max-w-sm">
+          Estamos cruzando milhares de dados com a base de cadastros do SPX. Isso pode levar alguns segundos.
+        </p>
+      </div>
+    );
+  }
 
   const filteredRegsOptions = listRegs.filter(reg => sanitizeForSearch(reg).includes(sanitizeForSearch(regSearchTerm)));
   const filteredHubsOptions = listHubs.filter(hub => sanitizeForSearch(hub).includes(sanitizeForSearch(hubSearchTerm)));
@@ -955,7 +967,7 @@ export default function DeliverySuccess() {
                       <div className="absolute top-[100%] left-0 w-full bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-xl mt-1 shadow-xl z-50 max-h-64 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5">
                         <div className="p-1 sticky top-0 bg-white dark:bg-[#1f232d] z-10 flex flex-col gap-1 border-b border-slate-100 dark:border-gray-800">
                           <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} /><input type="text" placeholder="Buscar hub..." value={hubSearchTerm} onChange={(e) => setHubSearchTerm(e.target.value)} className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white text-xs font-bold pl-8 pr-2.5 py-2 rounded-lg border border-slate-200 dark:border-gray-700 outline-none focus:border-[#EE4D2D] transition-all"/></div>
-                          <div className="flex justify-between items-center px-1 py-1"><button type="button" onClick={handleSelectAllHubs} className="text-[10px] font-black uppercase text-[#EE4D2D] hover:text-[#D0011B] transition-colors">Selecionar Todos</button><button type="button" onClick={handleClearHubs} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors">Limpar Filtro</button></div>
+                          <div className="flex justify-between items-center px-1 py-1"><button type="button" onClick={handleSelectAllHubs} className="text-[10px] font-black uppercase text-[#EE4D2D] hover:text-[#D0011B] transition-colors">Selecionar Todas</button><button type="button" onClick={handleClearHubs} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors">Limpar Filtro</button></div>
                         </div>
                         {filteredHubsOptions.length === 0 ? (<div className="text-center p-4 text-xs font-bold text-slate-400">Nenhum HUB correspondente.</div>) : (
                           filteredHubsOptions.map(hub => {
@@ -985,7 +997,7 @@ export default function DeliverySuccess() {
                 </div>
             </div>
 
-            {/* LINHA 2 DE FILTROS: TEMPO & CLASSIFICAÇÃO */}
+            {/* LINHA 2 DE FILTROS: TEMPO E CLASSIFICACAO */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-2">
                 <div className="md:col-span-3 flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1"><CalendarDays size={12}/> 4. Semana</label>
@@ -1017,9 +1029,9 @@ export default function DeliverySuccess() {
                       className="w-full bg-slate-50 dark:bg-[#15171e] dark:text-white border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-3 text-sm font-bold outline-none cursor-pointer"
                     >
                       <option value="ALL">Qualquer DS</option>
-                      <option value="VERDE">Melhores </option>
-                      <option value="AMARELO">Risco (SOMENTE PARA DS TOTAL)</option>
-                      <option value="VERMELHO">Ofensores </option>
+                      <option value="VERDE">Melhores (Verde)</option>
+                      <option value="AMARELO">Risco (Amarelo)</option>
+                      <option value="VERMELHO">Ofensores (Vermelho)</option>
                     </select>
                 </div>
                 <div className="md:col-span-3 flex flex-col gap-2">
@@ -1047,7 +1059,7 @@ export default function DeliverySuccess() {
                     Para exibir os nomes e manter a base em dia, acesse o <strong>SPX</strong> (<em>Gestão de Equipe &gt; Perfil de motorista &gt; Exportar</em>). Selecione o Hub no painel abaixo e clique em <strong>Importar SPX</strong>.
                     <br/><br/>
                     <span className="text-[10px] bg-slate-200 dark:bg-gray-800 text-slate-600 dark:text-gray-300 px-2 py-0.5 rounded font-bold">
-                      Uso do Banco de Dados: {((cadastroMap.size / 1400000) * 100).toFixed(2).replace('.', ',')}% (Capacidade para 1.4M de condutores)
+                      Uso do Banco de Dados: {((cadastroMap.size / 1400000) * 100).toFixed(2).replace('.', ',')}% (Capacidade: 1.4M)
                     </span>
                   </p>
                 </div>
@@ -1138,7 +1150,15 @@ export default function DeliverySuccess() {
             </div>
 
             <div className={`flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto transition-opacity ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+              {/* UPLOAD DO SPX */}
               <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded-xl border border-blue-200 dark:border-blue-800 w-full md:w-auto">
+                <button
+                  onClick={fetchData}
+                  className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-[11px] font-black uppercase transition-all shadow-sm shrink-0 w-full md:w-auto"
+                  title="Recarregar dados da planilha"
+                >
+                  <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Atualizar
+                </button>
                 <select 
                   value={hubUpload} 
                   onChange={(e) => setHubUpload(e.target.value)}
