@@ -713,7 +713,7 @@ export default function RotationTable() {
                 value={hubUpload} 
                 onChange={(e) => setHubUpload(e.target.value)}
                 disabled={isUploading}
-                className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-blue-200 dark:border-blue-800 outline-none cursor-pointer flex-1 min-w-[150px] text-[#113366] dark:text-blue-400 disabled:opacity-50"
+                className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold p-2.5 rounded-lg border border-blue-200 dark:border-blue-800 outline-none cursor-pointer flex-1 min-w-[150px] text-[#113366] disabled:opacity-50"
               >
                 <option value="">HUB Upload...</option>
                 {hubsDisponiveis.map(h => <option key={`ul-${h}`} value={h}>{h}</option>)}
