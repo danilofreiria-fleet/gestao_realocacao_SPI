@@ -17,7 +17,6 @@ export default function DispoClusterTable({ dispoData, filtrosGlobais = {} }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  // ESTADOS DO "BACKEND"
   const [isCalculating, setIsCalculating] = useState(false);
   const [matrix, setMatrix] = useState({ headers: [], rows: [], stationsUnicas: [], modaisUnicos: [] });
 
@@ -55,7 +54,7 @@ export default function DispoClusterTable({ dispoData, filtrosGlobais = {} }) {
     }, []);
   }, [matrix.rows, searchTerm]);
 
-  // 🔥 Divide as pontuações dos gráficos pela quantidade de colunas visíveis usando Math.round
+  // 🔥 Divide as pontuações pela quantidade de colunas visíveis
   const { topClusters, bottomClusters } = useMemo(() => {
     const list = [];
     const dCount = Math.max(1, matrix.headers.length); 

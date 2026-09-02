@@ -329,7 +329,7 @@ export default function RotationTable() {
     return { headers: activeDateCols, rows: finalRows, availableTrips: availableTripsList, wksPast };
   }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedHubs, selectedModal, selectedStatus, selectedTrips, selectedClassificacao, sortConfig, regEscolhida, dsMap, cadastroMap]);
 
-// MOTOR DE MÉDIAS DIÁRIAS (Tornando os cards proporcionais ao período selecionado)
+  // 🔥 MOTOR DE CÁLCULO E ARREDONDAMENTO
   const summaryMetrics = useMemo(() => {
     let rodou = 0;
     let recusou = 0;
@@ -342,26 +342,25 @@ export default function RotationTable() {
         if (st === 'RODOU') rodou++;
         else if (st === 'RECUSOU') recusou++;
         else if (st === 'DISPO') dispo++;
-        else indisp++; // Tudo que não for ação ativa é Indisponível
+        else indisp++;
       });
     });
 
-    const numDias = matrix.headers.length || 1; // Evita divisão por zero
+    // Conta quantos dias tem no header filtrado para tirar a média
+    const numDias = matrix.headers.length || 1; 
     
-    const avgRodou = (rodou / numDias).toFixed(1).replace('.0', '');
-    const avgRecusou = (recusou / numDias).toFixed(1).replace('.0', '');
-    const avgDispo = (dispo / numDias).toFixed(1).replace('.0', '');
-    const avgIndisp = (indisp / numDias).toFixed(1).replace('.0', '');
+    // Calcula as médias arredondadas matematicamente (0.5 ou mais sobe pra próxima casa)
+    const avgRodou = Math.round(rodou / numDias);
+    const avgRecusou = Math.round(recusou / numDias);
+    const avgDispo = Math.round(dispo / numDias);
+    const avgIndisp = Math.round(indisp / numDias);
 
     const acionamentos = rodou + recusou + dispo;
     const totalGeral = acionamentos + indisp;
 
     const taxaUtilizacao = acionamentos > 0 ? ((rodou / acionamentos) * 100).toFixed(1) : 0;
     const taxaRecusa = acionamentos > 0 ? ((recusou / acionamentos) * 100).toFixed(1) : 0;
-    
-    // Taxa de Ociosidade (Disponíveis sobre o total de acionamentos ativos)
     const taxaOciosidade = acionamentos > 0 ? ((dispo / acionamentos) * 100).toFixed(1) : 0;
-    // Taxa de Indisponibilidade (Indisponíveis sobre o tamanho total da frota do painel)
     const taxaIndisp = totalGeral > 0 ? ((indisp / totalGeral) * 100).toFixed(1) : 0;
 
     const sorted = [...matrix.rows].sort((a,b) => b.total - a.total).filter(d => d.total > 0);
@@ -493,7 +492,6 @@ export default function RotationTable() {
       await uploadCadastroSPX(finalDataToUpload, hubUpload);
       alert(`Sucesso! A base de cadastro do Hub ${hubUpload} foi atualizada com ${finalDataToUpload.length} motoristas únicos (lidos de ${files.length} arquivo(s))!`);
       
-      // Força a re-leitura do Google Sheets no exato momento
       fetchData();
 
     } catch (err) {

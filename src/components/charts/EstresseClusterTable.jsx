@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, AlertTriangle, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, Activity, Car, PackageCheck, UserMinus, ShieldAlert, BarChart2, Layers, ChevronDown } from 'lucide-react';
+import { Search, MapPin, AlertTriangle, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, Activity, Layers, ChevronDown, BarChart2, UserMinus, ShieldAlert } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList } from 'recharts';
 import { CLUSTERS_POR_HUB } from '../../constants/cluster_SPI_SPM'; 
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../../constants/regionais';
@@ -14,10 +14,8 @@ const padronizarHubLocal = (nome) => {
   if (!nome) return "";
   let n = String(nome).trim();
   let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
-  
   if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
   if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
-  
   return n;
 };
 
@@ -25,12 +23,9 @@ const fastSanitizeHub = (str) => {
   if (!str) return "";
   let cached = SANITIZE_CACHE.get(str);
   if (cached) return cached;
-
   let s = padronizarHubLocal(str);
   let sanitized = s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  sanitized = sanitized.replace(/[_-]\d+$/, "");
-  sanitized = sanitized.replace(/[^A-Z0-9]/g, '');
-
+  sanitized = sanitized.replace(/[_-]\d+$/, "").replace(/[^A-Z0-9]/g, '');
   SANITIZE_CACHE.set(str, sanitized);
   return sanitized;
 };
@@ -40,10 +35,8 @@ const fastSanitizeCluster = (str) => {
   const key = `C_${str}`;
   let cached = SANITIZE_CACHE.get(key);
   if (cached) return cached;
-  
   let s = String(str).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   s = s.replace(/[^A-Z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-  
   SANITIZE_CACHE.set(key, s);
   return s;
 };
@@ -60,13 +53,10 @@ const fastParseDate = (s) => {
   let str = String(s).trim();
   let cached = PARSED_DATE_CACHE.get(str);
   if (cached) return cached;
-
   let dStr = str.length > 10 ? str.substring(0,10) : str;
   if (dStr.indexOf('/') !== -1) {
       const parts = dStr.split('/');
-      if (parts.length === 3) {
-          dStr = `${parts[2].length === 2 ? '20'+parts[2] : parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-      }
+      if (parts.length === 3) dStr = `${parts[2].length === 2 ? '20'+parts[2] : parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
   }
   const res = dStr + 'T12:00:00';
   PARSED_DATE_CACHE.set(str, res);
@@ -87,9 +77,6 @@ export default function EstresseClusterTable({
 
   const MODAIS = ['PASSEIO', 'FIORINO', 'MOTO', 'VAN'];
 
-  // ==========================================
-  // 1. O ESQUELETO ESTRITO O(1)
-  // ==========================================
   const esqueletoBase = useMemo(() => {
     const permitidos = new Set();
     const mapaLimpoRegs = new Map();
@@ -102,7 +89,6 @@ export default function EstresseClusterTable({
       const reg = MAPA_REGIONAL_COMPLETO[k] || "";
       const hC = fastSanitizeHub(k);
       mapaLimpoRegs.set(hC, reg);
-      
       if (isAll || reg.toUpperCase().includes(String(currentRegional).toUpperCase()) || permittedSanitized.includes(hC)) {
         permitidos.add(hC);
       }
@@ -129,7 +115,6 @@ export default function EstresseClusterTable({
            resolverCache.set(`${hC}|${cC}`, cC);
            totalClusters++;
          });
-         
          aggsTpl[hC].clustersMap['OUTROS'] = { cluster: 'OUTROS / NÃO MAPEADO', dispo: 0, atPiso: 0, recusas: 0, expedidas: 0 };
       });
     }
@@ -137,9 +122,6 @@ export default function EstresseClusterTable({
     return { aggsTpl, resolverCache, mapaLimpoRegs, totalClusters, permitidos };
   }, [currentRegional]);
 
-  // ==========================================
-  // 2. O MOTOR SÍNCRONO (FORÇA BRUTA OTIMIZADA)
-  // ==========================================
   const matrizEstresse = useMemo(() => {
     const { regional = [], station = [], turno = [], dataInicio = '', dataFim = '', semana = '', mes = '' } = filtrosGlobais;
     const aggs = JSON.parse(JSON.stringify(esqueletoBase.aggsTpl)); 
@@ -171,10 +153,7 @@ export default function EstresseClusterTable({
     const resolveToAgg = (hC, cC) => {
         const hubAgg = aggs[hC];
         if (!hubAgg) return null; 
-        
-        if (!cC || cC === "NAOPREENCHIDO" || cC === "SEMCLUSTER") {
-            return { hubAgg, clusterAgg: hubAgg.clustersMap['OUTROS'] };
-        }
+        if (!cC || cC === "NAOPREENCHIDO" || cC === "SEMCLUSTER") return { hubAgg, clusterAgg: hubAgg.clustersMap['OUTROS'] };
         
         let targetCKey = esqueletoBase.resolverCache.get(`${hC}|${cC}`);
         if (!targetCKey) {
@@ -191,7 +170,8 @@ export default function EstresseClusterTable({
       const cC = fastSanitizeCluster(clusterRaw);
       
       const resolved = resolveToAgg(hC, cC);
-      if (!resolved) return; 
+      // 🔥 VACINA: Impede que clusters bugados causem o crash de "undefined" no painel
+      if (!resolved || !resolved.clusterAgg) return; 
 
       resolved.hubAgg[campo] += qtd;
       resolved.clusterAgg[campo] += qtd;
@@ -238,9 +218,7 @@ export default function EstresseClusterTable({
         if (!aggs[hC]) continue;
 
         let dateIdx = 4;
-        for (let k = 4; k <= 8; k++) {
-           if (isDateFast(row[k])) { dateIdx = k; break; }
-        }
+        for (let k = 4; k <= 8; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
         
         const clusterRaw = dateIdx === 4 ? String(row[1] || "") : row.slice(1, dateIdx - 2).join(", ");
         const turnoLinha = String(row[dateIdx - 2] || "").trim().toUpperCase();
@@ -249,7 +227,6 @@ export default function EstresseClusterTable({
         const qtd = parseNumFast(row[dateIdx + 1]);
         
         if (!dataRaw || qtd === 0) continue;
-        
         let tConf = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
         const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || esqueletoBase.mapaLimpoRegs.get(hC) || ""; 
         
@@ -302,9 +279,7 @@ export default function EstresseClusterTable({
         if (!aggs[hC]) continue;
 
         let dateIdx = 8;
-        for (let k = 8; k <= 12; k++) {
-           if (isDateFast(row[k])) { dateIdx = k; break; }
-        }
+        for (let k = 8; k <= 12; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
         
         const clusterRaw = dateIdx === 8 ? String(row[6] || "") : row.slice(6, dateIdx - 1).join(", ");
         const tConf = String(row[dateIdx - 1] || "").trim().toUpperCase();
@@ -337,9 +312,7 @@ export default function EstresseClusterTable({
         if (!aggs[hC]) continue;
 
         let dateIdx = 5;
-        for (let k = 5; k <= 9; k++) {
-           if (isDateFast(row[k])) { dateIdx = k; break; }
-        }
+        for (let k = 5; k <= 9; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
 
         const tConf = String(row[2] || "").trim().toUpperCase();
         const modalRaw = String(row[3] || "").trim().toUpperCase();
@@ -362,7 +335,6 @@ export default function EstresseClusterTable({
       }
     }
 
-    // 🔥 Conta quantos dias únicos existem no período analisado para fazer a média
     const uniqueDates = new Set();
     Object.keys(historicoDiario).forEach(k => uniqueDates.add(k.split('|')[2]));
     const dCount = Math.max(1, uniqueDates.size);
@@ -418,7 +390,6 @@ export default function EstresseClusterTable({
 
   const filteredAndSortedRows = useMemo(() => {
     let result = matrizEstresse.linhas.filter(h => h.clusters.length > 0);
-    
     if (searchTerm) {
       const term = fastSanitizeCluster(searchTerm);
       result = result.filter(r => fastSanitizeHub(r.hub).includes(term) || r.clusters.some(c => fastSanitizeCluster(c.cluster).includes(term)));
@@ -447,7 +418,6 @@ export default function EstresseClusterTable({
 
   const toggleHub = (hubName) => setExpandedHubs(prev => ({ ...prev, [hubName]: !prev[hubName] }));
 
-  // 🔥 Aplica a divisão por dias também nos gráficos do Top 15 usando Math.round
   const chartData = useMemo(() => {
     const list = [];
     const dCount = matrizEstresse.resumo.dCount || 1;
@@ -491,8 +461,6 @@ export default function EstresseClusterTable({
 
   return (
     <div className="flex flex-col gap-6">
-      
-      {/* CONTROLES E TABELA EXPANSÍVEL (SANFONA) */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden flex flex-col mt-4">
         <div className="p-5 border-b border-slate-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50 dark:bg-[#15171e]">
           <div className="flex items-center gap-2">
@@ -547,7 +515,6 @@ export default function EstresseClusterTable({
                   const isOpen = !!expandedHubs[rowHub.hub];
                   return (
                     <React.Fragment key={rowHub.hub}>
-                      {/* LINHA PAI - HUB */}
                       <tr onClick={() => toggleHub(rowHub.hub)} className="hover:bg-orange-50 dark:hover:bg-gray-700/50 transition-colors bg-slate-50/80 dark:bg-[#15171e] cursor-pointer">
                         <td className="p-3 text-left text-[#113366] dark:text-blue-400 font-black border-r border-slate-100 dark:border-gray-800 flex items-center gap-2 sticky left-0 z-[30] bg-slate-50/90 dark:bg-[#15171e]/90 backdrop-blur-sm shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                           {isOpen ? <ChevronDown size={16} className="text-[#EE4D2D] shrink-0"/> : <ChevronRight size={16} className="text-slate-400 shrink-0"/>}
@@ -564,8 +531,6 @@ export default function EstresseClusterTable({
                         </td>
                         <td className="p-3">{getStatusBadge(rowHub.estresse)}</td>
                       </tr>
-
-                      {/* LINHAS FILHAS - CLUSTERS */}
                       {isOpen && rowHub.clusters.map((c, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors bg-white dark:bg-[#1f232d]">
                           <td className="p-3 text-left text-slate-600 dark:text-gray-300 flex items-center gap-2 pl-10 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-[30] bg-white/90 dark:bg-[#1f232d]/90 backdrop-blur-sm">
