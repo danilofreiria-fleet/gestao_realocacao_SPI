@@ -55,19 +55,30 @@ export default function DispoClusterTable({ dispoData, filtrosGlobais = {} }) {
     }, []);
   }, [matrix.rows, searchTerm]);
 
+  // 🔥 Divide as pontuações dos gráficos pela quantidade de colunas visíveis usando Math.round
   const { topClusters, bottomClusters } = useMemo(() => {
     const list = [];
+    const dCount = Math.max(1, matrix.headers.length); 
+
     filteredRows.forEach(r => {
       r.clusters.forEach(c => {
         const totalVolume = Object.values(c.valores).reduce((acc, curr) => acc + curr, 0);
-        if (totalVolume > 0) list.push({ id: `${r.hub.split('_').pop()} - ${c.cluster}`, hub: r.hub, cluster: c.cluster, total: totalVolume });
+        const mediaDiaria = totalVolume / dCount; 
+        if (mediaDiaria > 0) {
+            list.push({ 
+                id: `${r.hub.split('_').pop()} - ${c.cluster}`, 
+                hub: r.hub, 
+                cluster: c.cluster, 
+                total: Math.round(mediaDiaria) 
+            });
+        }
       });
     });
     return {
       topClusters: [...list].sort((a, b) => b.total - a.total).slice(0, 5),
       bottomClusters: [...list].sort((a, b) => a.total - b.total).slice(0, 5)
     };
-  }, [filteredRows]);
+  }, [filteredRows, matrix.headers.length]);
 
   useEffect(() => { setCurrentPage(1); }, [filteredRows.length, itemsPerPage]);
 
@@ -246,7 +257,7 @@ export default function DispoClusterTable({ dispoData, filtrosGlobais = {} }) {
               <div className="p-1.5 bg-green-50 dark:bg-green-950/40 rounded-lg"><TrendingUp size={16} className="text-[#113366] dark:text-blue-400" /></div>
               <div>
                 <h4 className="text-xs font-black text-[#113366] dark:text-white uppercase tracking-wider">Top 5 Clusters + Abastecidos</h4>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Maior volume total no período filtrado</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Maior MÉDIA diária no período filtrado</p>
               </div>
             </div>
             <div className="space-y-3.5 my-2">
@@ -272,7 +283,7 @@ export default function DispoClusterTable({ dispoData, filtrosGlobais = {} }) {
               <div className="p-1.5 bg-red-50 dark:bg-red-950/40 rounded-lg"><TrendingDown size={16} className="text-[#D0011B]" /></div>
               <div>
                 <h4 className="text-xs font-black text-[#D0011B] uppercase tracking-wider">Top 5 Clusters Críticos (Vazios)</h4>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Menor volume total acumulado no período</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Menor MÉDIA diária no período filtrado</p>
               </div>
             </div>
             <div className="space-y-3.5 my-2">
