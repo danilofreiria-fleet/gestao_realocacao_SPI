@@ -8,7 +8,7 @@ const padronizarHubLocal = (nome) => {
   let n = String(nome).trim();
   let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
   
-  // ARRUMAR AQUI TAMBÉM!
+  
   if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
   if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
   
@@ -159,7 +159,7 @@ export const calcularMatrizDispo = async ({ dispoData, filtrosGlobais, selectedM
   });
   const permittedHubsSet = new Set([...permittedHubsList, ...extraPermitted].map(fastSanitizeHub));
 
-  // 🔥 Laço Síncrono (Instantâneo)
+  // Laço Síncrono (Instantâneo)
   if (dispoData && dispoData.length > 1) {
     const len = dispoData.length;
     for (let i = 1; i < len; i++) {

@@ -54,7 +54,7 @@ export default function DispoClusterTable({ dispoData, filtrosGlobais = {} }) {
     }, []);
   }, [matrix.rows, searchTerm]);
 
-  // 🔥 Divide as pontuações pela quantidade de colunas visíveis
+  // Divide as pontuações pela quantidade de colunas visíveis
   const { topClusters, bottomClusters } = useMemo(() => {
     const list = [];
     const dCount = Math.max(1, matrix.headers.length); 

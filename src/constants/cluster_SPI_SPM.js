@@ -1614,7 +1614,19 @@ export const CLUSTERS_POR_HUB = {
     "01. Cruzalia",  
     "03.1. Borá, Paraguaçu",  
     "02.1. Palmital, Platina",  
-    "01.1. Cruzália, Florínea"  
+    "01.1. Cruzália, Florínea",
+    "Assis",
+    "Borá - Paraguaçu - z",
+    "Candido Mota",
+    "Cervinho",
+    "Cruzália - Florínea - z",
+    "Echaporã",
+    "Oscar Bressane",
+    "Palmital",
+    "Palmital - Platina - z",
+    "Paraguaçu Paulista",
+    "São José - Santa Amélia",
+    "Tarumã"  
   ],  
   "LM Hub_SP_Barretos": [  
     "11. Lagoinha",  

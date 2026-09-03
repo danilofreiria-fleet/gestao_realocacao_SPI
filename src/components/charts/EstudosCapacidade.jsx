@@ -10,7 +10,7 @@ import {
 
 import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
-// 🔥 VACINA INJETADA: HIGIENIZADOR INTELIGENTE DE HUBS
+// VACINA INJETADA: HIGIENIZADOR INTELIGENTE DE HUBS
 const padronizarHubLocal = (nome) => {
   if (!nome) return "";
   let n = String(nome).trim();
@@ -172,7 +172,7 @@ export default function EstudosCapacidade({ consolidadoData, baseData }) {
     }));
   };
 
-  // --- 🔥 GERAÇÃO DINÂMICA DE OPÇÕES (ISOLAMENTO DE REGIONAL GARANTIDO) ---
+  // --- (ISOLAMENTO DE REGIONAL) ---
   const opcoes = useMemo(() => {
     const regionaisSet = new Set();
     const stationsSet = new Set();

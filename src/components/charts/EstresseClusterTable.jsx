@@ -170,7 +170,7 @@ export default function EstresseClusterTable({
       const cC = fastSanitizeCluster(clusterRaw);
       
       const resolved = resolveToAgg(hC, cC);
-      // 🔥 VACINA: Impede que clusters bugados causem o crash de "undefined" no painel
+      // impede que clusters bugados causem o crash de "undefined" no painel
       if (!resolved || !resolved.clusterAgg) return; 
 
       resolved.hubAgg[campo] += qtd;
