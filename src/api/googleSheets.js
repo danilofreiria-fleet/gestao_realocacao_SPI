@@ -831,7 +831,7 @@ export const getOfertasDriversData = async () => {
             
             respostas.forEach((r) => {
                 if (r && r.values && r.values.length > 0) {
-                    // 🔥 AGORA MANTEMOS O CABEÇALHO DE TODAS AS ABAS!
+                    // MANTEMOS O CABEÇALHO DE TODAS AS ABAS!
                     dadosCompletos = dadosCompletos.concat(r.values); 
                 }
             });

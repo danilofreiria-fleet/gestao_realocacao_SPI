@@ -18,6 +18,7 @@ import AtExpedidaClusterTable from './charts/AtExpedidaClusterTable';
 import DispoClusterTable from './charts/DispoClusterTable'; 
 import EstudosCapacidade from './charts/EstudosCapacidade';
 import EstresseClusterTable from './charts/EstresseClusterTable'; 
+import EstudosDSRodizio from './charts/EstudosDSRodizio';
 import { MapPin, Database, Maximize2, Loader2, BrainCircuit } from 'lucide-react';
 
 import { getRecusasData, getAtExpedidaData, getDisponibilidadeClusterData } from '../api/googleSheets';
@@ -230,6 +231,16 @@ const Visualizations = ({
            {clusterSubTab === 'dispo' && (isLoadingPesados ? <LoadingOverlay /> : <DispoClusterTable dispoData={lazyData.dispo} recusasData={lazyData.recusas} filtrosGlobais={filtrosGlobais} />)}
            {clusterSubTab === 'recusas' && (isLoadingPesados ? <LoadingOverlay /> : <RecusasClusterTable recusasData={lazyData.recusas} filtrosGlobais={filtrosGlobais} />)}
            {clusterSubTab === 'expedida' && (isLoadingPesados ? <LoadingOverlay /> : <AtExpedidaClusterTable atExpedidaData={lazyData.expedida} filtrosGlobais={filtrosGlobais} />)}
+        </div>
+      )}
+
+      {activeCategory === 'estudos' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <EstudosDSRodizio 
+              rawData={rawData} 
+              dsMotoristaData={dsMotoristaData || rawData} 
+              filtrosGlobais={filtrosGlobais} 
+           />
         </div>
       )}
 

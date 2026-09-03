@@ -433,20 +433,82 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
   const fInt = (val) => val > 0 ? new Intl.NumberFormat('pt-BR').format(Math.round(val)) : '';
   const fIntTooltip = (val) => new Intl.NumberFormat('pt-BR').format(Math.round(val));
 
-  const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
+      
+      // 1. Cálculos de totais baseados no que está sendo exibido no gráfico
+      const totalOfertas = payload.reduce((acc, entry) => (entry.name?.includes('Ofertas') ? acc + entry.value : acc), 0);
+      const totalRecusas = payload.reduce((acc, entry) => (entry.name?.includes('Recusas') ? acc + entry.value : acc), 0);
+      
+      const hasOfertas = payload.some(e => e.name?.includes('Ofertas'));
+      // Identifica se é o Gráfico 4 (apenas recusas, sem linhas de porcentagem)
+      const isGraficoRecusasAbsolutas = payload.some(e => e.name?.includes('Recusas')) && !payload.some(e => e.name?.includes('%'));
+
       return (
         <div className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-800 p-3 rounded-lg shadow-xl z-50">
           <p className="font-black text-slate-800 dark:text-white mb-2">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={index} style={{ color: entry.color }} className="font-bold text-sm py-0.5">
-              {entry.name}: {entry.name.includes('%') ? `${entry.value.toFixed(1)}%` : fIntTooltip(entry.value)}
-            </p>
-          ))}
+          
+          {payload.map((entry, index) => {
+            const isLinhaPorcentagem = entry.name && entry.name.includes('% Recusa');
+            
+            return (
+              <React.Fragment key={index}>
+                {/* Lógica do Gráfico 1: Injeta o TOTAL DE OFERTAS antes da linha de % */}
+                {isLinhaPorcentagem && hasOfertas && (
+                  <p className="font-black text-slate-800 dark:text-white text-sm py-1 mt-1 border-t border-slate-100 dark:border-gray-700">
+                    TOTAL DE OFERTAS: {fIntTooltip(totalOfertas)}
+                  </p>
+                )}
+                
+                <p style={{ color: entry.color }} className="font-bold text-sm py-0.5">
+                  {entry.name}: {entry.name.includes('%') ? `${entry.value.toFixed(1)}%` : fIntTooltip(entry.value)}
+                </p>
+              </React.Fragment>
+            );
+          })}
+
+          {/* Lógica do Gráfico 4: Injeta o TOTAL DE RECUSAS no final do tooltip */}
+          {isGraficoRecusasAbsolutas && (
+             <p className="font-black text-slate-800 dark:text-white text-sm py-1 mt-2 border-t border-slate-100 dark:border-gray-700">
+               TOTAL DE RECUSAS: {fIntTooltip(totalRecusas)}
+             </p>
+          )}
         </div>
       );
     }
     return null;
+  };
+
+  // Função auxiliar protegida para desenhar o Total no topo das barras empilhadas
+  const renderTopTotalLabel = (props, modaisAtivos, tipo) => {
+    const { x, y, width, payload } = props;
+    
+    // VACINA: Se o Recharts chamar a função de conteúdo customizado antes de montar os dados
+    if (!payload) return null;
+
+    let total = 0;
+
+    if (tipo === 'off') {
+      if (modaisAtivos.includes('Passeio')) total += (payload.p_off || 0);
+      if (modaisAtivos.includes('Fiorino')) total += (payload.u_off || 0);
+      if (modaisAtivos.includes('Moto')) total += (payload.m_off || 0);
+      if (modaisAtivos.includes('Van')) total += (payload.v_off || 0);
+    } else {
+      if (modaisAtivos.includes('Passeio')) total += (payload.p_rec || 0);
+      if (modaisAtivos.includes('Fiorino')) total += (payload.u_rec || 0);
+      if (modaisAtivos.includes('Moto')) total += (payload.m_rec || 0);
+      if (modaisAtivos.includes('Van')) total += (payload.v_rec || 0);
+    }
+
+    if (total === 0) return null;
+
+    const corTexto = tipo === 'rec' ? '#D0011B' : '#113366';
+
+    return (
+      <text x={x + width / 2} y={y - 8} fill={corTexto} fontSize={12} fontWeight="900" textAnchor="middle">
+        {typeof fInt === 'function' ? fInt(total) : total}
+      </text>
+    );
   };
 
   const renderChartCard = (id, title, subtitle, icon, extraControls, content, dataLength) => {
@@ -703,7 +765,7 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
           ),
           (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartEvolucaoData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+              <ComposedChart data={chartEvolucaoData} margin={{ top: 25, right: 10, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
@@ -711,10 +773,30 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold' }} />
 
-                {modaisEvol.includes('Passeio') && <Bar yAxisId="left" dataKey="p_off" stackId="a" name="Ofertas Passeio" fill="#113366" maxBarSize={50} radius={topVisibleModal === 'Passeio' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="p_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisEvol.includes('Fiorino') && <Bar yAxisId="left" dataKey="u_off" stackId="a" name="Ofertas Fiorino" fill="#3b82f6" maxBarSize={50} radius={topVisibleModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="u_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisEvol.includes('Moto') && <Bar yAxisId="left" dataKey="m_off" stackId="a" name="Ofertas Moto" fill="#F5A623" maxBarSize={50} radius={topVisibleModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="m_off" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisEvol.includes('Van') && <Bar yAxisId="left" dataKey="v_off" stackId="a" name="Ofertas Van" fill="#8b5cf6" maxBarSize={50} radius={topVisibleModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="v_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
+              {modaisEvol.includes('Passeio') && (
+                  <Bar yAxisId="left" dataKey="p_off" stackId="a" name="Ofertas Passeio" fill="#113366" maxBarSize={50} radius={topVisibleModal === 'Passeio' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="p_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleModal === 'Passeio' && <LabelList dataKey="p_off" content={(props) => renderTopTotalLabel(props, modaisEvol, 'off')} />}
+                  </Bar>
+                )}
+                {modaisEvol.includes('Fiorino') && (
+                  <Bar yAxisId="left" dataKey="u_off" stackId="a" name="Ofertas Fiorino" fill="#3b82f6" maxBarSize={50} radius={topVisibleModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="u_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleModal === 'Fiorino' && <LabelList dataKey="u_off" content={(props) => renderTopTotalLabel(props, modaisEvol, 'off')} />}
+                  </Bar>
+                )}
+                {modaisEvol.includes('Moto') && (
+                  <Bar yAxisId="left" dataKey="m_off" stackId="a" name="Ofertas Moto" fill="#F5A623" maxBarSize={50} radius={topVisibleModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="m_off" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleModal === 'Moto' && <LabelList dataKey="m_off" content={(props) => renderTopTotalLabel(props, modaisEvol, 'off')} />}
+                  </Bar>
+                )}
+                {modaisEvol.includes('Van') && (
+                  <Bar yAxisId="left" dataKey="v_off" stackId="a" name="Ofertas Van" fill="#8b5cf6" maxBarSize={50} radius={topVisibleModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="v_off" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleModal === 'Van' && <LabelList dataKey="v_off" content={(props) => renderTopTotalLabel(props, modaisEvol, 'off')} />}
+                  </Bar>
+                )}
                 
                 <Line yAxisId="right" type="monotone" dataKey="recusaPctEvol" name="% Recusa (vs Dispo)" stroke="#D0011B" strokeWidth={3} dot={{ r: 5, fill: '#fff', stroke: '#D0011B', strokeWidth: 2 }} activeDot={{ r: 7 }} />
               </ComposedChart>
@@ -812,17 +894,37 @@ export default function FleetHealthCharts({ rawData, historicoFrotaData, firstTr
           ), 
           (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={temporalData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+              <BarChart data={temporalData} margin={{ top: 25, right: 10, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 'bold' }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold' }} />
 
-                {modaisRec.includes('Passeio') && <Bar dataKey="p_rec" stackId="a" name="Recusas Passeio" fill="#113366" maxBarSize={60} radius={topVisibleRecModal === 'Passeio' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="p_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisRec.includes('Fiorino') && <Bar dataKey="u_rec" stackId="a" name="Recusas Fiorino" fill="#3b82f6" maxBarSize={60} radius={topVisibleRecModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="u_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisRec.includes('Moto') && <Bar dataKey="m_rec" stackId="a" name="Recusas Moto" fill="#F5A623" maxBarSize={60} radius={topVisibleRecModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="m_rec" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
-                {modaisRec.includes('Van') && <Bar dataKey="v_rec" stackId="a" name="Recusas Van" fill="#8b5cf6" maxBarSize={60} radius={topVisibleRecModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}><LabelList dataKey="v_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} /></Bar>}
+                {modaisRec.includes('Passeio') && (
+                  <Bar dataKey="p_rec" stackId="a" name="Recusas Passeio" fill="#113366" maxBarSize={60} radius={topVisibleRecModal === 'Passeio' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="p_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleRecModal === 'Passeio' && <LabelList dataKey="p_rec" content={(props) => renderTopTotalLabel(props, modaisRec, 'rec')} />}
+                  </Bar>
+                )}
+                {modaisRec.includes('Fiorino') && (
+                  <Bar dataKey="u_rec" stackId="a" name="Recusas Fiorino" fill="#3b82f6" maxBarSize={60} radius={topVisibleRecModal === 'Fiorino' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="u_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleRecModal === 'Fiorino' && <LabelList dataKey="u_rec" content={(props) => renderTopTotalLabel(props, modaisRec, 'rec')} />}
+                  </Bar>
+                )}
+                {modaisRec.includes('Moto') && (
+                  <Bar dataKey="m_rec" stackId="a" name="Recusas Moto" fill="#F5A623" maxBarSize={60} radius={topVisibleRecModal === 'Moto' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="m_rec" position="center" fill="#78350f" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleRecModal === 'Moto' && <LabelList dataKey="m_rec" content={(props) => renderTopTotalLabel(props, modaisRec, 'rec')} />}
+                  </Bar>
+                )}
+                {modaisRec.includes('Van') && (
+                  <Bar dataKey="v_rec" stackId="a" name="Recusas Van" fill="#8b5cf6" maxBarSize={60} radius={topVisibleRecModal === 'Van' ? [4,4,0,0] : [0,0,0,0]}>
+                    <LabelList dataKey="v_rec" position="center" fill="#ffffff" fontSize={10} fontWeight="bold" formatter={fInt} />
+                    {topVisibleRecModal === 'Van' && <LabelList dataKey="v_rec" content={(props) => renderTopTotalLabel(props, modaisRec, 'rec')} />}
+                  </Bar>
+                )}
               </BarChart>
             </ResponsiveContainer>
           ),

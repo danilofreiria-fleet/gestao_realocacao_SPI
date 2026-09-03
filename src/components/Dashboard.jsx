@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
-import { Layers, CalendarDays, MapPin, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning, PieChart } from 'lucide-react';
+import { Layers, CalendarDays, MapPin, BookOpen, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning, PieChart } from 'lucide-react';
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
 const MESES = [
@@ -77,7 +77,7 @@ export default function Dashboard() {
     return () => menuElement.removeEventListener('wheel', handleWheel);
   }, [loading]); 
 
-  // 🔥 MOTOR DE CARREGAMENTO INTELIGENTE (OTIMIZADO)
+  // MOTOR DE CARREGAMENTO INTELIGENTE (OTIMIZADO)
   useEffect(() => {
     const carregarDadosEssenciais = async () => {
       setLoading(true);
@@ -150,6 +150,7 @@ export default function Dashboard() {
     { id: 'saude', label: 'Saúde de Frota', icon: <Activity size={16}/> },
     { id: 'estudosCluster', label: 'Estudos de Cluster', icon: <Layers size={16}/> },
     { id: 'capacidade', label: 'Estudos de Capacidade', icon: <PieChart size={16}/> },
+    { id: 'estudos', label: 'Estudos de DS e Rodízio', icon: <BookOpen size={18} /> },
     { id: 'volumes', label: 'Volumes & SPR', icon: <BarChart3 size={16}/> },
     { id: 'gargalos', label: 'Gargalos & CAP', icon: <AlertCircle size={16}/> },
     { id: 'pacotes', label: 'Pacotes e Realocação', icon: <Package size={16}/> },

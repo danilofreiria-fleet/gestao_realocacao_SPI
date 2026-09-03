@@ -69,6 +69,28 @@ export default function DeliverySuccess() {
   const [driverViewMode, setDriverViewMode] = useState('TOTAL'); 
   const [hubTimeView, setHubTimeView] = useState('dia'); 
 
+  // CONTROLE DE COLUNAS (KPIs) NA ABA HUB
+  const KPI_OPTIONS = [
+    { id: 'dsTotal', label: 'DS Total (%)' },
+    { id: 'dsD0', label: 'DS D-0 (%)' },
+    { id: 'spr', label: 'SPR' },
+    { id: 'reut', label: 'Reut.' },
+    { id: 'atPiso', label: 'Atuação Piso' },
+    { id: 'totalCarregado', label: 'Total Carregado' },
+    { id: 'driversUnicos', label: 'Drivers Únicos' },
+    { id: 'ofertasTotais', label: 'Ofertas Totais' },
+  ];
+
+  const [kpisVisiveis, setKpisVisiveis] = useState(KPI_OPTIONS.map(k => k.id));
+  const [dropdownKpiOpen, setDropdownKpiOpen] = useState(false);
+  const dropdownKpiRef = useRef(null);
+
+  const toggleKpiVisivel = (kpiId) => {
+    setKpisVisiveis(prev => 
+      prev.includes(kpiId) ? prev.filter(id => id !== kpiId) : [...prev, kpiId]
+    );
+  };
+
   // FILTROS GLOBAIS
   const [selectedRegs, setSelectedRegs] = useState([]);
   const [dropdownRegOpen, setDropdownRegOpen] = useState(false);
@@ -84,7 +106,7 @@ export default function DeliverySuccess() {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   
-  const [selectedClassificacao, setSelectedClassificacao] = useState('ALL'); // 🔥 NOVO FILTRO
+  const [selectedClassificacao, setSelectedClassificacao] = useState('ALL');
 
   const dropdownRegRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -101,6 +123,9 @@ export default function DeliverySuccess() {
       if (dropdownRegRef.current && !dropdownRegRef.current.contains(event.target)) {
         setDropdownRegOpen(false);
         setRegSearchTerm(''); 
+      }
+      if (dropdownKpiRef.current && !dropdownKpiRef.current.contains(event.target)) {
+        setDropdownKpiOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -151,7 +176,6 @@ export default function DeliverySuccess() {
     return mes.charAt(0).toUpperCase() + mes.slice(1);
   };
 
-  // 🔥 RENDER SEMAFAFORO ATUALIZADO COM A COR AMARELA NO D-0
   const renderSemaforo = (val, isD0) => {
     if (val === null || val === undefined || val === '') return '-';
     const num = Number(val);
@@ -164,7 +188,7 @@ export default function DeliverySuccess() {
             {num}%
           </div>
         );
-      } else if (num >= 90) { // 🔥 COR AMARELA (RISCO) ENTRE 90 E 94.9%
+      } else if (num >= 90) { 
         return (
           <div className="flex items-center gap-1.5 justify-center text-yellow-600 dark:text-yellow-400 font-black">
             <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]"></div>
@@ -1122,303 +1146,373 @@ export default function DeliverySuccess() {
           
           <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4">
             <div className={`flex flex-wrap items-center bg-white dark:bg-[#1f232d] p-1.5 rounded-xl w-fit shadow-sm border border-slate-200 dark:border-gray-800 transition-opacity ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-              <button onClick={() => setDriverViewMode('TOTAL')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'TOTAL' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}>
-                <Award size={14}/> Semanal Total
-              </button>
-              <button onClick={() => setDriverViewMode('D0')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'D0' ? 'bg-[#EE4D2D] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}>
-                <Zap size={14}/> Semanal D-0
-              </button>
-              <div className="w-[1px] h-6 bg-slate-200 dark:bg-gray-700 mx-1"></div>
-              <button onClick={() => setDriverViewMode('MONTH_TOTAL')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'MONTH_TOTAL' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}>
-                <CalendarDays size={14}/> Mensal Total
-              </button>
-              <button onClick={() => setDriverViewMode('MONTH_D0')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'MONTH_D0' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}>
-                <CalendarCheck size={14}/> Mensal D-0
-              </button>
+              <button 
+                onClick={() => setDriverViewMode('TOTAL')} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'TOTAL' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              >Semana (Total)</button>
+              <button 
+                onClick={() => setDriverViewMode('D0')} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'D0' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              >Semana (D-0)</button>
+              <button 
+                onClick={() => setDriverViewMode('MONTH_TOTAL')} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'MONTH_TOTAL' ? 'bg-[#EE4D2D] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              >Mês (Total)</button>
+              <button 
+                onClick={() => setDriverViewMode('MONTH_D0')} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${driverViewMode === 'MONTH_D0' ? 'bg-[#EE4D2D] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              >Mês (D-0)</button>
             </div>
 
-            <div className={`flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto transition-opacity ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded-xl border border-blue-200 dark:border-blue-800 w-full md:w-auto">
+            <div className="flex gap-2 w-full xl:w-auto">
+              <div className="flex gap-2">
                 <select 
                   value={hubUpload} 
-                  onChange={(e) => setHubUpload(e.target.value)}
-                  disabled={isUploading}
-                  className="bg-white dark:bg-[#1f232d] dark:text-white text-xs font-bold py-2 px-3 rounded-lg border border-blue-200 dark:border-blue-800 outline-none cursor-pointer flex-1 min-w-[150px] text-[#113366] disabled:opacity-50"
+                  onChange={(e) => setHubUpload(e.target.value)} 
+                  className="bg-blue-50 dark:bg-blue-900/20 text-[#113366] dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-xs font-bold outline-none"
                 >
-                  <option value="">1. HUB do Upload...</option>
-                  {listHubs.map(h => <option key={`ul-${h}`} value={h}>{h}</option>)}
+                  <option value="">Selecione o Hub para Importar Cadastro...</option>
+                  {listHubs.map(h => <option key={`up-${h}`} value={h}>{h}</option>)}
                 </select>
-                
-                <input type="file" accept=".csv" id="spx-upload-ds" className="hidden" onChange={handleFileUpload} disabled={isUploading} multiple />
-                <button 
-                  onClick={() => document.getElementById('spx-upload-ds').click()}
-                  disabled={isUploading}
-                  className="flex items-center justify-center gap-1.5 bg-[#113366] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all shadow-sm shrink-0 w-full md:w-auto disabled:opacity-50"
-                >
-                  {isUploading ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
-                  {isUploading ? 'Enviando...' : '2. Importar SPX'}
-                </button>
+                <label className={`flex items-center gap-1.5 bg-[#113366] hover:bg-blue-900 text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase cursor-pointer transition-colors shadow-sm ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  Importar SPX
+                  <input type="file" accept=".csv" className="hidden" multiple onChange={handleFileUpload} disabled={isUploading} />
+                </label>
               </div>
 
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#15171e] p-1.5 rounded-xl border border-slate-200 dark:border-gray-700 w-full md:w-auto">
-                <select
-                  value={hubDownload}
-                  onChange={(e) => setHubDownload(e.target.value)}
-                  className="bg-white dark:bg-[#1f232d] dark:text-white border border-slate-200 dark:border-gray-700 rounded-lg py-2 px-3 text-[11px] font-bold outline-none cursor-pointer flex-1 min-w-[150px]"
+              <div className="flex gap-2 ml-auto">
+                <select 
+                  value={hubDownload} 
+                  onChange={(e) => setHubDownload(e.target.value)} 
+                  className="bg-orange-50 dark:bg-orange-950/20 text-[#EE4D2D] border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-2 text-xs font-bold outline-none"
                 >
-                  <option value="">Baixar Base Station...</option>
-                  {processedDrivers.hubsData.map(h => <option key={`dl-${h.name}`} value={h.name}>{h.name}</option>)}
+                  <option value="">Selecione Hub para Baixar...</option>
+                  {processedDrivers.hubsData.map(h => <option key={`down-${h.name}`} value={h.name}>{h.name}</option>)}
                 </select>
-                <button
-                  onClick={exportarHubCSV}
-                  className="flex items-center justify-center gap-1.5 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-colors shadow-sm shrink-0 w-full md:w-auto"
-                >
-                  <Download size={14} /> Baixar CSV
+                <button onClick={exportarHubCSV} className="flex items-center gap-1.5 bg-[#EE4D2D] hover:bg-[#D0011B] text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase transition-colors shadow-sm">
+                  <Download size={14} /> Exportar Excel
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-700 overflow-hidden flex flex-col flex-1 relative">
-            {showsEmptyState ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-6">
-                    <div className="bg-white dark:bg-[#1f232d] p-8 rounded-2xl shadow-xl flex flex-col items-center text-center max-w-md border border-slate-200 dark:border-gray-700">
-                        <AlertCircle size={48} className="text-[#EE4D2D] mb-4" />
-                        <h3 className="text-xl font-black text-[#113366] dark:text-white uppercase mb-2">Aguardando Filtro</h3>
-                        <p className="text-sm font-bold text-slate-500 dark:text-gray-400 leading-relaxed">
-                            A matriz completa de DS possui milhares de dados. Selecione uma Subregional, Station ou digite o ID do condutor para visualizar as métricas.
-                        </p>
+          {showsEmptyState ? (
+            <div className="bg-slate-50 dark:bg-[#15171e] rounded-2xl border-2 border-dashed border-slate-200 dark:border-gray-700 flex flex-col items-center justify-center py-20 text-center px-4">
+              <div className="bg-white dark:bg-[#1f232d] p-4 rounded-full shadow-sm mb-4">
+                <Filter size={32} className="text-slate-300 dark:text-gray-600" />
+              </div>
+              <h3 className="text-lg font-black text-slate-700 dark:text-gray-200 mb-2">Utilize os filtros acima para começar</h3>
+              <p className="text-sm font-medium text-slate-500 max-w-md">
+                Selecione pelo menos uma Subregional, Hub, ID de Motorista ou Modal para gerar a tabela de performance de condutores.
+              </p>
+            </div>
+          ) : processedDrivers.hubsData.length === 0 ? (
+            <div className="bg-slate-50 dark:bg-[#15171e] rounded-2xl border border-slate-200 dark:border-gray-700 flex flex-col items-center justify-center py-20 text-center px-4">
+              <AlertCircle size={32} className="text-orange-400 mb-4" />
+              <h3 className="text-lg font-black text-slate-700 dark:text-gray-200 mb-2">Nenhum dado encontrado</h3>
+              <p className="text-sm font-medium text-slate-500 max-w-md">
+                Sua combinação de filtros não retornou nenhum motorista. Tente limpar os filtros e buscar novamente.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {processedDrivers.hubsData.map(hubData => (
+                <div key={`hub-${hubData.name}`} className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
+                  <div 
+                    onClick={() => toggleHub(hubData.name)}
+                    className="p-4 bg-slate-50 dark:bg-gray-800/50 flex justify-between items-center cursor-pointer hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-1.5 rounded-lg transition-transform ${expandedHubs[hubData.name] ? 'rotate-90 bg-orange-100 dark:bg-orange-900/30 text-[#EE4D2D]' : 'bg-slate-200 dark:bg-gray-700 text-slate-500'}`}>
+                        <ChevronRight size={18} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-[#113366] dark:text-blue-400 flex items-center gap-2">
+                          <MapPin size={16} /> {hubData.name}
+                        </h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{hubData.subRegional} • {hubData.drivers.length} Motoristas</p>
+                      </div>
                     </div>
-                </div>
-            ) : (
-                <div className="overflow-x-auto w-full h-full custom-scrollbar">
-                <table className="w-full border-collapse text-center">
-                    <thead className={driverViewMode.includes('MONTH') ? (driverViewMode === 'MONTH_TOTAL' ? 'bg-indigo-600 text-white' : 'bg-orange-500 text-white') : (driverViewMode === 'TOTAL' ? 'bg-[#113366] text-white' : 'bg-[#EE4D2D] text-white')}>
-                    <tr className="tracking-widest text-[10px] uppercase font-black sticky top-0 z-20">
-                        <th className="p-4 text-left min-w-[200px] shadow-sm">SUBREGIONAL / STATION / DRIVER</th>
-                        <th className="p-4 shadow-sm">VEÍCULO</th>
-                        {activeColumns.map(col => (
-                          <th key={col.id} className="p-4 min-w-[85px] bg-white/10 border-l border-white/20 shadow-sm">{col.label}</th>
-                        ))}
-                    </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-black text-sm relative z-0">
-                    {processedDrivers.hubsData.length === 0 ? (
-                        <tr><td colSpan={activeColumns.length + 2} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado com esse filtro de classificação.</td></tr>
-                    ) : (
-                        processedDrivers.hubsData.map(hub => {
-                        const isOpen = !!expandedHubs[hub.name];
+                    
+                    <div className="flex gap-4">
+                      {activeColumns.slice(-3).map(col => {
+                        let med = null;
+                        if (driverViewMode === 'TOTAL') med = hubData.mediasTotal[col.id];
+                        else if (driverViewMode === 'D0') med = hubData.mediasD0[col.id];
+                        else if (driverViewMode === 'MONTH_TOTAL') med = hubData.mediasMesTotal[col.id];
+                        else if (driverViewMode === 'MONTH_D0') med = hubData.mediasMesD0[col.id];
+                        
                         return (
-                            <React.Fragment key={hub.name}>
-                            <tr onClick={() => toggleHub(hub.name)} className="cursor-pointer bg-slate-100/80 dark:bg-gray-800 hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors h-[50px]">
-                                <td className="p-4 text-left flex items-center gap-2 text-[#113366] dark:text-blue-400 font-black text-base border-r border-slate-200 dark:border-gray-700 h-[50px]">
-                                  {isOpen ? <ChevronDown size={18} className="text-[#EE4D2D]"/> : <ChevronRight size={18} className="text-slate-400"/>}
-                                  <MapPin size={16} className="text-[#EE4D2D] shrink-0" />
-                                  {hub.name}
-                                </td>
-                                <td className="p-4 text-xs font-black text-[#113366] dark:text-white uppercase border-r border-slate-200 dark:border-gray-700 h-[50px] whitespace-nowrap">MÉDIA CONDUTORES</td>
-                                {activeColumns.map(col => {
-                                  let val = null;
-                                  if (driverViewMode === 'TOTAL') val = hub.mediasTotal[col.id];
-                                  else if (driverViewMode === 'D0') val = hub.mediasD0[col.id];
-                                  else if (driverViewMode === 'MONTH_TOTAL') val = hub.mediasMesTotal[col.id];
-                                  else if (driverViewMode === 'MONTH_D0') val = hub.mediasMesD0[col.id];
-
-                                  return (
-                                      <td key={col.id} className={`p-4 border-r border-slate-200 dark:border-gray-700 h-[50px] bg-slate-50/50 dark:bg-gray-800/50 text-slate-800 dark:text-gray-200`}>
-                                        {renderSemaforo(val, driverViewMode.includes('D0'))}
-                                      </td>
-                                  );
-                                })}
-                            </tr>
-
-                            {isOpen && hub.drivers.map(driver => (
-                                <tr key={`${hub.name}-${driver.id}`} className="bg-white dark:bg-[#15171e] text-xs text-slate-600 dark:text-gray-400 transition-colors hover:bg-slate-50">
-                                  <td className="px-4 py-2 text-left pl-12 sticky left-0 z-20 bg-white dark:bg-[#15171e] border-r border-slate-100 dark:border-gray-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                    <div className="flex items-center gap-1.5 font-black text-[#113366] dark:text-blue-400 text-[12px] truncate max-w-[190px] leading-tight">
-                                      <User size={13} className="text-slate-400 shrink-0" /> {driver.id}
-                                    </div>
-                                    {driver.nome && <div className="text-[10px] text-slate-500 font-bold truncate max-w-[190px] leading-tight pl-5" title={driver.nome}>{driver.nome}</div>}
-                                  </td>
-                                  <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 whitespace-nowrap">
-                                      <span className="flex items-center justify-center gap-1"><Truck size={12}/> {driver.veiculo}</span>
-                                  </td>
-                                  
-                                  {activeColumns.map(col => {
-                                      let val = null;
-                                      if (driverViewMode === 'TOTAL') val = driver.scoresTotal[col.id];
-                                      else if (driverViewMode === 'D0') val = driver.scoresD0[col.id];
-                                      else if (driverViewMode === 'MONTH_TOTAL') val = driver.scoresMesTotal[col.id];
-                                      else if (driverViewMode === 'MONTH_D0') val = driver.scoresMesD0[col.id];
-
-                                      return (
-                                      <td key={col.id} className={`p-3 font-bold border-r border-slate-100 dark:border-gray-800 ${val !== null && val < 95 ? 'text-[#D0011B] font-black bg-red-50/20 dark:bg-red-900/5' : ''}`}>
-                                          {renderSemaforo(val, driverViewMode.includes('D0'))}
-                                      </td>
-                                      );
-                                  })}
-                                </tr>
-                            ))}
-                            </React.Fragment>
+                          <div key={`med-${col.id}`} className="text-right">
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{col.label}</p>
+                            {renderSemaforo(med, driverViewMode.includes('D0'))}
+                          </div>
                         );
-                        })
-                    )}
-                    </tbody>
-                </table>
+                      })}
+                    </div>
+                  </div>
+
+                  {expandedHubs[hubData.name] && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-white dark:bg-[#1f232d] border-b border-slate-200 dark:border-gray-800">
+                            <th className="p-3 text-[11px] font-black text-slate-500 uppercase whitespace-nowrap bg-slate-50/50 dark:bg-gray-800/30">Motorista</th>
+                            {activeColumns.map(col => (
+                              <th key={col.id} className="p-3 text-[11px] font-black text-slate-500 uppercase text-center whitespace-nowrap bg-slate-50/50 dark:bg-gray-800/30">{col.label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
+                          {hubData.drivers.map((driver, idx) => (
+                            <tr key={driver.id} className="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+                              <td className="p-3 whitespace-nowrap">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 flex items-center justify-center shrink-0">
+                                    <User size={14} className="text-slate-400" />
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-black text-slate-800 dark:text-gray-200">{driver.id}</span>
+                                    {driver.nome ? (
+                                      <span className="text-[10px] font-bold text-[#113366] dark:text-blue-400">{driver.nome.toUpperCase()}</span>
+                                    ) : (
+                                      <span className="text-[10px] font-bold text-slate-400 italic">Sem Cadastro (Importe SPX)</span>
+                                    )}
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">{driver.veiculo}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              {activeColumns.map(col => {
+                                let val = null;
+                                if (driverViewMode === 'TOTAL') val = driver.scoresTotal[col.id];
+                                else if (driverViewMode === 'D0') val = driver.scoresD0[col.id];
+                                else if (driverViewMode === 'MONTH_TOTAL') val = driver.scoresMesTotal[col.id];
+                                else if (driverViewMode === 'MONTH_D0') val = driver.scoresMesD0[col.id];
+                                
+                                return (
+                                  <td key={col.id} className="p-3 text-center whitespace-nowrap">
+                                    {renderSemaforo(val, driverViewMode.includes('D0'))}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* =========================================================
-          ABA 2: TABELA DE KPIs DO STATION (BASE DATA)
+          ABA 2: TABELA DE KPIS DO HUB (GLOBAL)
           ========================================================= */}
       {activeTab === 'hubs' && (
         <div className="flex flex-col gap-3 flex-1 relative min-h-[400px] animate-in fade-in slide-in-from-right-4 duration-300">
           
-          <div className="flex justify-between items-end">
-            <div className={`flex flex-wrap items-center bg-white dark:bg-[#1f232d] p-1.5 rounded-xl w-fit shadow-sm border border-slate-200 dark:border-gray-800 transition-opacity ${showsEmptyState ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-              <button onClick={() => setHubTimeView('dia')} className={`flex items-center gap-1.5 px-6 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${hubTimeView === 'dia' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}>
-                Dia
-              </button>
-              <button onClick={() => setHubTimeView('semana')} className={`flex items-center gap-1.5 px-6 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${hubTimeView === 'semana' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}>
-                Semana
-              </button>
-              <button onClick={() => setHubTimeView('mes')} className={`flex items-center gap-1.5 px-6 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${hubTimeView === 'mes' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white'}`}>
-                Mês
-              </button>
+          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4">
+            <div className="flex flex-wrap items-center bg-white dark:bg-[#1f232d] p-1.5 rounded-xl w-fit shadow-sm border border-slate-200 dark:border-gray-800">
+              <button 
+                onClick={() => setHubTimeView('dia')} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${hubTimeView === 'dia' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              >Visão Diária</button>
+              <button 
+                onClick={() => setHubTimeView('semana')} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${hubTimeView === 'semana' ? 'bg-[#113366] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              >Visão Semanal</button>
+              <button 
+                onClick={() => setHubTimeView('mes')} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all ${hubTimeView === 'mes' ? 'bg-[#EE4D2D] text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              >Visão Mensal</button>
+            </div>
+            
+            <div className="relative" ref={dropdownKpiRef}>
+              <div 
+                onClick={() => setDropdownKpiOpen(!dropdownKpiOpen)}
+                className="flex items-center gap-2 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 px-4 py-2 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                <Layers size={16} className="text-[#EE4D2D]" />
+                <span className="text-xs font-black text-slate-700 dark:text-gray-200 uppercase">
+                  {kpisVisiveis.length} KPIs Visíveis
+                </span>
+                <ChevronDown size={14} className={`text-slate-400 transition-transform ${dropdownKpiOpen ? 'rotate-180' : ''}`} />
+              </div>
+
+              {dropdownKpiOpen && (
+                <div className="absolute right-0 top-[100%] mt-2 w-56 bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col">
+                  <div className="p-2 border-b border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-900/50 flex justify-between items-center">
+                    <span className="text-[10px] font-black uppercase text-slate-500">Selecione as Colunas</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto p-1 custom-scrollbar">
+                    {KPI_OPTIONS.map(kpi => {
+                      const isChecked = kpisVisiveis.includes(kpi.id);
+                      return (
+                        <div 
+                          key={`kpi-opt-${kpi.id}`} 
+                          onClick={() => toggleKpiVisivel(kpi.id)}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${isChecked ? 'bg-orange-50 dark:bg-orange-900/20 text-[#EE4D2D]' : 'hover:bg-slate-50 dark:hover:bg-gray-800 text-slate-700 dark:text-gray-300'}`}
+                        >
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center ${isChecked ? 'border-[#EE4D2D] bg-[#EE4D2D]' : 'border-slate-300 dark:border-gray-600'}`}>
+                            {isChecked && <Check size={12} className="text-white" />}
+                          </div>
+                          <span className="text-xs font-bold">{kpi.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-[#113366] overflow-hidden flex flex-col flex-1 relative">
-            {showsEmptyState ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 p-6">
-                    <div className="bg-white dark:bg-[#1f232d] p-8 rounded-2xl shadow-xl flex flex-col items-center text-center max-w-md border border-slate-200 dark:border-gray-700">
-                        <AlertCircle size={48} className="text-[#EE4D2D] mb-4" />
-                        <h3 className="text-xl font-black text-[#113366] dark:text-white uppercase mb-2">Aguardando Filtro</h3>
-                        <p className="text-sm font-bold text-slate-500 dark:text-gray-400 leading-relaxed">
-                            Selecione uma Subregional ou Station para visualizar os KPIs globais do Hub.
-                        </p>
+          {processedHubKPIs.hubsData.length === 0 ? (
+            <div className="bg-slate-50 dark:bg-[#15171e] rounded-2xl border-2 border-dashed border-slate-200 dark:border-gray-700 flex flex-col items-center justify-center py-20 text-center px-4">
+              <Database size={32} className="text-slate-300 dark:text-gray-600 mb-4" />
+              <h3 className="text-lg font-black text-slate-700 dark:text-gray-200 mb-2">Sem Dados na Base de Hubs</h3>
+              <p className="text-sm font-medium text-slate-500 max-w-md">
+                Ajuste os filtros de tempo ou remova filtros exclusivos de condutor (como ID ou Veículo) para visualizar KPIs do station.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {processedHubKPIs.hubsData.map(hubData => (
+                <div key={`hub-kpi-${hubData.hub}`} className="bg-white dark:bg-[#1f232d] border border-slate-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
+                  <div 
+                    onClick={() => toggleOfertas(hubData.hub)}
+                    className="p-4 bg-slate-50 dark:bg-gray-800/50 flex justify-between items-center cursor-pointer hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-1.5 rounded-lg transition-transform ${expandedOfertas[hubData.hub] ? 'rotate-90 bg-blue-100 dark:bg-blue-900/30 text-[#113366]' : 'bg-slate-200 dark:bg-gray-700 text-slate-500'}`}>
+                        <ChevronRight size={18} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-[#113366] dark:text-blue-400 flex items-center gap-2">
+                          <LayoutDashboard size={16} /> {hubData.hub}
+                        </h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{hubData.subRegional}</p>
+                      </div>
                     </div>
-                </div>
-            ) : (
-                <div className="overflow-x-auto w-full h-full custom-scrollbar">
-                  <table className="w-full border-collapse text-center">
-                      <thead className="bg-[#113366] text-white">
-                        <tr className="tracking-widest text-[10px] uppercase font-black">
-                            <th className="p-4 text-left shadow-sm min-w-[250px] sticky left-0 top-0 bg-[#113366] z-50 border-r border-white/20">
-                                STATION (HUB) / KPI
-                            </th>
-                            <th className="p-4 shadow-sm border-r border-white/20 sticky left-[250px] top-0 bg-[#113366] z-50">
-                                VISÃO
-                            </th>
-                            
+                  </div>
+
+                  {expandedOfertas[hubData.hub] && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-white dark:bg-[#1f232d] border-b border-slate-200 dark:border-gray-800">
+                            <th className="p-3 text-[11px] font-black text-slate-500 uppercase whitespace-nowrap bg-slate-50/50 dark:bg-gray-800/30 w-32 border-r border-slate-100 dark:border-gray-800">Métrica</th>
                             {processedHubKPIs.timeColumns.map(col => (
-                               <th key={col.id} className="p-4 shadow-sm border-r border-white/20 min-w-[85px] sticky top-0 bg-[#113366] z-40">
-                                   {col.label}
-                               </th>
+                              <th key={`th-${col.id}`} className="p-3 text-[11px] font-black text-[#113366] dark:text-blue-400 uppercase text-center whitespace-nowrap bg-slate-50/50 dark:bg-gray-800/30 min-w-[80px]">
+                                {col.label}
+                              </th>
                             ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-black text-sm relative z-0">
-                        {processedHubKPIs.hubsData.length === 0 ? (
-                            <tr><td colSpan={processedHubKPIs.timeColumns.length + 2} className="p-10 text-center font-bold text-slate-400">Nenhum dado encontrado para o período.</td></tr>
-                        ) : (
-                            processedHubKPIs.hubsData.map((row) => {
-                              const isOpen = !!expandedHubs[row.hub];
-                              return (
-                                <React.Fragment key={row.hub}>
-                                  <tr onClick={() => toggleHub(row.hub)} className="cursor-pointer bg-slate-100 dark:bg-gray-800 hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors h-[50px]">
-                                     <td className="p-4 text-left text-[#113366] dark:text-blue-400 font-black border-r border-slate-200 dark:border-gray-700 flex items-center gap-2 sticky left-0 z-20 bg-slate-100 dark:bg-gray-800">
-                                       {isOpen ? <ChevronDown size={18} className="text-[#EE4D2D]"/> : <ChevronRight size={18} className="text-slate-400"/>}
-                                       <Layers size={16} className="text-[#EE4D2D] shrink-0" />
-                                       <span className="truncate" title={row.hub}>{row.hub}</span>
-                                     </td>
-                                     <td className="p-4 text-xs font-black text-[#113366] dark:text-white uppercase border-r border-slate-200 dark:border-gray-700 sticky left-[250px] z-20 bg-slate-100 dark:bg-gray-800">TOTAL STATION</td>
-                                     {processedHubKPIs.timeColumns.map(col => (
-                                        <td key={col.id} className="p-4 border-r border-slate-200 dark:border-gray-700 bg-slate-50/50 dark:bg-gray-800/50">-</td>
-                                     ))}
-                                  </tr>
-
-                                  {isOpen && [
-                                     { key: 'dsTotal', label: 'Delivery Success (Total)', format: 'semaforo', isD0: false },
-                                     { key: 'dsD0', label: 'Delivery Success (D-0)', format: 'semaforo', isD0: true },
-                                     { key: 'spr', label: 'Aderência SPR', format: 'percent', color: 'text-[#113366] dark:text-blue-400' },
-                                     { key: 'reut', label: 'Reutilização', format: 'percent', color: 'text-indigo-600 dark:text-indigo-400' },
-                                     { key: 'atPiso', label: '% AT no Piso', format: 'percent', color: 'text-orange-500' },
-                                     { key: 'totalCarregado', label: 'Total Carregado', format: 'number', color: 'text-slate-700 dark:text-slate-300' },
-                                     { key: 'driversUnicos', label: 'Drivers Únicos', format: 'number', color: 'text-slate-700 dark:text-slate-300' },
-                                     { key: 'ofertasTotais', label: 'Ofertas de Drivers', format: 'expandable', color: 'text-[#113366] dark:text-blue-400' }
-                                  ].map(kpi => {
-                                      if (kpi.format === 'expandable') {
-                                          const isOfExpanded = !!expandedOfertas[row.hub];
-                                          return (
-                                              <React.Fragment key={`${row.hub}-${kpi.key}`}>
-                                                  <tr onClick={(e) => { e.stopPropagation(); toggleOfertas(row.hub); }} className="bg-slate-50 dark:bg-[#1a1d24] hover:bg-slate-100 dark:hover:bg-gray-800/50 transition-colors cursor-pointer">
-                                                      <td className="p-3 text-left pl-12 font-black text-slate-800 dark:text-gray-200 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-20 bg-slate-50 dark:bg-[#1a1d24] flex items-center gap-1.5">
-                                                          {isOfExpanded ? <ChevronDown size={14} className="text-[#EE4D2D]"/> : <ChevronRight size={14} className="text-slate-400"/>}
-                                                          {kpi.label}
-                                                      </td>
-                                                      <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 sticky left-[250px] z-20 bg-slate-50 dark:bg-[#1a1d24]">KPI</td>
-                                                      {processedHubKPIs.timeColumns.map(col => {
-                                                          const val = row.kpis[kpi.key][col.id];
-                                                          return <td key={col.id} className="p-3 border-r border-slate-100 dark:border-gray-800">{val ? <span className={`font-black ${kpi.color}`}>{val.toLocaleString('pt-BR')}</span> : '-'}</td>;
-                                                      })}
-                                                  </tr>
-                                                  {isOfExpanded && [
-                                                      { key: 'ofertasMoto', label: '↳ Moto' },
-                                                      { key: 'ofertasPasseio', label: '↳ Passeio' },
-                                                      { key: 'ofertasUtil', label: '↳ Utilitário' },
-                                                      { key: 'ofertasVan', label: '↳ Van' }
-                                                  ].map(subKpi => (
-                                                      <tr key={`${row.hub}-${subKpi.key}`} className="bg-white dark:bg-[#15171e] hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
-                                                          <td className="p-3 text-left pl-20 font-bold text-slate-600 dark:text-gray-400 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-20 bg-white dark:bg-[#15171e]">{subKpi.label}</td>
-                                                          <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 sticky left-[250px] z-20 bg-white dark:bg-[#15171e]">MODAL</td>
-                                                          {processedHubKPIs.timeColumns.map(col => {
-                                                              const val = row.kpis[subKpi.key][col.id];
-                                                              return <td key={col.id} className="p-3 border-r border-slate-100 dark:border-gray-800 font-bold text-slate-700 dark:text-gray-300">{val ? val.toLocaleString('pt-BR') : '-'}</td>;
-                                                          })}
-                                                      </tr>
-                                                  ))}
-                                              </React.Fragment>
-                                          );
-                                      }
-
-                                      return (
-                                        <tr key={`${row.hub}-${kpi.key}`} className="bg-white dark:bg-[#15171e] hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
-                                           <td className="p-3 text-left pl-12 font-black text-slate-800 dark:text-gray-200 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-20 bg-white dark:bg-[#15171e]">{kpi.label}</td>
-                                           <td className="p-3 font-bold uppercase text-[10px] text-slate-400 tracking-wider border-r border-slate-100 dark:border-gray-800 sticky left-[250px] z-20 bg-white dark:bg-[#15171e]">KPI</td>
-                                           {processedHubKPIs.timeColumns.map(col => {
-                                               const val = row.kpis[kpi.key][col.id];
-                                               if (val === null || val === undefined) return <td key={col.id} className="p-3 border-r border-slate-100 dark:border-gray-800">-</td>;
-
-                                               let content;
-                                               if (kpi.format === 'semaforo') {
-                                                   content = renderSemaforo(val, kpi.isD0 ? 'D0' : 'TOTAL'); 
-                                               } else if (kpi.format === 'percent') {
-                                                   content = <span className={`font-black ${kpi.color}`}>{val}%</span>;
-                                               } else if (kpi.format === 'number') {
-                                                   content = <span className={`font-black ${kpi.color}`}>{val.toLocaleString('pt-BR')}</span>;
-                                               }
-                                               return <td key={col.id} className={`p-3 border-r border-slate-100 dark:border-gray-800 ${kpi.format === 'semaforo' && val < 95 ? 'bg-red-50/20 dark:bg-red-900/5' : ''}`}>{content}</td>;
-                                           })}
-                                        </tr>
-                                      );
-                                  })}
-                                </React.Fragment>
-                              );
-                            })
-                        )}
-                      </tbody>
-                  </table>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
+                          {kpisVisiveis.includes('dsTotal') && (
+                            <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                              <td className="p-3 text-[11px] font-black text-slate-700 dark:text-gray-300 border-r border-slate-100 dark:border-gray-800">DS Total</td>
+                              {processedHubKPIs.timeColumns.map(col => (
+                                <td key={`dsT-${col.id}`} className="p-3 text-center">{renderSemaforo(hubData.kpis.dsTotal[col.id], false)}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {kpisVisiveis.includes('dsD0') && (
+                            <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                              <td className="p-3 text-[11px] font-black text-slate-700 dark:text-gray-300 border-r border-slate-100 dark:border-gray-800">DS D-0</td>
+                              {processedHubKPIs.timeColumns.map(col => (
+                                <td key={`dsD0-${col.id}`} className="p-3 text-center">{renderSemaforo(hubData.kpis.dsD0[col.id], true)}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {kpisVisiveis.includes('spr') && (
+                            <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                              <td className="p-3 text-[11px] font-black text-slate-700 dark:text-gray-300 border-r border-slate-100 dark:border-gray-800">SPR</td>
+                              {processedHubKPIs.timeColumns.map(col => (
+                                <td key={`spr-${col.id}`} className="p-3 text-center text-[11px] font-bold text-slate-600 dark:text-gray-400">{hubData.kpis.spr[col.id] ?? '-'}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {kpisVisiveis.includes('reut') && (
+                            <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                              <td className="p-3 text-[11px] font-black text-slate-700 dark:text-gray-300 border-r border-slate-100 dark:border-gray-800">Reut. (%)</td>
+                              {processedHubKPIs.timeColumns.map(col => (
+                                <td key={`reut-${col.id}`} className="p-3 text-center text-[11px] font-bold text-slate-600 dark:text-gray-400">{hubData.kpis.reut[col.id] !== null ? `${hubData.kpis.reut[col.id]}%` : '-'}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {kpisVisiveis.includes('atPiso') && (
+                            <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                              <td className="p-3 text-[11px] font-black text-slate-700 dark:text-gray-300 border-r border-slate-100 dark:border-gray-800">At. Piso (%)</td>
+                              {processedHubKPIs.timeColumns.map(col => (
+                                <td key={`atPiso-${col.id}`} className="p-3 text-center text-[11px] font-bold text-slate-600 dark:text-gray-400">{hubData.kpis.atPiso[col.id] !== null ? `${hubData.kpis.atPiso[col.id]}%` : '-'}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {kpisVisiveis.includes('totalCarregado') && (
+                            <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50 bg-slate-50/30 dark:bg-gray-800/10">
+                              <td className="p-3 text-[11px] font-black text-slate-700 dark:text-gray-300 border-r border-slate-100 dark:border-gray-800">Total Carregado</td>
+                              {processedHubKPIs.timeColumns.map(col => (
+                                <td key={`carregado-${col.id}`} className="p-3 text-center text-[11px] font-black text-[#113366] dark:text-blue-400">{hubData.kpis.totalCarregado[col.id] ?? '-'}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {kpisVisiveis.includes('driversUnicos') && (
+                            <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                              <td className="p-3 text-[11px] font-black text-slate-700 dark:text-gray-300 border-r border-slate-100 dark:border-gray-800">Drivers Únicos</td>
+                              {processedHubKPIs.timeColumns.map(col => (
+                                <td key={`drivers-${col.id}`} className="p-3 text-center text-[11px] font-bold text-slate-600 dark:text-gray-400">{hubData.kpis.driversUnicos[col.id] ?? '-'}</td>
+                              ))}
+                            </tr>
+                          )}
+                          {kpisVisiveis.includes('ofertasTotais') && (
+                            <>
+                              <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50 bg-orange-50/30 dark:bg-orange-900/10">
+                                <td className="p-3 text-[11px] font-black text-[#EE4D2D] border-r border-orange-100 dark:border-orange-800/30 flex items-center gap-1.5"><Zap size={12}/> Ofertas Totais</td>
+                                {processedHubKPIs.timeColumns.map(col => (
+                                  <td key={`ofertas-${col.id}`} className="p-3 text-center text-[11px] font-black text-[#EE4D2D]">{hubData.kpis.ofertasTotais[col.id] ?? '-'}</td>
+                                ))}
+                              </tr>
+                              <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                                <td className="p-3 text-[10px] font-bold text-slate-500 pl-6 border-r border-slate-100 dark:border-gray-800">↳ Passeio</td>
+                                {processedHubKPIs.timeColumns.map(col => (
+                                  <td key={`pass-${col.id}`} className="p-3 text-center text-[10px] font-bold text-slate-500">{hubData.kpis.ofertasPasseio[col.id] ?? '-'}</td>
+                                ))}
+                              </tr>
+                              <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                                <td className="p-3 text-[10px] font-bold text-slate-500 pl-6 border-r border-slate-100 dark:border-gray-800">↳ Moto</td>
+                                {processedHubKPIs.timeColumns.map(col => (
+                                  <td key={`moto-${col.id}`} className="p-3 text-center text-[10px] font-bold text-slate-500">{hubData.kpis.ofertasMoto[col.id] ?? '-'}</td>
+                                ))}
+                              </tr>
+                              <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50">
+                                <td className="p-3 text-[10px] font-bold text-slate-500 pl-6 border-r border-slate-100 dark:border-gray-800">↳ Utilitário</td>
+                                {processedHubKPIs.timeColumns.map(col => (
+                                  <td key={`util-${col.id}`} className="p-3 text-center text-[10px] font-bold text-slate-500">{hubData.kpis.ofertasUtil[col.id] ?? '-'}</td>
+                                ))}
+                              </tr>
+                              <tr className="hover:bg-slate-50 dark:hover:bg-gray-800/50 border-b border-slate-200 dark:border-gray-700">
+                                <td className="p-3 text-[10px] font-bold text-slate-500 pl-6 border-r border-slate-100 dark:border-gray-800">↳ Van</td>
+                                {processedHubKPIs.timeColumns.map(col => (
+                                  <td key={`van-${col.id}`} className="p-3 text-center text-[10px] font-bold text-slate-500">{hubData.kpis.ofertasVan[col.id] ?? '-'}</td>
+                                ))}
+                              </tr>
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-
     </div>
   );
 }
