@@ -1,9 +1,21 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData } from '../api/googleSheets';
+import { getConsolidadoData, getBaseReferenceData, getDadosAtPiso, getFirstTripsData, getHistoricoFrotaData, getAtPisoClusterData, getBaseDSHubData } from '../api/googleSheets';
 import Visualizations from './Visualizations';
 import { Layers, CalendarDays, MapPin, BookOpen, Search, Clock, Hash, Eraser, Download, Printer, ChevronDown, LayoutDashboard, Users, BarChart3, AlertCircle, Package, Zap, Activity, MessageSquareWarning, PieChart } from 'lucide-react';
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
+
+
+const padronizarHubLocal = (nome) => {
+  if (!nome) return "";
+  let n = String(nome).trim();
+  let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
+  
+  if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
+  if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  
+  return n;
+};
 
 const MESES = [
   { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' }, { value: '03', label: 'Março' },
@@ -25,7 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState("Iniciando...");
   
-  // ESTADOS GLOBAIS DE DADOS (Removi os pesados daqui!)
+  // ESTADOS GLOBAIS DE DADOS
   const [rawData, setRawData] = useState([]);
   const [dashData, setDashData] = useState([]);
   const [baseData, setBaseData] = useState([]);
@@ -34,13 +46,13 @@ export default function Dashboard() {
   const [historicoFrotaData, setHistoricoFrotaData] = useState([]);
   const [ofertasModalData, setOfertasModalData] = useState([]);
   const [atPisoClusterData, setAtPisoClusterData] = useState([]);
+  const [dsHubData, setDsHubData] = useState([]);
   
   // ESTADOS DE FILTROS GLOBAIS
   const [filtros, setFiltros] = useState({
     regional: [], station: [], turno: [], dataInicio: '', dataFim: '', semana: '', mes: ''
   });
   
-
   const [isTurnoMenuOpen, setIsTurnoMenuOpen] = useState(false);
   const [isStationMenuOpen, setIsStationMenuOpen] = useState(false);
   const [isRegionalMenuOpen, setIsRegionalMenuOpen] = useState(false);
@@ -77,7 +89,7 @@ export default function Dashboard() {
     return () => menuElement.removeEventListener('wheel', handleWheel);
   }, [loading]); 
 
-  // MOTOR DE CARREGAMENTO INTELIGENTE (OTIMIZADO)
+  
   useEffect(() => {
     const carregarDadosEssenciais = async () => {
       setLoading(true);
@@ -86,9 +98,11 @@ export default function Dashboard() {
         const hubsPermitidos = getHubsPermitidos(regEscolhida);
 
         setLoadingProgress("Buscando Base de Planejamento...");
-        const [dataConsol, dataBase] = await Promise.all([
+        
+        const [dataConsol, dataBase, dataDsHub] = await Promise.all([
           getConsolidadoData(),
-          getBaseReferenceData()
+          getBaseReferenceData(),
+          getBaseDSHubData()
         ]);
 
         let dadosConsolBrutos = [];
@@ -101,8 +115,13 @@ export default function Dashboard() {
             setBaseData([dataBase[0]].concat(dataBase.slice(1).filter(r => hubsPermitidos.includes(String(r[0]).trim()))));
         }
 
+        // AGORA FUNCIONA SEM DARS ERRO:
+        if (dataDsHub && dataDsHub.length > 1) {
+            setDsHubData(dataDsHub.slice(1).filter(r => hubsPermitidos.includes(padronizarHubLocal(r[0]))));
+        }
+
         setLoadingProgress("Buscando KPI's Secundários...");
-        // Carregamento Sequenciado (para evitar pico de chamadas)
+        
         const dataPiso = await getDadosAtPiso();
         if (dataPiso && dataPiso.length > 1) setAtPisoData(dataPiso);
 
@@ -121,9 +140,6 @@ export default function Dashboard() {
             setAtPisoClusterData([dataCluster[0]].concat(dataCluster.slice(1).filter(r => hubsPermitidos.includes(String(r[3]).trim()))));
         }
 
-        // 🔥 RETIRAMOS A LÓGICA DE DADOS PESADOS E ABA "POR MÊS" DAQUI!
-        // O Componente Visualizations fará o Lazy Load deles quando precisar.
-
       } catch (error) {
         console.error("Erro Crítico no Start do Dashboard", error);
       } finally {
@@ -132,7 +148,7 @@ export default function Dashboard() {
     };
     
     carregarDadosEssenciais();
-  }, []); 
+  }, []);
 
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
@@ -366,7 +382,21 @@ export default function Dashboard() {
 
       {/* CONTEÚDO DOS DASHBOARDS */}
       <div className="flex-1 overflow-y-auto print:overflow-visible">
-        <Visualizations activeCategory={activeCategory} data={dadosFiltrados} rawData={rawData} dashData={dashData} atPisoData={atPisoData} atPisoClusterData={atPisoClusterData} baseData={baseData} firstTripsData={firstTripsData} historicoFrotaData={historicoFrotaData} ofertasModalData={ofertasModalData} filtrosGlobais={filtros} />
+        {/* CORREÇÃO AQUI: Passando dsHubData para o componente */}
+        <Visualizations 
+          activeCategory={activeCategory} 
+          data={dadosFiltrados} 
+          rawData={rawData} 
+          dashData={dashData} 
+          atPisoData={atPisoData} 
+          atPisoClusterData={atPisoClusterData} 
+          baseData={baseData} 
+          firstTripsData={firstTripsData} 
+          historicoFrotaData={historicoFrotaData} 
+          ofertasModalData={ofertasModalData} 
+          dsHubData={dsHubData} 
+          filtrosGlobais={filtros} 
+        />
       </div>
     </div>
   );

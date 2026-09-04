@@ -29,10 +29,12 @@ window.TRADUZ_MES = {
   '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez'
 };
 
+
 const Visualizations = ({ 
   activeCategory, data, rawData, dashData, atPisoData, baseData, 
   firstTripsData, historicoFrotaData, ofertasModalData, filtrosGlobais,
-  atPisoClusterData, atExpedidaData: propAtExpedidaData, recusasData: propRecusasData 
+  atPisoClusterData, atExpedidaData: propAtExpedidaData, recusasData: propRecusasData,
+  dsHubData // 
 }) => {
 
   const [clusterSubTab, setClusterSubTab] = useState('conclusoes'); 
@@ -237,8 +239,7 @@ const Visualizations = ({
       {activeCategory === 'estudos' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <EstudosDSRodizio 
-              rawData={rawData} 
-              dsMotoristaData={dsMotoristaData || rawData} 
+              dsHubData={dsHubData || []} 
               filtrosGlobais={filtrosGlobais} 
            />
         </div>
