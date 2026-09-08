@@ -25,7 +25,8 @@ const fastSanitizeHub = (str) => {
   if (cached) return cached;
   let s = padronizarHubLocal(str);
   let sanitized = s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  sanitized = sanitized.replace(/[_-]\d+$/, "").replace(/[^A-Z0-9]/g, '');
+  // CORREÇÃO: Removido o .replace(/[_-]\d+$/, "") que arrancava o "_02" do final
+  sanitized = sanitized.replace(/[^A-Z0-9]/g, '');
   SANITIZE_CACHE.set(str, sanitized);
   return sanitized;
 };
@@ -170,7 +171,6 @@ export default function EstresseClusterTable({
       const cC = fastSanitizeCluster(clusterRaw);
       
       const resolved = resolveToAgg(hC, cC);
-      // impede que clusters bugados causem o crash de "undefined" no painel
       if (!resolved || !resolved.clusterAgg) return; 
 
       resolved.hubAgg[campo] += qtd;
