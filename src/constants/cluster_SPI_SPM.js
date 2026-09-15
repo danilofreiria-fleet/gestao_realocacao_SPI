@@ -684,13 +684,14 @@ export const CLUSTERS_POR_HUB = {
     "Swiss Park",  
     "Jardim Campo Belo - z",  
     "Swift",
-     "Jardim Campo Belo - z",
- "Jardim Nova Europa",
- "Sousas",
- "Swift",
- "Swiss Park",
- "Valinhos",
- "Vinhedo"  
+    "Jardim Campo Belo - z",
+    "Jardim Nova Europa",
+    "Sousas",
+    "Swift",
+    "Swiss Park",
+    "Valinhos",
+    "Vinhedo",
+    "Itatinga"
   ],  
   "LM Hub_SP_Várzea Paulista": [  
     "14. Botujuru",  
