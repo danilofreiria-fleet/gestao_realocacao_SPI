@@ -497,25 +497,7 @@ export const CLUSTERS_POR_HUB = {
     "Recanto dos Dourados - z",  
     "Cidade Universitária",  
     "Village Campinas - z",  
-    "Jardim Itatinga",
-     "Indaiatuba Oeste",
- "Indaiatuba Norte",
- "Indaiatuba Sul",
- "Centro Campinas - z",
- "Recanto dos Dourados - z",
- "Village Campinas - z",
- "Cambuí",
- "Cidade Universitária",
- "Jardim Leonor",
- "Jardim Ouro Verde",
- "Conj Hab Parque Itajaí",
- "Taquaral",
- "Chapadão",
- "Jardim Novo Flamboyant",
- "Jardim Alvorada",
- "Satélite Íris",
- "Lot Alphaville Campinas",
- "Jardim Santa Mônica"  
+    "Jardim Itatinga"  
   ],  
   "LM Hub_SP_Limeira_Campo Belo": [  
     "04_Cluster_4",  
@@ -684,14 +666,7 @@ export const CLUSTERS_POR_HUB = {
     "Swiss Park",  
     "Jardim Campo Belo - z",  
     "Swift",
-    "Jardim Campo Belo - z",
-    "Jardim Nova Europa",
-    "Sousas",
-    "Swift",
-    "Swiss Park",
-    "Valinhos",
-    "Vinhedo",
-    "Itatinga"
+    "Itatinga"  
   ],  
   "LM Hub_SP_Várzea Paulista": [  
     "14. Botujuru",  
@@ -852,13 +827,15 @@ export const CLUSTERS_POR_HUB = {
     "ZOF03 Ibiúna, Verava",  
     "ZOF04 Ibiúna, Lajeado"  
   ],  
-    "LM Hub_SP_Sorocaba_02": [
-  "ALL",
+
+  "LM Hub_SP_Sorocaba_02": [
   "Aluminio",
   "Araçariguama",
   "Chácara Flórida",
   "Cidade Nova",
   "Ibiuna I",
+  "Ibiuna II",
+  "Ibiuna III",
   "Ibiuna IV",
   "Itu Centro",
   "Mairinque I",
@@ -870,9 +847,9 @@ export const CLUSTERS_POR_HUB = {
   "Salto III",
   "Salto IV",
   "São Roque",
-  "São Roque_Canguera"
+  "São Roque_Canguera",
+  "São Roque_Mailasqui"
 ],
-
   "LM Hub_SP_Itapeva": [  
     "Ribeirão Branco",  
     "Itapeva",  
@@ -1014,8 +991,8 @@ export const CLUSTERS_POR_HUB = {
     "Santa Branca",  
     "Paraibuna",  
     "Jambeiro"  
-  ],  
-
+  ], 
+  
   "LM Hub_SP_São José dos Cam_103": [
   "Monteiro Lobato",
   "São Francisco Xavier",
@@ -1031,6 +1008,23 @@ export const CLUSTERS_POR_HUB = {
   "Zona Sul - Interlagos",
   "Zona Oeste - Jd. Das Indústrias"
 ],
+
+  "LM Hub_SP_São José dos Cam_103":[
+    "Monteiro Lobato",
+    "São Francisco Xavier",
+    "Aquárius",
+    "Urbanova",
+    "Zona Norte - Buquirinha",
+    "Zona Leste - Jardim Majestic",
+    "Zona Leste",
+    "Zona Leste - Eugênio de Melo",
+    "Zona Norte - Altos de Santana",
+    "Sudeste - Flamboyant",
+    "Zona Sul - Satélite",
+    "Zona Sul - Interlagos",
+    "Zona Oeste - Jd. Das Indústrias"
+  ],
+  
   "LM Hub_SP_Artur Alvim": [  
     "06. Jardim Limoeiro",  
     "03. Parque Boturussu",  
@@ -1107,7 +1101,7 @@ export const CLUSTERS_POR_HUB = {
   "Ponta Da Praia",
   "Vila Belmiro",
   "Vila Matias"
-], 
+],
   "LM Hub_SP_Jurubatuba": [  
     "Vila São José - 02 - z",  
     "São Luis - 02 - z",  
@@ -1227,7 +1221,7 @@ export const CLUSTERS_POR_HUB = {
   "Santa Cruz",
   "Solemar",
   "Tupi"
-], 
+],  
   "LM Hub_SP_Mauá": [  
     "11. Parque São Rafael",  
     "07. Vila Feital",  
