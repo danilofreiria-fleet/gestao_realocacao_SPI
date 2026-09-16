@@ -852,6 +852,27 @@ export const CLUSTERS_POR_HUB = {
     "ZOF03 Ibiúna, Verava",  
     "ZOF04 Ibiúna, Lajeado"  
   ],  
+    "LM Hub_SP_Sorocaba_02": [
+  "ALL",
+  "Aluminio",
+  "Araçariguama",
+  "Chácara Flórida",
+  "Cidade Nova",
+  "Ibiuna I",
+  "Ibiuna IV",
+  "Itu Centro",
+  "Mairinque I",
+  "Mairinque II",
+  "Mairinque III",
+  "Mairinque IV",
+  "Salto I",
+  "Salto II",
+  "Salto III",
+  "Salto IV",
+  "São Roque",
+  "São Roque_Canguera"
+],
+
   "LM Hub_SP_Itapeva": [  
     "Ribeirão Branco",  
     "Itapeva",  
