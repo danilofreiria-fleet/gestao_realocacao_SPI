@@ -1190,7 +1190,7 @@ export const CLUSTERS_POR_HUB = {
   "Santa Cruz",
   "Solemar",
   "Tupi"
-] 
+], 
   "LM Hub_SP_Mauá": [  
     "11. Parque São Rafael",  
     "07. Vila Feital",  
