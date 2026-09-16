@@ -994,6 +994,22 @@ export const CLUSTERS_POR_HUB = {
     "Paraibuna",  
     "Jambeiro"  
   ],  
+
+  "LM Hub_SP_São José dos Cam_103": [
+  "Monteiro Lobato",
+  "São Francisco Xavier",
+  "Aquárius",
+  "Urbanova",
+  "Zona Norte - Buquirinha",
+  "Zona Leste - Jardim Majestic",
+  "Zona Leste",
+  "Zona Leste - Eugênio de Melo",
+  "Zona Norte - Altos de Santana",
+  "Sudeste - Flamboyant",
+  "Zona Sul - Satélite",
+  "Zona Sul - Interlagos",
+  "Zona Oeste - Jd. Das Indústrias"
+],
   "LM Hub_SP_Artur Alvim": [  
     "06. Jardim Limoeiro",  
     "03. Parque Boturussu",  
