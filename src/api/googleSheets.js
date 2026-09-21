@@ -220,12 +220,16 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
     if (!token) throw new Error("Usuário não autenticado.");
 
     const safeVal = (v) => (v === undefined || v === null) ? "" : v;
+    
+    // ATENÇÃO: Garanta que padronizarData e limpaTexto são à prova de falhas
+    // e conseguem comparar o que vem do Sheets com o que vem do seu Frontend.
     const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
     const hubAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
     const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
 
     console.log("🚀 INICIANDO EDIÇÃO TRIPLA EM BLOCO...");
 
+    // 1. ATUALIZA O CONSOLIDADO (VIA INDEX - NÃO CAUSA DUPLICIDADE)
     try {
       const payloadConsolidado = [{ range: `'${ABA_NOME}'!A${rowIndex}`, values: [rowData.map(safeVal)] }];
       const reqConsol = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`, {
@@ -235,8 +239,15 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       if (!reqConsol.ok) throw new Error(await reqConsol.text());
     } catch (e) { throw new Error(`Falha no Consolidado: ${e.message}`); }
 
+    // 2. ATUALIZA O REPORT DIARIO (ONDE OCORRE O RISCO DE DUPLICIDADE)
     try {
-      const respRep = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}`, { headers: { "Authorization": `Bearer ${token}` } });
+      // CORREÇÃO: Quebra de cache inserida na URL e no Header
+      const urlGetRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}?t=${Date.now()}`;
+      const respRep = await fetchWithQueue(urlGetRep, { 
+        headers: { "Authorization": `Bearer ${token}` },
+        cache: "no-store" // Bloqueia o cache do navegador
+      });
+      
       const dataRep = await respRep.json();
       let encontrouReport = false;
       const linhaGestao = rowData.slice(0, 47).map(safeVal);
@@ -252,7 +263,7 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
               body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
             });
             if (!reqRep.ok) throw new Error(await reqRep.text());
-            break;
+            break; // Para no primeiro que encontrar (o mais recente)
           }
         }
       }
@@ -267,8 +278,15 @@ export const updateRowData = async (rowIndex, rowData, oldRowData) => {
       }
     } catch (e) { throw new Error(`Falha no Report: ${e.message}`); }
 
+    // 3. ATUALIZA O CONTROLE / SOP
     try {
-      const respSop = await fetchWithQueue(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}`, { headers: { "Authorization": `Bearer ${token}` } });
+      // CORREÇÃO: Quebra de cache inserida na URL e no Header
+      const urlGetSop = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}?t=${Date.now()}`;
+      const respSop = await fetchWithQueue(urlGetSop, { 
+        headers: { "Authorization": `Bearer ${token}` },
+        cache: "no-store" // Bloqueia o cache do navegador
+      });
+      
       const dataSop = await respSop.json();
       let encontrouSop = false;
       
