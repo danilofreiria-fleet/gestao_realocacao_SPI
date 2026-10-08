@@ -556,8 +556,32 @@ export const CLUSTERS_POR_HUB = {
     "Charqueada",  
     "Santa Rosa",  
     "SBO 3",  
-    "São Jorge"  
+    "São Jorge",
+    "Águas de São Pedro",
+    "Americana 1",
+    "Americana 2",
+    "Artemis",
+    "Campestre",
+    "Capivari",
+    "Centro",
+    "Charqueada",
+    "Jupia",
+    "Mario Dedini",
+    "Piracicamirim",
+    "Rio das Pedras",
+    "Santana",
+    "São Jorge",
+    "São Pedro",
+    "SBO 1",
+    "SBO 2"
   ],  
+
+"LM Hub_SP_Ibitinga": [
+  "Borborema",
+  "Novo Horizonte - z",
+  "Ibitinga"
+],
+
   "LM Hub_SP_Sumaré_Nova Veneza": [  
     "06. Campinas I",  
     "22. Sumaré V",  
