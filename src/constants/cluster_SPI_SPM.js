@@ -421,6 +421,16 @@ export const CLUSTERS_POR_HUB = {
   "Vila Nova Mazzei"
 ],
 
+"LM Hub_SP_Guarulhos_142": [
+  "Cidade De Deus",
+  "Domitila",
+  "Parque Boturussu",
+  "Parque Guarani",
+  "São Miguel Paulista",
+  "Tiquatira",
+  "Vila Esperança"
+],
+
   "LM Hub_SP_VilaGuilherme": [
   "Barra Funda",
   "Bela Vista_01",
