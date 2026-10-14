@@ -25,7 +25,6 @@ const fastSanitizeHub = (str) => {
   if (cached) return cached;
   let s = padronizarHubLocal(str);
   let sanitized = s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  // CORREÇÃO: Removido o .replace(/[_-]\d+$/, "") que arrancava o "_02" do final
   sanitized = sanitized.replace(/[^A-Z0-9]/g, '');
   SANITIZE_CACHE.set(str, sanitized);
   return sanitized;
@@ -64,6 +63,17 @@ const fastParseDate = (s) => {
   return res;
 };
 
+// Nova função para checar o status matematicamente
+const checkStatus = (estresse, status) => {
+  if (!status) return true;
+  if (status === 'SEM_DEMANDA') return estresse === 0;
+  if (status === 'FOLGA_SEGURA') return estresse > 0 && estresse < 0.50;
+  if (status === 'ATENCAO') return estresse >= 0.50 && estresse <= 0.99;
+  if (status === 'RISCO') return estresse > 0.99 && estresse <= 1.25;
+  if (status === 'RUPTURA') return estresse > 1.25; // Inclui 9.9
+  return true;
+};
+
 export default function EstresseClusterTable({ 
   data = [], dispoData = [], atPisoClusterData = [], recusasData = [], atExpedidaData = [], filtrosGlobais = {} 
 }) {
@@ -71,6 +81,7 @@ export default function EstresseClusterTable({
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedModal, setSelectedModal] = useState(''); 
+  const [selectedStatus, setSelectedStatus] = useState(''); // Novo Estado do Filtro
   const [expandedHubs, setExpandedHubs] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
@@ -389,18 +400,30 @@ export default function EstresseClusterTable({
   }, [data, dispoData, atPisoClusterData, recusasData, atExpedidaData, filtrosGlobais, selectedModal, esqueletoBase]);
 
   const filteredAndSortedRows = useMemo(() => {
-    let result = matrizEstresse.linhas.filter(h => h.clusters.length > 0);
+    let result = matrizEstresse.linhas.map(h => {
+      // Filtra os clusters dentro do hub de acordo com o status selecionado
+      const clustersFiltrados = h.clusters.filter(c => checkStatus(c.estresse, selectedStatus));
+      return { ...h, clusters: clustersFiltrados };
+    }).filter(h => {
+      // Mantém o Hub na lista se ele próprio atende ao status OU se algum cluster dele atende
+      return h.clusters.length > 0 || checkStatus(h.estresse, selectedStatus);
+    });
+
+    // Filtro de Busca Textual
     if (searchTerm) {
       const term = fastSanitizeCluster(searchTerm);
       result = result.filter(r => fastSanitizeHub(r.hub).includes(term) || r.clusters.some(c => fastSanitizeCluster(c.cluster).includes(term)));
     }
+
+    // Ordenação
     result.sort((a, b) => {
       if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
       if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
+    
     return result;
-  }, [matrizEstresse.linhas, searchTerm, sortConfig]);
+  }, [matrizEstresse.linhas, searchTerm, sortConfig, selectedStatus]);
 
   const clustersComRiscoChurn = useMemo(() => {
     const todos = [];
@@ -467,21 +490,36 @@ export default function EstresseClusterTable({
             <Activity className="text-[#EE4D2D]" size={20} />
             <h3 className="text-sm font-black text-[#113366] dark:text-white uppercase tracking-wide">Mapeamento de Pressão Operacional</h3>
           </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="relative w-full md:w-56">
+          
+          <div className="flex items-center gap-3 w-full md:w-auto flex-wrap md:flex-nowrap">
+            <div className="relative w-full md:w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input 
                 type="text" placeholder="Buscar Station ou Cluster..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 pl-9 pr-3 text-xs font-bold outline-none text-slate-700 dark:text-white"
               />
             </div>
+            
             <select
               value={selectedModal}
               onChange={(e) => setSelectedModal(e.target.value)}
-              className="w-full md:w-48 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 px-3 text-xs font-bold outline-none cursor-pointer uppercase text-slate-700 dark:text-white"
+              className="w-full md:w-40 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 px-2 text-xs font-bold outline-none cursor-pointer uppercase text-slate-700 dark:text-white"
             >
-              <option value="">🚙 Todos os Modais</option>
+              <option value="">🚙 Todos Modais</option>
               {MODAIS.map(modal => <option key={modal} value={modal}>{modal}</option>)}
+            </select>
+
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full md:w-48 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg py-1.5 px-2 text-[11px] font-bold outline-none cursor-pointer uppercase text-slate-700 dark:text-white"
+            >
+              <option value="">📊 Todos os Status</option>
+              <option value="SEM_DEMANDA">⚪ Sem Demanda</option>
+              <option value="FOLGA_SEGURA">🟢 Folga Segura</option>
+              <option value="ATENCAO">🟡 Atenção (Margem Curta)</option>
+              <option value="RISCO">🟠 Risco (Gargalo)</option>
+              <option value="RUPTURA">🔴 Ruptura Crítica</option>
             </select>
           </div>
         </div>
@@ -509,7 +547,7 @@ export default function EstresseClusterTable({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-bold text-xs bg-white dark:bg-[#1f232d]">
               {paginatedRows.length === 0 ? (
-                <tr><td colSpan={8} className="p-12 text-center text-slate-400 font-bold">Nenhum dado cruzado encontrado.</td></tr>
+                <tr><td colSpan={8} className="p-12 text-center text-slate-400 font-bold">Nenhum dado encontrado para os filtros ativos.</td></tr>
               ) : (
                 paginatedRows.map((rowHub) => {
                   const isOpen = !!expandedHubs[rowHub.hub];
