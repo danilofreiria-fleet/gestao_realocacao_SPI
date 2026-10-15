@@ -6,7 +6,6 @@ const TRADUZ_MES = { '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI',
 const NAMES_MESES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const MODAL_OPTIONS = ['Passeio', 'Fiorino', 'Moto', 'Van'];
 
-// 🔥 VACINA CONTRA ERROS DE DIGITAÇÃO E SUFIXOS
 const padronizarHubLocal = (nome) => {
   if (!nome) return "";
   let n = String(nome).trim();
@@ -14,6 +13,9 @@ const padronizarHubLocal = (nome) => {
   
   if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
   if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+  
+  if (nLimpo.includes("guarulhos") && nLimpo.includes("119")) return "LM Hub_SP_Guarulhos_119";
+  if (nLimpo.includes("guarulhos") && nLimpo.includes("142")) return "LM Hub_SP_Guarulhos_142";
   
   return n;
 };

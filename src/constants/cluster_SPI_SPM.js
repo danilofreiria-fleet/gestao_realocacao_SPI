@@ -685,20 +685,17 @@ export const CLUSTERS_POR_HUB = {
     "Terras de Jundiaí - z",  
     "Fazenda Velha"  
   ],  
-  "LM Hub_SP_Campinas_São Martinho": [  
-    "09_Cluster_9",  
-    "22_Cluster_22",  
-    "08_Cluster_8",  
-    "24_Cluster_24",  
-    "Valinhos",  
-    "Sousas",  
-    "Jardim Nova Europa",  
-    "Vinhedo",  
-    "Swiss Park",  
-    "Jardim Campo Belo - z",  
-    "Swift",
-    "Itatinga"  
-  ],  
+"LM Hub_SP_Campinas_São Martinho": [
+  "Jardim Campo Belo - z",
+  "Itatinga",
+  "Sousas",
+  "Vinhedo",
+  "Valinhos",
+  "Guarani",
+  "Ponte Preta",
+  "Parque Oziel"
+],
+  
   "LM Hub_SP_Várzea Paulista": [  
     "14. Botujuru",  
     "16. Panorama",  

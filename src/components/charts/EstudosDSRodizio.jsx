@@ -14,6 +14,9 @@ const padronizarHubLocal = (nome) => {
   if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
   if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
   
+  if (nLimpo.includes("guarulhos") && nLimpo.includes("119")) return "LM Hub_SP_Guarulhos_119";
+  if (nLimpo.includes("guarulhos") && nLimpo.includes("142")) return "LM Hub_SP_Guarulhos_142";
+  
   return n;
 };
 
