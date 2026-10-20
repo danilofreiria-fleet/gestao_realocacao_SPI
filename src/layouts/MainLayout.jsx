@@ -89,7 +89,7 @@ export default function MainLayout() {
   const menuItems = [
     { path: '/app/premissas', name: 'Manual do Sistema', icon: <BookOpen size={20} /> }, 
     { path: '/app/tabela', name: 'Gestão de Dados', icon: <TableProperties size={20} /> },
-    { path: '/app/calculadora', name: 'Calculadora de SPR', icon: <Calculator size={20} /> }, // 🔥 NOVA FERRAMENTA INSERIDA NO MENU!
+    { path: '/app/planejamento', name: 'Planejamento de Expedição', icon: <Calculator size={20} /> }, // 🔥 NOVA FERRAMENTA INSERIDA NO MENU!
     { path: '/app/rodizio', name: 'Rodízio', icon: <CalendarDays size={20} /> },
     { path: '/app/ds', name: 'Delivery Success', icon: <Award size={20} /> },
     { path: '/app/reports', name: 'Reports Prontos', icon: <ClipboardList size={20} /> },

@@ -16,11 +16,8 @@ const padronizarHubLocal = (nome) => {
   let nLimpo = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
   if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
   if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
-  
-
   if (nLimpo.includes("guarulhos") && nLimpo.includes("119")) return "LM Hub_SP_Guarulhos_119";
   if (nLimpo.includes("guarulhos") && nLimpo.includes("142")) return "LM Hub_SP_Guarulhos_142";
-  
   return n;
 };
 
@@ -68,14 +65,13 @@ const fastParseDate = (s) => {
   return res;
 };
 
-// Nova função para checar o status matematicamente
 const checkStatus = (estresse, status) => {
   if (!status) return true;
   if (status === 'SEM_DEMANDA') return estresse === 0;
   if (status === 'FOLGA_SEGURA') return estresse > 0 && estresse < 0.50;
   if (status === 'ATENCAO') return estresse >= 0.50 && estresse <= 0.99;
   if (status === 'RISCO') return estresse > 0.99 && estresse <= 1.25;
-  if (status === 'RUPTURA') return estresse > 1.25; // Inclui 9.9
+  if (status === 'RUPTURA') return estresse > 1.25; 
   return true;
 };
 
@@ -86,7 +82,7 @@ export default function EstresseClusterTable({
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedModal, setSelectedModal] = useState(''); 
-  const [selectedStatus, setSelectedStatus] = useState(''); // Novo Estado do Filtro
+  const [selectedStatus, setSelectedStatus] = useState(''); 
   const [expandedHubs, setExpandedHubs] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
@@ -143,6 +139,10 @@ export default function EstresseClusterTable({
     const { regional = [], station = [], turno = [], dataInicio = '', dataFim = '', semana = '', mes = '' } = filtrosGlobais;
     const aggs = JSON.parse(JSON.stringify(esqueletoBase.aggsTpl)); 
     const historicoDiario = {}; 
+
+    // Padronização em Caixa Alta para Filtros e Busca Inflexível
+    const regUpper = regional.map(r => String(r).toUpperCase());
+    const stUpper = station.map(s => String(s).toUpperCase());
 
     const dataInicioObj = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
     const dataFimObj = dataFim ? new Date(dataFim + 'T23:59:59') : null;
@@ -246,8 +246,10 @@ export default function EstresseClusterTable({
         let tConf = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
         const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || esqueletoBase.mapaLimpoRegs.get(hC) || ""; 
         
-        if (regional.length > 0 && !regional.includes(subreg)) continue;
-        if (station.length > 0 && !station.includes(hubRaw)) continue;
+        // Regras blindadas contra Case Sensitivity
+        if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+        if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+        
         if (turno.length > 0 && !turno.includes(tConf)) continue;
         if (!isValidDate(dataRaw)) continue;
         if (selectedModal && !modalRaw.includes(selectedModal)) continue;
@@ -277,8 +279,10 @@ export default function EstresseClusterTable({
         const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || esqueletoBase.mapaLimpoRegs.get(hC) || ""; 
      
         if (!dataRaw || qtd === 0) continue;
-        if (regional.length > 0 && !regional.includes(subreg)) continue;
-        if (station.length > 0 && !station.includes(hubRaw)) continue;
+        
+        if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+        if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+
         if (!isValidDate(dataRaw)) continue;
 
         injectAggs(hubRaw, clusterRaw, dataRaw, 'atPiso', qtd);
@@ -304,8 +308,10 @@ export default function EstresseClusterTable({
         const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || esqueletoBase.mapaLimpoRegs.get(hC) || ""; 
 
         if (!dataRaw || !clusterRaw) continue;
-        if (regional.length > 0 && !regional.includes(subreg)) continue;
-        if (station.length > 0 && !station.includes(hubRaw)) continue;
+
+        if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+        if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+
         if (turno.length > 0 && !turno.includes(tConf)) continue;
         if (!isValidDate(dataRaw)) continue;
 
@@ -337,8 +343,10 @@ export default function EstresseClusterTable({
         const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || esqueletoBase.mapaLimpoRegs.get(hC) || ""; 
 
         if (!dataRaw) continue;
-        if (regional.length > 0 && !regional.includes(subreg)) continue;
-        if (station.length > 0 && !station.includes(hubRaw)) continue;
+
+        if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+        if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+
         if (turno.length > 0 && !turno.includes(tConf)) continue;
         if (!isValidDate(dataRaw)) continue;
 
@@ -370,11 +378,33 @@ export default function EstresseClusterTable({
 
     let resumo = { totalDispo: totalDispoGlobal, demandaTotal: 0, deficitGeral: 0, dCount };
 
-    const linhas = Object.values(aggs).map(hAgg => {
+    // =========================================================================
+    // GUILHOTINA: Destrói Hubs Zerados Fora do Escopo dos Filtros
+    // =========================================================================
+    let hubsArray = Object.values(aggs);
+    
+    if (regUpper.length > 0) {
+      hubsArray = hubsArray.filter(h => {
+        const hC = fastSanitizeHub(h.hub);
+        const subreg = String(esqueletoBase.mapaLimpoRegs.get(hC) || "").toUpperCase();
+        return regUpper.some(r => subreg.includes(r));
+      });
+    }
+
+    if (stUpper.length > 0) {
+      hubsArray = hubsArray.filter(h => stUpper.includes(String(h.hub).toUpperCase()));
+    }
+
+    const linhas = hubsArray.map(hAgg => {
       const hubDemanda = hAgg.expedidas + hAgg.atPiso + hAgg.recusas;
       const hubEstresse = hAgg.dispo > 0 ? (hubDemanda / hAgg.dispo) : (hubDemanda > 0 ? 9.9 : 0);
       const hubDeficit = hubDemanda - hAgg.dispo;
       const hubFrotaReal = hAgg.dispo - hAgg.recusas;
+
+      const hubExpMedia = hAgg.expedidas / dCount;
+      const hubMetaDrivers = Math.ceil(hubExpMedia * 1.20);
+      const hubFrotaRealMedia = Math.round(hubFrotaReal / dCount);
+      const hubGapFrota = hubMetaDrivers - hubFrotaRealMedia;
 
       resumo.demandaTotal += hubDemanda;
 
@@ -386,17 +416,26 @@ export default function EstresseClusterTable({
           const cDeficit = cDemanda - cAgg.dispo;
           const cFrotaReal = cAgg.dispo - cAgg.recusas;
           
+          const cExpMedia = cAgg.expedidas / dCount;
+          const cMetaDrivers = Math.ceil(cExpMedia * 1.20);
+          const cFrotaRealMedia = Math.round(cFrotaReal / dCount);
+          const cGapFrota = cMetaDrivers - cFrotaRealMedia;
+
           const cKeyLookup = `${fastSanitizeHub(hAgg.hub)}|${cAgg.cluster}`;
           const diasEstressados = pontosDeAtritoPorCluster[cKeyLookup] || 0;
           
-          return { ...cAgg, demandaTotal: cDemanda, estresse: cEstresse, deficit: cDeficit, frotaReal: cFrotaReal, diasEstressados };
+          return { 
+            ...cAgg, demandaTotal: cDemanda, estresse: cEstresse, deficit: cDeficit, frotaReal: cFrotaReal, 
+            metaDrivers: cMetaDrivers, gapFrota: cGapFrota, diasEstressados 
+          };
         });
 
       clustersFiltrados.sort((a,b) => a.cluster.localeCompare(b.cluster));
 
       return { 
         ...hAgg, demandaTotal: hubDemanda, estresse: hubEstresse, 
-        deficit: hubDeficit, frotaReal: hubFrotaReal, clusters: clustersFiltrados 
+        deficit: hubDeficit, frotaReal: hubFrotaReal,
+        metaDrivers: hubMetaDrivers, gapFrota: hubGapFrota, clusters: clustersFiltrados 
       };
     });
 
@@ -406,21 +445,27 @@ export default function EstresseClusterTable({
 
   const filteredAndSortedRows = useMemo(() => {
     let result = matrizEstresse.linhas.map(h => {
-      // Filtra os clusters dentro do hub de acordo com o status selecionado
       const clustersFiltrados = h.clusters.filter(c => checkStatus(c.estresse, selectedStatus));
       return { ...h, clusters: clustersFiltrados };
     }).filter(h => {
-      // Mantém o Hub na lista se ele próprio atende ao status OU se algum cluster dele atende
-      return h.clusters.length > 0 || checkStatus(h.estresse, selectedStatus);
+      if (selectedStatus && h.clusters.length === 0 && !checkStatus(h.estresse, selectedStatus)) return false;
+      if (selectedStatus && h.demandaTotal === 0 && h.dispo === 0 && selectedStatus !== 'SEM_DEMANDA') return false;
+      return true;
     });
 
-    // Filtro de Busca Textual
     if (searchTerm) {
       const term = fastSanitizeCluster(searchTerm);
-      result = result.filter(r => fastSanitizeHub(r.hub).includes(term) || r.clusters.some(c => fastSanitizeCluster(c.cluster).includes(term)));
+      result = result.reduce((acc, h) => {
+        const hubMatches = fastSanitizeHub(h.hub).includes(term);
+        const matchingClusters = h.clusters.filter(c => fastSanitizeCluster(c.cluster).includes(term));
+
+        if (hubMatches || matchingClusters.length > 0) {
+          acc.push({ ...h, clusters: hubMatches ? h.clusters : matchingClusters });
+        }
+        return acc;
+      }, []);
     }
 
-    // Ordenação
     result.sort((a, b) => {
       if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
       if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
@@ -537,7 +582,7 @@ export default function EstresseClusterTable({
         )}
 
         <div className="overflow-auto w-full custom-scrollbar max-h-[60vh] min-h-[400px] border-b border-slate-200 dark:border-gray-700">
-          <table className="w-full border-collapse text-center relative">
+          <table className="w-full border-collapse text-center relative whitespace-nowrap">
             <thead className="text-white tracking-widest text-[10px] uppercase font-black">
               <tr>
                 <th className="p-3 text-left w-[200px] bg-[#113366] cursor-pointer hover:bg-white/10 transition-colors sticky top-0 left-0 z-[50] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]" onClick={() => requestSort('hub')}>Station / Cluster</th>
@@ -545,14 +590,16 @@ export default function EstresseClusterTable({
                 <th className="p-3 cursor-pointer hover:bg-white/10 transition-colors bg-[#113366] sticky top-0 z-[40]" onClick={() => requestSort('expedidas')}>Expedidas <br/><span className="text-[8px] font-medium normal-case text-slate-300">(Média/Dia)</span></th>
                 <th className={`p-3 cursor-pointer hover:bg-white/10 transition-colors bg-[#113366] sticky top-0 z-[40] ${selectedModal ? 'opacity-30' : ''}`} onClick={() => requestSort('atPiso')}>AT Piso <br/><span className="text-[8px] font-medium normal-case text-slate-300">(Média/Dia)</span></th>
                 <th className="p-3 cursor-pointer hover:bg-white/10 transition-colors bg-[#113366] sticky top-0 z-[40]" onClick={() => requestSort('recusas')}>Recusas <br/><span className="text-[8px] font-medium normal-case text-slate-300">(Média/Dia)</span></th>
-                <th className="p-3 border-l border-white/20 cursor-pointer hover:bg-white/10 transition-colors text-[#EE4D2D] bg-[#113366] sticky top-0 z-[40]" onClick={() => requestSort('frotaReal')}>Frota Real <br/><span className="text-[8px] font-medium normal-case text-slate-300">(Média/Dia)</span></th>
+                <th className="p-3 border-l border-white/20 cursor-pointer hover:bg-white/10 transition-colors text-slate-300 bg-[#113366] sticky top-0 z-[40]" onClick={() => requestSort('frotaReal')}>Frota Real <br/><span className="text-[8px] font-medium normal-case text-slate-300">(Dispo - Recusas)</span></th>
+                <th className="p-3 border-l border-white/20 cursor-pointer hover:bg-white/10 transition-colors bg-[#113366] sticky top-0 z-[40]" onClick={() => requestSort('metaDrivers')}>Meta Drivers <br/><span className="text-[8px] font-medium normal-case text-emerald-400">(Expedidas + 20%)</span></th>
+                <th className="p-3 cursor-pointer hover:bg-white/10 transition-colors bg-[#113366] sticky top-0 z-[40]" onClick={() => requestSort('gapFrota')}>Gap Frota <br/><span className="text-[8px] font-medium normal-case text-emerald-400">(Meta - Real)</span></th>
                 <th className="p-3 border-l border-white/20 cursor-pointer hover:bg-white/10 transition-colors bg-[#EE4D2D] sticky top-0 z-[40]" onClick={() => requestSort('estresse')}>Índice de Estresse</th>
                 <th className="p-3 bg-[#EE4D2D] sticky top-0 z-[40]">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-bold text-xs bg-white dark:bg-[#1f232d]">
               {paginatedRows.length === 0 ? (
-                <tr><td colSpan={8} className="p-12 text-center text-slate-400 font-bold">Nenhum dado encontrado para os filtros ativos.</td></tr>
+                <tr><td colSpan={10} className="p-12 text-center text-slate-400 font-bold">Nenhum dado encontrado para os filtros ativos.</td></tr>
               ) : (
                 paginatedRows.map((rowHub) => {
                   const isOpen = !!expandedHubs[rowHub.hub];
@@ -562,13 +609,15 @@ export default function EstresseClusterTable({
                         <td className="p-3 text-left text-[#113366] dark:text-blue-400 font-black border-r border-slate-100 dark:border-gray-800 flex items-center gap-2 sticky left-0 z-[30] bg-slate-50/90 dark:bg-[#15171e]/90 backdrop-blur-sm shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                           {isOpen ? <ChevronDown size={16} className="text-[#EE4D2D] shrink-0"/> : <ChevronRight size={16} className="text-slate-400 shrink-0"/>}
                           <MapPin size={13} className="text-[#EE4D2D] shrink-0" />
-                          <span className="truncate">{rowHub.hub}</span>
+                          <span className="truncate max-w-[150px]">{rowHub.hub}</span>
                         </td>
                         <td className="p-3 text-[#113366] dark:text-blue-300 font-black">{rowHub.dispo > 0 ? Math.round(rowHub.dispo / dCount) : '-'}</td>
                         <td className="p-3 text-slate-600 dark:text-gray-300">{rowHub.expedidas > 0 ? Math.round(rowHub.expedidas / dCount) : '-'}</td>
                         <td className={`p-3 text-orange-500 ${selectedModal ? 'opacity-30' : ''}`}>{rowHub.atPiso > 0 ? Math.round(rowHub.atPiso / dCount) : '-'}</td>
                         <td className="p-3 text-[#D0011B]">{rowHub.recusas > 0 ? Math.round(rowHub.recusas / dCount) : '-'}</td>
-                        <td className={`p-3 font-black border-l border-slate-100 dark:border-gray-800 ${rowHub.frotaReal < 0 ? 'text-[#D0011B]' : 'text-emerald-600'}`}>{Math.round(rowHub.frotaReal / dCount)}</td>
+                        <td className={`p-3 font-black border-l border-slate-100 dark:border-gray-800 ${rowHub.frotaReal < 0 ? 'text-[#D0011B]' : 'text-slate-600 dark:text-slate-300'}`}>{Math.round(rowHub.frotaReal / dCount)}</td>
+                        <td className="p-3 font-black text-[#113366] dark:text-blue-400 border-l border-slate-100 dark:border-gray-800 bg-emerald-50/50 dark:bg-emerald-950/10">{rowHub.metaDrivers}</td>
+                        <td className={`p-3 font-black bg-emerald-50/50 dark:bg-emerald-950/10 ${rowHub.gapFrota > 0 ? 'text-[#D0011B]' : 'text-emerald-600'}`}>{rowHub.gapFrota > 0 ? `+${rowHub.gapFrota}` : rowHub.gapFrota}</td>
                         <td className={`p-3 font-black text-sm border-l border-slate-100 dark:border-gray-800 ${getEstresseColor(rowHub.estresse)}`}>
                           {rowHub.estresse === 9.9 ? 'CRÍTICO' : rowHub.estresse === 0 ? '0.0x' : `${rowHub.estresse.toFixed(2)}x`}
                         </td>
@@ -578,13 +627,15 @@ export default function EstresseClusterTable({
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors bg-white dark:bg-[#1f232d]">
                           <td className="p-3 text-left text-slate-600 dark:text-gray-300 flex items-center gap-2 pl-10 border-r border-slate-100 dark:border-gray-800 sticky left-0 z-[30] bg-white/90 dark:bg-[#1f232d]/90 backdrop-blur-sm">
                             <Layers size={11} className="text-slate-400 shrink-0" /> 
-                            <span className={`truncate text-[10px] tracking-wider uppercase ${c.cluster === 'OUTROS / NÃO MAPEADO' ? 'text-red-500' : ''}`}>{c.cluster}</span>
+                            <span className={`truncate text-[10px] tracking-wider uppercase max-w-[150px] ${c.cluster === 'OUTROS / NÃO MAPEADO' ? 'text-red-500' : ''}`}>{c.cluster}</span>
                           </td>
                           <td className="p-3 text-[#113366] dark:text-blue-300">{c.dispo > 0 ? Math.round(c.dispo / dCount) : '-'}</td>
                           <td className="p-3 text-slate-600 dark:text-gray-300">{c.expedidas > 0 ? Math.round(c.expedidas / dCount) : '-'}</td>
                           <td className={`p-3 text-orange-500 ${selectedModal ? 'opacity-30' : ''}`}>{c.atPiso > 0 ? Math.round(c.atPiso / dCount) : '-'}</td>
                           <td className="p-3 text-[#D0011B]">{c.recusas > 0 ? Math.round(c.recusas / dCount) : '-'}</td>
-                          <td className={`p-3 font-black border-l border-slate-100 dark:border-gray-800 ${c.frotaReal < 0 ? 'text-[#D0011B]' : 'text-emerald-600'}`}>{Math.round(c.frotaReal / dCount)}</td>
+                          <td className={`p-3 font-black border-l border-slate-100 dark:border-gray-800 ${c.frotaReal < 0 ? 'text-[#D0011B]' : 'text-slate-600 dark:text-slate-300'}`}>{Math.round(c.frotaReal / dCount)}</td>
+                          <td className="p-3 font-black text-[#113366] dark:text-blue-400 border-l border-slate-100 dark:border-gray-800 bg-emerald-50/20 dark:bg-emerald-950/10">{c.metaDrivers}</td>
+                          <td className={`p-3 font-black bg-emerald-50/20 dark:bg-emerald-950/10 ${c.gapFrota > 0 ? 'text-[#D0011B]' : 'text-emerald-600'}`}>{c.gapFrota > 0 ? `+${c.gapFrota}` : c.gapFrota}</td>
                           <td className={`p-3 font-black text-sm border-l border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-[#15171e] ${getEstresseColor(c.estresse)}`}>
                             {c.estresse === 9.9 ? 'CRÍTICO' : c.estresse === 0 ? '0.0x' : `${c.estresse.toFixed(2)}x`}
                           </td>
@@ -613,7 +664,6 @@ export default function EstresseClusterTable({
         </div>
       </div>
 
-      {/* 🔥 GRÁFICOS DO TOP 15 */}
       {chartData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           <div className="bg-white dark:bg-[#1f232d] p-5 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm flex flex-col">
@@ -644,7 +694,7 @@ export default function EstresseClusterTable({
               <Activity size={20} className="text-[#EE4D2D]" />
               <div>
                 <h4 className="text-sm font-black text-[#113366] dark:text-white uppercase tracking-wider">Composição do Cluster (100%)</h4>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Proporção entre Oferta e Demanda Absorvida/Rejeitada</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Proporção entre Oferta e Demanda</p>
               </div>
             </div>
             <div className="flex-1 w-full min-h-[350px]">
@@ -666,7 +716,6 @@ export default function EstresseClusterTable({
         </div>
       )}
 
-      {/* MONITOR DE RISCO DE CHURN DE MOTORISTAS */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl border border-slate-200 dark:border-gray-800 p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-5 border-b border-slate-100 dark:border-gray-800 pb-3">
           <UserMinus className="text-[#D0011B]" size={22} />
@@ -715,7 +764,6 @@ export default function EstresseClusterTable({
           </div>
         )}
       </div>
-
     </div>
   );
 }

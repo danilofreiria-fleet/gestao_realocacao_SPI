@@ -11,6 +11,9 @@ const padronizarHubLocal = (nome) => {
   
   if (nLimpo.includes("ribeiraopretoesta")) return "LM Hub_SP_RibeirãoPretoEstaça";
   if (nLimpo.includes("sumare") && nLimpo.includes("veneza")) return "LM Hub_SP_Sumaré_Nova Veneza";
+
+  if (nLimpo.includes("guarulhos") && nLimpo.includes("119")) return "LM Hub_SP_Guarulhos_119";
+  if (nLimpo.includes("guarulhos") && nLimpo.includes("142")) return "LM Hub_SP_Guarulhos_142";
   
   return n;
 };
@@ -524,6 +527,10 @@ export const calcularMatrizEstresse = async ({
   const aggs = {};
   const historicoDiario = {}; 
 
+  // Padronização em Caixa Alta Inflexível para os Filtros
+  const regUpper = regional.map(r => String(r).toUpperCase());
+  const stUpper = station.map(s => String(s).toUpperCase());
+
   const dataInicioObj = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
   const dataFimObj = dataFim ? new Date(dataFim + 'T23:59:59') : null;
 
@@ -573,7 +580,6 @@ export const calcularMatrizEstresse = async ({
     const lenData = data.length;
     for (let i = 1; i < lenData; i++) {
       const row = data[i];
-      // Garante que só puxa os totais da regional correta também (Opcional, mas seguro)
       const hubRow = padronizarHubLocal(row[4]);
       if (hubRow && (!isAll && !permittedHubsSet.has(fastSanitizeHub(hubRow)))) continue;
 
@@ -587,6 +593,7 @@ export const calcularMatrizEstresse = async ({
     }
   }
 
+  // DISPO
   if (dispoData && dispoData.length > 1) {
     const len = dispoData.length;
     for (let i = 1; i < len; i++) {
@@ -610,8 +617,10 @@ export const calcularMatrizEstresse = async ({
       let tConf = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
       const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
       
-      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
-      if (station.length > 0 && !station.includes(hubRaw)) continue;
+      // Aplicando Case Sensitivity cego
+      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+
       if (turno.length > 0 && !turno.includes(tConf)) continue;
       if (!isValidDate(dataRaw)) continue;
       if (selectedModal && !modalRaw.includes(selectedModal)) continue;
@@ -620,6 +629,7 @@ export const calcularMatrizEstresse = async ({
     }
   }
 
+  // AT PISO
   if (atPisoClusterData && atPisoClusterData.length > 1) {
     const len = atPisoClusterData.length;
     for (let i = 1; i < len; i++) {
@@ -641,14 +651,17 @@ export const calcularMatrizEstresse = async ({
       const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
       if (!dataRaw || qtd === 0) continue;
-      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
-      if (station.length > 0 && !station.includes(hubRaw)) continue;
+
+      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+
       if (!isValidDate(dataRaw)) continue;
 
       injectAggs(hubRaw, clusterRaw, dataRaw, 'atPiso', qtd);
     }
   }
 
+  // RECUSAS
   if (recusasData && recusasData.length > 1) {
     const len = recusasData.length;
     for (let i = 1; i < len; i++) {
@@ -668,8 +681,10 @@ export const calcularMatrizEstresse = async ({
       const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
       if (!dataRaw || !clusterRaw) continue;
-      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
-      if (station.length > 0 && !station.includes(hubRaw)) continue;
+
+      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+
       if (turno.length > 0 && !turno.includes(tConf)) continue;
       if (!isValidDate(dataRaw)) continue;
       if (selectedModal) {
@@ -681,6 +696,7 @@ export const calcularMatrizEstresse = async ({
     }
   }
 
+  // EXPEDIDAS
   if (atExpedidaData && atExpedidaData.length > 1) {
     const len = atExpedidaData.length;
     for (let i = 1; i < len; i++) {
@@ -700,8 +716,10 @@ export const calcularMatrizEstresse = async ({
       const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
       if (!dataRaw) continue;
-      if (regional.length > 0 && !regional.some(r => subreg.toUpperCase().includes(String(r).toUpperCase()))) continue;
-      if (station.length > 0 && !station.includes(hubRaw)) continue;
+
+      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
+      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
+
       if (turno.length > 0 && !turno.includes(tConf)) continue;
       if (!isValidDate(dataRaw)) continue;
       if (selectedModal) {
@@ -712,6 +730,10 @@ export const calcularMatrizEstresse = async ({
       injectAggs(hubRaw, clusterRaw, dataRaw, 'expedidas', 1);
     }
   }
+
+  const uniqueDates = new Set();
+  Object.keys(historicoDiario).forEach(k => uniqueDates.add(k.split('|')[2]));
+  const dCount = Math.max(1, uniqueDates.size);
 
   const pontosDeAtritoPorCluster = {};
   Object.entries(historicoDiario).forEach(([dKey, valores]) => {
@@ -725,12 +747,26 @@ export const calcularMatrizEstresse = async ({
     }
   });
 
-  let resumo = { totalDispo: totalDispoGlobal, demandaTotal: 0, deficitGeral: 0 };
-  const linhas = Object.values(aggs).map(hubObj => {
+  let resumo = { totalDispo: totalDispoGlobal, demandaTotal: 0, deficitGeral: 0, dCount };
+  
+  let hubsArray = Object.values(aggs);
+
+  // Aqui é onde destruimos hubs da listagem exportada que não batem 100% com o Filtro Station via Case Insensitive
+  if (stUpper.length > 0) {
+     hubsArray = hubsArray.filter(h => stUpper.includes(String(h.hub).toUpperCase()));
+  }
+
+  const linhas = hubsArray.map(hubObj => {
     const hubDemanda = hubObj.expedidas + hubObj.atPiso + hubObj.recusas;
     hubObj.estresse = hubObj.dispo > 0 ? (hubDemanda / hubObj.dispo) : (hubDemanda > 0 ? 9.9 : 0);
     hubObj.deficit = hubDemanda - hubObj.dispo;
     hubObj.frotaReal = hubObj.dispo - hubObj.recusas;
+    
+    const hubExpMedia = hubObj.expedidas / dCount;
+    hubObj.metaDrivers = Math.ceil(hubExpMedia * 1.20);
+    const hubFrotaRealMedia = Math.round(hubObj.frotaReal / dCount);
+    hubObj.gapFrota = hubObj.metaDrivers - hubFrotaRealMedia;
+    
     hubObj.demandaTotal = hubDemanda;
     resumo.demandaTotal += hubDemanda;
 
@@ -739,6 +775,12 @@ export const calcularMatrizEstresse = async ({
       clObj.estresse = clObj.dispo > 0 ? (clDemanda / clObj.dispo) : (clDemanda > 0 ? 9.9 : 0);
       clObj.deficit = clDemanda - clObj.dispo;
       clObj.frotaReal = clObj.dispo - clObj.recusas;
+      
+      const cExpMedia = clObj.expedidas / dCount;
+      clObj.metaDrivers = Math.ceil(cExpMedia * 1.20);
+      const cFrotaRealMedia = Math.round(clObj.frotaReal / dCount);
+      clObj.gapFrota = clObj.metaDrivers - cFrotaRealMedia;
+
       clObj.demandaTotal = clDemanda;
 
       const cKeyLookup = `${fastSanitizeHub(hubObj.hub)}|${clObj.cluster}`;

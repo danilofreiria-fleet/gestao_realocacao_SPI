@@ -13,9 +13,7 @@ import ReportsProntos from './pages/ReportsProntos.jsx';
 import SelecionarRegional from './components/RegionalSelection.jsx'; 
 import Premissas from './pages/Premissas.jsx';
 import DeliverySuccess from './pages/DeliverySuccess.jsx';
-
-// PÁGINA INDEPENDENTE IMPORTADA 
-import CalculadoraPage from './pages/CalculadoraPage.jsx';
+import Planejamento from './pages/CalculadoraPage.jsx';
 
 import './index.css';
 
@@ -42,7 +40,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           
           {/* Rotas Internas Protegidas (Com a Sidebar) */}
           <Route path="/app" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
-            {/* 🔥 FORÇA PREMISSAS COMO A PÁGINA INICIAL DO APP */}
             <Route index element={<Navigate to="premissas" replace />} /> 
             <Route path="tabela" element={<DataTable />} />
             <Route path="premissas" element={<Premissas />} />
@@ -61,7 +58,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="validacao" element={<Validacao />} />
             
             {/* ROTA DA CALCULADORA DE ROTAS (PCP) */}
-            <Route path="calculadora" element={<CalculadoraPage />} />
+            <Route path="planejamento" element={<Planejamento />} />
             
           </Route>
         </Routes>
