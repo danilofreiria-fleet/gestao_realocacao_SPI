@@ -527,7 +527,6 @@ export const calcularMatrizEstresse = async ({
   const aggs = {};
   const historicoDiario = {}; 
 
-  // Padronização em Caixa Alta Inflexível para os Filtros
   const regUpper = regional.map(r => String(r).toUpperCase());
   const stUpper = station.map(s => String(s).toUpperCase());
 
@@ -542,15 +541,24 @@ export const calcularMatrizEstresse = async ({
   });
   const permittedHubsSet = new Set([...permittedHubsList, ...extraPermitted].map(fastSanitizeHub));
 
+  // OTIMIZAÇÃO: Cache de Validação de Datas
+  const dateValidityCache = new Map();
   const isValidDate = (dateStr) => {
+    if (!dateStr) return false;
+    const cached = dateValidityCache.get(dateStr);
+    if (cached !== undefined) return cached;
+
     const iso = parseUniversalDate(dateStr);
-    if (!iso) return false;
+    if (!iso) { dateValidityCache.set(dateStr, false); return false; }
+    
     const dObj = new Date(iso);
-    if (isNaN(dObj.getTime())) return false;
-    if (dataInicioObj && dObj < dataInicioObj) return false;
-    if (dataFimObj && dObj > dataFimObj) return false;
-    if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) return false;
-    if (semana && getISOWeek(iso) !== semana) return false;
+    if (isNaN(dObj.getTime())) { dateValidityCache.set(dateStr, false); return false; }
+    if (dataInicioObj && dObj < dataInicioObj) { dateValidityCache.set(dateStr, false); return false; }
+    if (dataFimObj && dObj > dataFimObj) { dateValidityCache.set(dateStr, false); return false; }
+    if (mes && String(dObj.getMonth() + 1).padStart(2, '0') !== mes) { dateValidityCache.set(dateStr, false); return false; }
+    if (semana && getISOWeek(iso) !== semana) { dateValidityCache.set(dateStr, false); return false; }
+    
+    dateValidityCache.set(dateStr, true);
     return true;
   };
 
@@ -575,6 +583,18 @@ export const calcularMatrizEstresse = async ({
     }
   };
 
+  // OTIMIZAÇÃO: Cache de Filtro de Hubs
+  const hubFilterCache = new Map();
+  const checkHubFilter = (hubRaw) => {
+    if (hubFilterCache.has(hubRaw)) return hubFilterCache.get(hubRaw);
+    const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
+    const isRegOk = regUpper.length === 0 || regUpper.some(r => subreg.toUpperCase().includes(r));
+    const isStOk = stUpper.length === 0 || stUpper.includes(hubRaw.toUpperCase());
+    const ok = isRegOk && isStOk;
+    hubFilterCache.set(hubRaw, ok);
+    return ok;
+  };
+
   let totalDispoGlobal = 0;
   if (data && data.length > 0) {
     const lenData = data.length;
@@ -593,16 +613,11 @@ export const calcularMatrizEstresse = async ({
     }
   }
 
-  // DISPO
   if (dispoData && dispoData.length > 1) {
-    const len = dispoData.length;
-    for (let i = 1; i < len; i++) {
+    for (let i = 1; i < dispoData.length; i++) {
       const row = dispoData[i];
       const hubRaw = padronizarHubLocal(row[0]);
-      if (!hubRaw) continue;
-      
-      const hC = fastSanitizeHub(hubRaw);
-      if (!isAll && !permittedHubsSet.has(hC)) continue;
+      if (!hubRaw || (!isAll && !permittedHubsSet.has(fastSanitizeHub(hubRaw)))) continue;
 
       let dateIdx = 4;
       for (let k = 4; k <= 8; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
@@ -615,12 +630,8 @@ export const calcularMatrizEstresse = async ({
       
       if (!dataRaw || qtd === 0) continue;
       let tConf = turnoLinha === 'SD' ? 'PM1' : turnoLinha === 'PM' ? 'PM2' : turnoLinha;
-      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
       
-      // Aplicando Case Sensitivity cego
-      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
-      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
-
+      if (!checkHubFilter(hubRaw)) continue;
       if (turno.length > 0 && !turno.includes(tConf)) continue;
       if (!isValidDate(dataRaw)) continue;
       if (selectedModal && !modalRaw.includes(selectedModal)) continue;
@@ -629,17 +640,12 @@ export const calcularMatrizEstresse = async ({
     }
   }
 
-  // AT PISO
   if (atPisoClusterData && atPisoClusterData.length > 1) {
-    const len = atPisoClusterData.length;
-    for (let i = 1; i < len; i++) {
+    for (let i = 1; i < atPisoClusterData.length; i++) {
       if (selectedModal) continue; 
       const row = atPisoClusterData[i];
       const hubRaw = padronizarHubLocal(row[3]);
-      if (!hubRaw) continue;
-      
-      const hC = fastSanitizeHub(hubRaw);
-      if (!isAll && !permittedHubsSet.has(hC)) continue;
+      if (!hubRaw || (!isAll && !permittedHubsSet.has(fastSanitizeHub(hubRaw)))) continue;
 
       let qtdIdx = 5;
       for (let k = row.length - 1; k >= 5; k--) {
@@ -648,29 +654,20 @@ export const calcularMatrizEstresse = async ({
       const clusterRaw = qtdIdx === 5 ? String(row[4] || "") : row.slice(4, qtdIdx).join(", ");
       const dataRaw = row[0];
       const qtd = parseNum(row[qtdIdx]);
-      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
       if (!dataRaw || qtd === 0) continue;
-
-      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
-      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
-
+      if (!checkHubFilter(hubRaw)) continue;
       if (!isValidDate(dataRaw)) continue;
 
       injectAggs(hubRaw, clusterRaw, dataRaw, 'atPiso', qtd);
     }
   }
 
-  // RECUSAS
   if (recusasData && recusasData.length > 1) {
-    const len = recusasData.length;
-    for (let i = 1; i < len; i++) {
+    for (let i = 1; i < recusasData.length; i++) {
       const row = recusasData[i];
       const hubRaw = padronizarHubLocal(row[4]);
-      if (!hubRaw) continue;
-      
-      const hC = fastSanitizeHub(hubRaw);
-      if (!isAll && !permittedHubsSet.has(hC)) continue;
+      if (!hubRaw || (!isAll && !permittedHubsSet.has(fastSanitizeHub(hubRaw)))) continue;
 
       let dateIdx = 8;
       for (let k = 8; k <= 12; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
@@ -678,13 +675,9 @@ export const calcularMatrizEstresse = async ({
       const tConf = String(row[dateIdx - 1] || "").trim().toUpperCase();
       const dataRaw = row[dateIdx];
       const modalRaw = String(row[dateIdx + 2] || "").trim().toUpperCase(); 
-      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
       if (!dataRaw || !clusterRaw) continue;
-
-      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
-      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
-
+      if (!checkHubFilter(hubRaw)) continue;
       if (turno.length > 0 && !turno.includes(tConf)) continue;
       if (!isValidDate(dataRaw)) continue;
       if (selectedModal) {
@@ -696,16 +689,11 @@ export const calcularMatrizEstresse = async ({
     }
   }
 
-  // EXPEDIDAS
   if (atExpedidaData && atExpedidaData.length > 1) {
-    const len = atExpedidaData.length;
-    for (let i = 1; i < len; i++) {
+    for (let i = 1; i < atExpedidaData.length; i++) {
       const row = atExpedidaData[i];
       const hubRaw = padronizarHubLocal(row[1]);
-      if (!hubRaw) continue;
-      
-      const hC = fastSanitizeHub(hubRaw);
-      if (!isAll && !permittedHubsSet.has(hC)) continue;
+      if (!hubRaw || (!isAll && !permittedHubsSet.has(fastSanitizeHub(hubRaw)))) continue;
 
       let dateIdx = 5;
       for (let k = 5; k <= 9; k++) { if (isDateFast(row[k])) { dateIdx = k; break; } }
@@ -713,13 +701,9 @@ export const calcularMatrizEstresse = async ({
       const modalRaw = String(row[3] || "").trim().toUpperCase();
       const clusterRaw = dateIdx === 5 ? String(row[4] || "") : row.slice(4, dateIdx).join(", ");
       const dataRaw = row[dateIdx];
-      const subreg = MAPA_REGIONAL_COMPLETO[hubRaw] || ""; 
 
       if (!dataRaw) continue;
-
-      if (regUpper.length > 0 && !regUpper.some(r => subreg.toUpperCase().includes(r))) continue;
-      if (stUpper.length > 0 && !stUpper.includes(hubRaw.toUpperCase())) continue;
-
+      if (!checkHubFilter(hubRaw)) continue;
       if (turno.length > 0 && !turno.includes(tConf)) continue;
       if (!isValidDate(dataRaw)) continue;
       if (selectedModal) {
@@ -748,10 +732,8 @@ export const calcularMatrizEstresse = async ({
   });
 
   let resumo = { totalDispo: totalDispoGlobal, demandaTotal: 0, deficitGeral: 0, dCount };
-  
   let hubsArray = Object.values(aggs);
 
-  // Aqui é onde destruimos hubs da listagem exportada que não batem 100% com o Filtro Station via Case Insensitive
   if (stUpper.length > 0) {
      hubsArray = hubsArray.filter(h => stUpper.includes(String(h.hub).toUpperCase()));
   }
@@ -762,10 +744,13 @@ export const calcularMatrizEstresse = async ({
     hubObj.deficit = hubDemanda - hubObj.dispo;
     hubObj.frotaReal = hubObj.dispo - hubObj.recusas;
     
-    const hubExpMedia = hubObj.expedidas / dCount;
-    hubObj.metaDrivers = Math.ceil(hubExpMedia * 1.20);
+    const hubExpMedia = Math.round(hubObj.expedidas / dCount);
+    hubObj.sugestaoMeta = Math.ceil(hubExpMedia * 1.20);
     const hubFrotaRealMedia = Math.round(hubObj.frotaReal / dCount);
-    hubObj.gapFrota = hubObj.metaDrivers - hubFrotaRealMedia;
+    
+    hubObj.saldoExpedido = hubFrotaRealMedia - hubExpMedia; 
+    hubObj.saldoMeta = hubFrotaRealMedia - hubObj.sugestaoMeta; 
+    hubObj.percAtingimento = hubObj.sugestaoMeta > 0 ? (hubFrotaRealMedia / hubObj.sugestaoMeta) : 0;
     
     hubObj.demandaTotal = hubDemanda;
     resumo.demandaTotal += hubDemanda;
@@ -776,10 +761,13 @@ export const calcularMatrizEstresse = async ({
       clObj.deficit = clDemanda - clObj.dispo;
       clObj.frotaReal = clObj.dispo - clObj.recusas;
       
-      const cExpMedia = clObj.expedidas / dCount;
-      clObj.metaDrivers = Math.ceil(cExpMedia * 1.20);
+      const cExpMedia = Math.round(clObj.expedidas / dCount);
+      clObj.sugestaoMeta = Math.ceil(cExpMedia * 1.20);
       const cFrotaRealMedia = Math.round(clObj.frotaReal / dCount);
-      clObj.gapFrota = clObj.metaDrivers - cFrotaRealMedia;
+      
+      clObj.saldoExpedido = cFrotaRealMedia - cExpMedia;
+      clObj.saldoMeta = cFrotaRealMedia - clObj.sugestaoMeta;
+      clObj.percAtingimento = clObj.sugestaoMeta > 0 ? (cFrotaRealMedia / clObj.sugestaoMeta) : 0;
 
       clObj.demandaTotal = clDemanda;
 
