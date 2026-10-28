@@ -1,131 +1,144 @@
-export const CLUSTERS_POR_HUB = {  
+export const CLUSTERS_POR_HUB = {
   
-  "LM Hub_SP_Guarulhos": [  
-    "03. Jardim Robru",  
-    "01. Itaim Paulista",  
-    "16. Aeroporto",  
-    "14. Fortaleza",  
-    "09. São Miguel",  
-    "10. Cumbica",  
-    "06. Itaquaquecetuba",  
-    "15. Jardim Pres. Dutra",  
-    "13. Bonsucesso",  
-    "08. Dom Miguel",  
-    "05. Jardim Nélia",  
-    "11. Parque Jurema",  
-    "04. Jardim Luciana",  
-    "02. Jardim São Vicente",  
-    "07. Vanderlei do Prado",  
-    "12. Água Chata",  
-    "Bonsucesso - z",  
-    "Fortaleza",  
-    "Jardim Robru",  
-    "Dom Miguel",  
-    "Cumbica",  
-    "Parque Jurema",  
-    "São Miguel",  
-    "Jardim Pres. Dutra",  
-    "Jardim Luciana",  
-    "Jardim Nélia - z",  
-    "Itaim Paulista",  
-    "Água Chata",  
-    "Jardim São Vicente - z",  
-    "Itaquaquecetuba - z",  
-    "Aeroporto",  
-    "Vanderlei do Prado - z",  
-    "G-6",  
-    "A-4",  
-    "B-4",  
-    "E-4",  
-    "E-13",  
-    "F-13",  
-    "B-8",  
-    "F-2",  
-    "F-9",  
-    "C-11",  
-    "B-13",  
-    "F-7",  
-    "C-14",  
-    "C-12",  
-    "B-14",  
-    "H-6",  
-    "B-3",  
-    "G-9",  
-    "A-1",  
-    "F-5",  
-    "G-11",  
-    "H-7",  
-    "A-12",  
-    "A-3",  
-    "B-5",  
-    "G-14",  
-    "G-4",  
-    "H-2",  
-    "F-14",  
-    "H-5",  
-    "G-5",  
-    "C-13",  
-    "D-1",  
-    "D-5",  
-    "G-13",  
-    "H-4",  
-    "C-7",  
-    "B-9",  
-    "C-3",  
-    "G-10",  
-    "B-2",  
-    "A-2",  
-    "D-7",  
-    "B-6",  
-    "D-10",  
-    "D-6",  
-    "D-14",  
-    "B-10",  
-    "A-8",  
-    "C-4",  
-    "B-11",  
-    "H-3",  
-    "G-12",  
-    "C-5",  
-    "B-1",  
-    "G-3",  
-    "D-12",  
-    "B-7",  
-    "F-4",  
-    "C-9",  
-    "C-1",  
-    "G-7",  
-    "A-14",  
-    "A-5",  
-    "D-8",  
-    "H-12",  
-    "F-3",  
-    "B-12",  
-    "A-7",  
-    "F-8",  
-    "F-12",  
-    "F-11",  
-    "H-1",  
-    "H-8",  
-    "C-8",  
-    "D-3",  
-    "E-6",  
-    "A-9",  
-    "C-2",  
-    "F-10",  
-    "D-9",  
-    "E-11",  
-    "C-6",  
-    "D-13",  
-    "E-2",  
-    "D-4",  
-    "G-2",  
-    "E-10",  
-    "C-10",  
-    "H-10",  
-    "E-14",  
-    "E-3"  
-  ],  
+  "LM Hub_SP_Guarulhos": [
+  "03. Jardim Robru",
+  "01. Itaim Paulista",
+  "16. Aeroporto",
+  "14. Fortaleza",
+  "09. São Miguel",
+  "10. Cumbica",
+  "06. Itaquaquecetuba",
+  "15. Jardim Pres. Dutra",
+  "13. Bonsucesso",
+  "08. Dom Miguel",
+  "05. Jardim Nélia",
+  "11. Parque Jurema",
+  "04. Jardim Luciana",
+  "02. Jardim São Vicente",
+  "07. Vanderlei do Prado",
+  "12. Água Chata",
+  "Bonsucesso - z",
+  "Fortaleza",
+  "Jardim Robru",
+  "Dom Miguel",
+  "Cumbica",
+  "Parque Jurema",
+  "São Miguel",
+  "Jardim Pres. Dutra",
+  "Jardim Luciana",
+  "Jardim Nélia - z",
+  "Itaim Paulista",
+  "Água Chata",
+  "Jardim São Vicente - z",
+  "Itaquaquecetuba - z",
+  "Aeroporto",
+  "Vanderlei do Prado - z",
+  "G-6",
+  "A-4",
+  "B-4",
+  "E-4",
+  "E-13",
+  "F-13",
+  "B-8",
+  "F-2",
+  "F-9",
+  "C-11",
+  "B-13",
+  "F-7",
+  "C-14",
+  "C-12",
+  "B-14",
+  "H-6",
+  "B-3",
+  "G-9",
+  "A-1",
+  "F-5",
+  "G-11",
+  "H-7",
+  "A-12",
+  "A-3",
+  "B-5",
+  "G-14",
+  "G-4",
+  "H-2",
+  "F-14",
+  "H-5",
+  "G-5",
+  "C-13",
+  "D-1",
+  "D-5",
+  "G-13",
+  "H-4",
+  "C-7",
+  "B-9",
+  "C-3",
+  "G-10",
+  "B-2",
+  "A-2",
+  "D-7",
+  "B-6",
+  "D-10",
+  "D-6",
+  "D-14",
+  "B-10",
+  "A-8",
+  "C-4",
+  "B-11",
+  "H-3",
+  "G-12",
+  "C-5",
+  "B-1",
+  "G-3",
+  "D-12",
+  "B-7",
+  "F-4",
+  "C-9",
+  "C-1",
+  "G-7",
+  "A-14",
+  "A-5",
+  "D-8",
+  "H-12",
+  "F-3",
+  "B-12",
+  "A-7",
+  "F-8",
+  "F-12",
+  "F-11",
+  "H-1",
+  "H-8",
+  "C-8",
+  "D-3",
+  "E-6",
+  "A-9",
+  "C-2",
+  "F-10",
+  "D-9",
+  "E-11",
+  "C-6",
+  "D-13",
+  "E-2",
+  "D-4",
+  "G-2",
+  "E-10",
+  "C-10",
+  "H-10",
+  "E-14",
+  "E-3",
+  "A-10",
+  "A-11",
+  "A-13",
+  "A-6",
+  "D-11",
+  "D-2",
+  "E-1",
+  "E-12",
+  "E-5",
+  "F-1",
+  "F-6",
+  "G-1",
+  "G-8"
+],  
  
   "LM Hub_SP_Embu das Artes": [  
     "Roselândia",  
@@ -339,7 +352,7 @@ export const CLUSTERS_POR_HUB = {
     "Paraíso"  
   ],
   
-  "LM Hub_SP_Itaqua_Zimba": [
+"LM Hub_SP_Itaqua_Zimba": [
   "Amazonas_Taboão - Z",
   "Arujazinho",
   "Aruã I",
@@ -428,8 +441,27 @@ export const CLUSTERS_POR_HUB = {
   "Parque Guarani",
   "São Miguel Paulista",
   "Tiquatira",
-  "Vila Esperança"
+  "Vila Esperança",
+  "Caixa D'água_ Penha",
+  "Cangaíba",
+  "Cidade Industrial",
+  "Ermelino Matarazzo",
+  "Jardim Arapongas",
+  "Jardim Brasil",
+  "Jardim Ottawa",
+  "Jardim Santo Afonso",
+  "Keralux",
+  "São Miguel",
+  "Vila Alzira I",
+  "Vila Alzira II",
+  "Vila Jacuí",
+  "Vila Nova Cumbica I",
+  "Vila Nova Cumbica II",
+  "Vila Nova Cumbica III",
+  "Vila Ré",
+  "Vila Silvia"
 ],
+
 
 "LM Hub_SP_Guarulhos_119": [
   "Água Chata I",
@@ -481,11 +513,10 @@ export const CLUSTERS_POR_HUB = {
   "Vila Sadokim"
 ],
 
-  "LM Hub_SP_VilaGuilherme": [
+"LM Hub_SP_VilaGuilherme": [
   "Barra Funda",
   "Bela Vista_01",
   "Bela Vista_02",
-  "Bela Vista_03",
   "Bom Retiro_01",
   "Bom Retiro_02",
   "Casa Verde_Jardim São Bento",
@@ -495,29 +526,26 @@ export const CLUSTERS_POR_HUB = {
   "Freguesia do Ó",
   "Jardim Japão_01",
   "Jardim Japão_02",
+  "Jardim Japão_03",
   "Jardim Paulista - z",
   "Jardim Paulistano - z",
   "Jardim Primavera _02",
   "Jardim Primavera_01",
   "Jardim Primavera_03",
-  "Jardins_Itaim Bibi - z",
-  "Liberdade_01",
-  "Liberdade_02",
+  "Liberdade",
   "Luz_República_01",
   "Luz_República_02",
   "Luz_República_03",
   "Pacaembu",
-  "Praça João Mendes_01",
-  "Praça João Mendes_02",
-  "Santa Cecilia_Vila Buarque",
+  "Praça João Mendes",
+  "Santa Cecília_Vila Buarque",
   "Sumaré",
-  "Vila Constança",
   "Vila Guilherme_Santana_01",
   "Vila Guilherme_Santana_02",
   "Vila Guilherme_Santana_03",
   "Vila Guilherme_Vila Maria"
 ],  
-  "LM Hub_SP_Campinas_PqCidade": [  
+"LM Hub_SP_Campinas_PqCidade": [  
     "21_Cluster_21",  
     "07_Cluster_7",  
     "02_Cluster_2",  
@@ -556,12 +584,12 @@ export const CLUSTERS_POR_HUB = {
     "Village Campinas - z",  
     "Jardim Itatinga"  
   ],  
-  "LM Hub_SP_Limeira_Campo Belo": [  
+"LM Hub_SP_Limeira_Campo Belo": [  
     "04_Cluster_4",  
     "01_Cluster_1",  
     "10_Cluster_11"  
   ],  
-  "LM Hub_SP_Mogi Mirim": [  
+"LM Hub_SP_Mogi Mirim": [  
     "Mogi Mirim",  
     "Engenheiro Coelho",  
     "Santo Antônio de Posse",  
@@ -577,7 +605,7 @@ export const CLUSTERS_POR_HUB = {
     "Holambra - z",  
     "Estiva Gerbi"  
   ],  
-  "LM Hub_SP_Leme": [  
+"LM Hub_SP_Leme": [  
     "Araras",  
     "Pirassununga",  
     "Porto Ferreira",  
@@ -585,7 +613,7 @@ export const CLUSTERS_POR_HUB = {
     "Conchal",  
     "Cachoeira de Emas"  
   ],  
-  "LM Hub_SP_Piracicaba": [  
+"LM Hub_SP_Piracicaba": [  
     "10. Piracicamirim",  
     "03. Capivari",  
     "08. Vila Rezende",  
@@ -639,7 +667,7 @@ export const CLUSTERS_POR_HUB = {
   "Ibitinga"
 ],
 
-  "LM Hub_SP_Sumaré_Nova Veneza": [  
+"LM Hub_SP_Sumaré_Nova Veneza": [  
     "06. Campinas I",  
     "22. Sumaré V",  
     "19. Sumaré II",  
@@ -686,7 +714,7 @@ export const CLUSTERS_POR_HUB = {
     "Campinas II",  
     "Hortolândia II"  
   ],  
-  "LM Hub_SP_Jundiaí": [  
+"LM Hub_SP_Jundiaí": [  
     "Parque Santa Isabel",  
     "Jardim Bertioga",  
     "Bairro do Mina",  
@@ -746,7 +774,7 @@ export const CLUSTERS_POR_HUB = {
   "Parque Oziel"
 ],
   
-  "LM Hub_SP_Várzea Paulista": [  
+"LM Hub_SP_Várzea Paulista": [  
     "14. Botujuru",  
     "16. Panorama",  
     "13. Jardim Vassouras",  
@@ -799,7 +827,8 @@ export const CLUSTERS_POR_HUB = {
     "Parque Suiça - z",  
     "Vigoreli - z"  
   ],  
-  "LM Hub_SP_Atibaia_Ponte_Alta": [  
+
+"LM Hub_SP_Atibaia_Ponte_Alta": [  
     "Atibaia IV",  
     "Atibaia VI",  
     "Jarinu I",  
@@ -843,7 +872,7 @@ export const CLUSTERS_POR_HUB = {
     "Vicente Nunes",  
     "Itatiba III"  
   ],  
-  "LM Hub_SP_Sorocaba_Região Norte": [  
+"LM Hub_SP_Sorocaba_Região Norte": [  
     "Aluminio",  
     "Alumínio",  
     "Araçariguama",  
@@ -906,7 +935,7 @@ export const CLUSTERS_POR_HUB = {
     "ZOF04 Ibiúna, Lajeado"  
   ],  
 
-  "LM Hub_SP_Sorocaba_02": [
+"LM Hub_SP_Sorocaba_02": [
   "Aluminio",
   "Araçariguama",
   "Chácara Flórida",
@@ -928,7 +957,8 @@ export const CLUSTERS_POR_HUB = {
   "São Roque_Canguera",
   "São Roque_Mailasqui"
 ],
-  "LM Hub_SP_Itapeva": [  
+
+"LM Hub_SP_Itapeva": [  
     "Ribeirão Branco",  
     "Itapeva",  
     "Apiaí",  
@@ -948,8 +978,9 @@ export const CLUSTERS_POR_HUB = {
     "Itapirapuã Paulista - z",  
     "Taquarivaí - z",  
     "Apiaí - z"  
-  ],  
-  "LM Hub_SP_Registro": [  
+  ], 
+
+"LM Hub_SP_Registro": [  
     "Registro",  
     "Iha comprida - z",  
     "Cajati",  
@@ -962,8 +993,9 @@ export const CLUSTERS_POR_HUB = {
     "Pariquera Açu",  
     "Ariri Cananeia - z",  
     "Juquiá"  
-  ],  
-  "LM Hub_SP_Tatuí": [  
+  ], 
+
+"LM Hub_SP_Tatuí": [  
     "10. Tatuí",  
     "16. Capela do Alto",  
     "02. Laranjal Paulista",  
@@ -996,7 +1028,8 @@ export const CLUSTERS_POR_HUB = {
     "Pereiras",  
     "Jumirim"  
   ],  
-  "LM Hub_SP_Itapetininga": [  
+
+"LM Hub_SP_Itapetininga": [  
     "01. Angatuba",  
     "06. São Miguel Arcanjo",  
     "08. Alambari",  
@@ -1011,7 +1044,8 @@ export const CLUSTERS_POR_HUB = {
     "05. Gramadinho",  
     "03. Guareí"  
   ],  
-  "LM Hub_SP_Botucatu": [  
+
+"LM Hub_SP_Botucatu": [  
     "07. São Manuel",  
     "14. Jardim Brasil",  
     "13. Vila Di Capri",  
@@ -1025,8 +1059,9 @@ export const CLUSTERS_POR_HUB = {
     "08. Pratânia_1",  
     "09. Bofete",  
     "10. Pardinho_1"  
-  ],  
-  "LM Hub_SP_São José dos Campos": [  
+  ], 
+
+"LM Hub_SP_São José dos Campos": [  
     "10. Sudeste - Flamboyant",  
     "07. Centro de SJC- Aquários- Ind",  
     "19. Zona Sul - Satélite",  
@@ -1071,7 +1106,7 @@ export const CLUSTERS_POR_HUB = {
     "Jambeiro"  
   ], 
   
-  "LM Hub_SP_São José dos Cam_103": [
+"LM Hub_SP_São José dos Cam_103": [
   "Monteiro Lobato",
   "São Francisco Xavier",
   "Aquárius",
@@ -1087,7 +1122,7 @@ export const CLUSTERS_POR_HUB = {
   "Zona Oeste - Jd. Das Indústrias"
 ],
 
-  "LM Hub_SP_São José dos Cam_103":[
+"LM Hub_SP_São José dos Cam_103":[
     "Monteiro Lobato",
     "São Francisco Xavier",
     "Aquárius",
@@ -1103,7 +1138,7 @@ export const CLUSTERS_POR_HUB = {
     "Zona Oeste - Jd. Das Indústrias"
   ],
   
-  "LM Hub_SP_Artur Alvim": [
+"LM Hub_SP_Artur Alvim": [
   "06. Jardim Limoeiro",
   "03. Parque Boturussu",
   "08. Vila Carmosina",
@@ -1136,7 +1171,8 @@ export const CLUSTERS_POR_HUB = {
   "Parque Boturussu",
   "União Vila Nova"
 ],
-  "LM Hub_SP_Taubaté": [  
+
+"LM Hub_SP_Taubaté": [  
     "Tremembé",  
     "Taubaté - 01",  
     "Taubaté - 02",  
@@ -1155,8 +1191,9 @@ export const CLUSTERS_POR_HUB = {
     "Sapucaí Mirim",  
     "Redenção Da Serra - z",  
     "Natividade Da Serra - z"  
-  ],  
-  "LM Hub_SP_Santos_Praia Grande": [
+  ], 
+
+"LM Hub_SP_Santos_Praia Grande": [
   "Alemoa - Z",
   "Jardim Caraguatá - Z",
   "Morro Santa Maria - Z",
@@ -1993,4 +2030,5 @@ export const CLUSTERS_POR_HUB = {
     "SUL 02",  
     "NORTE 01"  
   ]  
+
 }
