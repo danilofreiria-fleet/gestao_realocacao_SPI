@@ -1,6 +1,7 @@
 export const HUBS_SPM = {
   
  "LM Hub_SP_Jardim Adriana": "SPC01", 
+"LM Hub_SP_Sao Paulo_118" : "SPC01",
  "LM Hub_SP_Itaqua_Zimba": "SPC01", 
  "LM Hub_SP_Guarulhos": "SPC01", 
  "LM Hub_SP_Guarulhos_142" : "SPC01",

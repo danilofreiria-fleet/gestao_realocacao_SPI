@@ -1,4 +1,4 @@
-export const CLUSTERS_POR_HUB = {
+export const CLUSTERS_POR_HUB = {  
   
   "LM Hub_SP_Guarulhos": [
   "03. Jardim Robru",
@@ -139,6 +139,23 @@ export const CLUSTERS_POR_HUB = {
   "G-1",
   "G-8"
 ],  
+
+"LM Hub_SP_Sao Paulo_118": [
+  "Papagaios - z",
+  "Jaguaré - z",
+  "São Domingos - z",
+  "Rio Pequeno - z",
+  "Jardim Ipanema - z",
+  "Vila dos Remédios",
+  "Jardim Jaqueline",
+  "Jardim Celeste",
+  "Vila Menck - 01 - z",
+  "Portal do Oeste - z",
+  "Rochdale",
+  "Osasco Centro",
+  "Vila Menck - 02",
+  "Pres. Altino"
+],
  
   "LM Hub_SP_Embu das Artes": [  
     "Roselândia",  
@@ -567,7 +584,7 @@ export const CLUSTERS_POR_HUB = {
     "Jardim Novo Flamboyant",  
     "Jardim Chapadão",  
     "Centro Campinas - z",  
-    "Centro Indaiatuba",  
+    "Centro Indaiatuba",
     "Indaiatuba Norte",
     "Indaiatuba Sul",  
     "indaiatuba Oeste",
@@ -2033,5 +2050,6 @@ export const CLUSTERS_POR_HUB = {
     "SUL 02",  
     "NORTE 01"  
   ]  
-
 }
+
+
