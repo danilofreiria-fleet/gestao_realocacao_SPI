@@ -16,38 +16,34 @@ const ABA_NOME = "CONSOLIDADO-GESTÃO-SPI_REALOCAÇÃO";
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 let activeRequests = 0;
-let globalRateLimitPause = false; // O "Sinal Vermelho" Global
-const MAX_CONCURRENT_REQUESTS = 2; // Baixamos para 2 para máxima segurança
+let globalRateLimitPause = false; 
+const MAX_CONCURRENT_REQUESTS = 2; 
 
 const fetchWithQueue = async (url, options, retries = 5) => {
-  // 1. Catraca: Aguarda se a fila está cheia OU se tomamos bloqueio global
-  // O Math.random (Jitter) impede que várias requisições acordem no exato mesmo milissegundo
   while (activeRequests >= MAX_CONCURRENT_REQUESTS || globalRateLimitPause) {
     await sleep(Math.floor(Math.random() * 200) + 100); 
   }
 
-  activeRequests++; // Entrou
+  activeRequests++;
   try {
     const response = await fetch(url, options);
     
-    // 2. Tomou 429? Ativa o sinal vermelho para todo o sistema!
     if (response.status === 429 && retries > 0) {
       activeRequests--;
-      globalRateLimitPause = true; // 🛑 Para todas as outras requisições
+      globalRateLimitPause = true; 
       
-      const attempt = 6 - retries; // Vai de 1 a 5
-      const waitTime = Math.pow(2, attempt) * 1500; // Ex: 3s, 6s, 12s, 24s...
+      const attempt = 6 - retries; 
+      const waitTime = Math.pow(2, attempt) * 1500; 
       
       console.warn(`🛑 [ERRO 429] Google bloqueou. Pausa Global de ${waitTime/1000}s (Tentativa ${attempt}/5)...`);
       
       await sleep(waitTime);
-      globalRateLimitPause = false; // 🟢 Libera o sinal vermelho
+      globalRateLimitPause = false; 
       
-      // Coloca a requisição que falhou de volta na fila
       return fetchWithQueue(url, options, retries - 1); 
     }
     
-    activeRequests--; // Saiu
+    activeRequests--;
     return response;
   } catch (error) {
     activeRequests--;
@@ -95,31 +91,283 @@ const executeDeleteAPI = async (spreadsheetId, sheetId, rowNumber, token) => {
 };
 
 // =================================================================
-// SISTEMA DE LOGS (Com Backup em Array/JSON na Coluna H)
+// SISTEMA DE LOGS (Agora com Console.log detalhado e sem falha silenciosa)
 // =================================================================
 export const registrarLog = async (acao, dataRef, station, turno, statusInfo, rawData = null) => {
   try {
     const token = localStorage.getItem("spiToken");
-    if (!token) return;
+    if (!token) {
+      console.warn("⚠️ [LOG] Abortado: Sem token de autenticação.");
+      return;
+    }
 
     const userEmail = localStorage.getItem("userEmail") || "Analista"; 
     const dataHoraAtual = new Date().toLocaleString('pt-BR');
-
     const backupSnapshot = rawData && rawData.length > 0 ? JSON.stringify(rawData) : "[]";
 
     const logData = [
       dataHoraAtual, userEmail, acao, dataRef || "", station || "", turno || "", statusInfo || "Sucesso", backupSnapshot 
     ];
 
+    console.log(`📝 [LOG] Tentando gravar log: ${acao} | Hub: ${station}`);
+
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_LOGS}/values/LOGS!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
-    fetch(url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ values: [logData] })
-    }).catch(() => {});
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ [LOG ERRO GOOGLE] Falha ao gravar log:", errorText);
+    } else {
+      console.log("✅ [LOG] Gravado com sucesso na planilha de Logs!");
+    }
   } catch (e) {
-    console.error("Falha ao gravar log:", e);
+    console.error("❌ [LOG ERRO CÓDIGO] Exceção ao gravar log:", e);
+  }
+};
+
+// =================================================================
+// POST (Criar Nova Linha - Com rastreio)
+// =================================================================
+export const insertRowData = async (rowData) => {
+  try {
+    console.log("📥 [POST - PASSO 1] Iniciando insertRowData. Alvo:", rowData[4]);
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    const dataAlvo = padronizarData(rowData[3]);
+    const hubAlvo = limpaTexto(rowData[4]);
+    const turnoAlvo = limpaTexto(rowData[5]);
+
+    console.log(`🔍 [POST - PASSO 2] Checando duplicidade no Consolidado para: ${dataAlvo} | ${hubAlvo} | ${turnoAlvo}`);
+    const urlGetCheck = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(ABA_NOME + "!D:F")}?t=${Date.now()}`;
+    const respCheck = await fetchWithQueue(urlGetCheck, { 
+      headers: { "Authorization": `Bearer ${token}` }, cache: "no-store"
+    });
+    
+    if (!respCheck.ok) throw new Error(`Falha ao verificar duplicidade: ${await respCheck.text()}`);
+    
+    const dataCheck = await respCheck.json();
+    if (dataCheck.values) {
+      const registroDuplicado = dataCheck.values.some(r => 
+        padronizarData(r[0]) === dataAlvo && limpaTexto(r[1]) === hubAlvo && limpaTexto(r[2]) === turnoAlvo
+      );
+
+      if (registroDuplicado) {
+        console.warn("🛑 [POST] Bloqueado! Registro duplicado encontrado.");
+        throw new Error(`CONFLITO DE DADOS: O turno [${rowData[5]}] para o hub [${rowData[4]}] na data [${rowData[3]}] já existe.`);
+      }
+    }
+
+    console.log(`🚀 [POST - PASSO 3] Enviando Append para o Consolidado (ID: ${SPREADSHEET_ID}, Aba: ${ABA_NOME})`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_NOME}!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ values: [rowData] })
+    });
+
+    if (!response.ok) {
+      const errTxt = await response.text();
+      console.error("❌ [POST ERRO] Google recusou o append no Consolidado:", errTxt);
+      throw new Error(`Erro HTTP: ${response.status}`);
+    }
+
+    console.log("✅ [POST - PASSO 4] Sucesso no Consolidado! Chamando registrarLog...");
+    const jsonResult = await response.json();
+    
+    // Tirei o 'await' do registrarLog para não travar o fluxo principal caso o log demore
+    registrarLog("CRIAR", rowData[3], rowData[4], rowData[5], "Salvo no Consolidado Principal", rowData);
+    
+    return jsonResult;
+  } catch (error) {
+    console.error("❌ [POST CATCH]:", error);
+    registrarLog("ERRO_CRIAR", rowData[3], rowData[4], rowData[5], String(error.message), rowData);
+    throw error; 
+  }
+};
+
+// =================================================================
+// PUT (Edição - Com Rastreio de Range)
+// =================================================================
+// =================================================================
+// PUT (Edição - Com Rastreio de Range e Trava de Colisão)
+// =================================================================
+export const updateRowData = async (rowIndex, rowData, oldRowData) => {
+  try {
+    console.log(`🔄 [PUT - INÍCIO] Recebido pedido de edição. RowIndex: ${rowIndex}`);
+    const token = localStorage.getItem("spiToken");
+    if (!token) throw new Error("Usuário não autenticado.");
+
+    if (!rowIndex) {
+      console.error("❌ [PUT ERRO GRAVE] rowIndex está vazio/indefinido! O Consolidado não saberá onde salvar.");
+    }
+
+    const safeVal = (v) => (v === undefined || v === null) ? "" : v;
+    
+    // Chaves de Busca (Para encontrar a linha antiga que será substituída)
+    const dataBusca = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
+    const hubBusca = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
+    const turnoBusca = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
+
+    // 🚨 NOVA TRAVA: Chaves de Destino (Para onde o usuário quer alterar)
+    const dataNova = padronizarData(rowData[3]);
+    const hubNovo = limpaTexto(rowData[4]);
+    const turnoNovo = limpaTexto(rowData[5]);
+
+    // Verifica se o usuário está tentando mudar a data, hub ou turno
+    if (dataNova !== dataBusca || hubNovo !== hubBusca || turnoNovo !== turnoBusca) {
+      console.log(`🔍 [PUT - TRAVA] Mudança de chave detectada. Verificando se o novo destino (${dataNova} | ${hubNovo} | ${turnoNovo}) já existe...`);
+      
+      const urlGetCheck = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(ABA_NOME + "!D:F")}?t=${Date.now()}`;
+      const respCheck = await fetchWithQueue(urlGetCheck, { 
+        headers: { "Authorization": `Bearer ${token}` }, cache: "no-store"
+      });
+      
+      if (!respCheck.ok) throw new Error(`Falha ao verificar duplicidade na edição: ${await respCheck.text()}`);
+      
+      const dataCheck = await respCheck.json();
+      if (dataCheck.values) {
+        // Ignoramos a própria linha que estamos editando verificando o rowIndex
+        const registroDuplicado = dataCheck.values.some((r, index) => 
+          index + 1 !== rowIndex && // Evita bloquear caso encontre a si mesmo
+          padronizarData(r[0]) === dataNova && 
+          limpaTexto(r[1]) === hubNovo && 
+          limpaTexto(r[2]) === turnoNovo
+        );
+
+        if (registroDuplicado) {
+          console.warn("🛑 [PUT] Edição Bloqueada! O usuário tentou alterar para uma data/hub/turno que já existe.");
+          throw new Error(`CONFLITO DE DADOS: O turno [${rowData[5]}] para o hub [${rowData[4]}] na data [${rowData[3]}] já existe. Você não pode sobrepor um registro já existente.`);
+        }
+      }
+    }
+
+    console.log(`🎯 [PUT - ALVO] Chave de Busca: ${dataBusca} | ${hubBusca} | ${turnoBusca}`);
+
+    // 1. ATUALIZA O CONSOLIDADO
+    try {
+      const rangeConsolidado = `'${ABA_NOME}'!A${rowIndex}`;
+      console.log(`📝 [PUT - PASSO 1] Tentando sobrescrever Consolidado no range: ${rangeConsolidado}`);
+      
+      const payloadConsolidado = [{ range: rangeConsolidado, values: [rowData.map(safeVal)] }];
+      const reqConsol = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`, {
+        method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadConsolidado })
+      });
+      
+      if (!reqConsol.ok) {
+        const errTxt = await reqConsol.text();
+        console.error("❌ [PUT ERRO CONSOLIDADO] Retorno do Google:", errTxt);
+        throw new Error(errTxt);
+      } else {
+        console.log("✅ [PUT - PASSO 1] Consolidado atualizado com sucesso!");
+      }
+    } catch (e) { throw new Error(`Falha no Consolidado: ${e.message}`); }
+
+    // 2. ATUALIZA O REPORT DIARIO
+    try {
+      console.log("📝 [PUT - PASSO 2] Buscando linha no Report Diario...");
+      const urlGetRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}?t=${Date.now()}`;
+      const respRep = await fetchWithQueue(urlGetRep, { headers: { "Authorization": `Bearer ${token}` }, cache: "no-store" });
+      
+      if (!respRep.ok) throw new Error(`Falha no GET Report Diario: ${await respRep.text()}`);
+      
+      const dataRep = await respRep.json();
+      let encontrouReport = false;
+      const linhaGestao = rowData.slice(0, 47).map(safeVal);
+
+      if (dataRep.values) {
+        for (let i = dataRep.values.length - 1; i >= 1; i--) {
+          const r = dataRep.values[i];
+          if (padronizarData(r[3]) === dataBusca && limpaTexto(r[4]) === hubBusca && limpaTexto(r[5]) === turnoBusca) {
+            encontrouReport = true;
+            console.log(`✅ [PUT - PASSO 2] Linha encontrada no Report (Linha ${i + 1}). Sobrescrevendo...`);
+            const payloadRep = [{ range: `'REPORT DIARIO'!A${i + 1}`, values: [linhaGestao] }];
+            const reqRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
+              method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
+            });
+            if (!reqRep.ok) throw new Error(await reqRep.text());
+            break; 
+          }
+        }
+      }
+
+      if (!encontrouReport) {
+        console.warn("⚠️ [PUT - PASSO 2] Linha NÃO encontrada no Report. Fazendo append no final...");
+        const urlAppendRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        const reqAppend = await fetch(urlAppendRep, {
+          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ values: [linhaGestao] })
+        });
+        if (!reqAppend.ok) throw new Error(await reqAppend.text());
+      }
+    } catch (e) { throw new Error(`Falha no Report: ${e.message}`); }
+
+    // 3. ATUALIZA O CONTROLE / SOP
+    try {
+      console.log("📝 [PUT - PASSO 3] Buscando linha na SOP (Controle)...");
+      const urlGetSop = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}?t=${Date.now()}`;
+      const respSop = await fetchWithQueue(urlGetSop, { headers: { "Authorization": `Bearer ${token}` }, cache: "no-store" });
+      
+      if (!respSop.ok) throw new Error(`Falha no GET SOP: ${await respSop.text()}`);
+      
+      const dataSop = await respSop.json();
+      let encontrouSop = false;
+      
+      const linhaControle = [
+        safeVal(rowData[3]), safeVal(rowData[1]), safeVal(rowData[4]), safeVal(rowData[5]),
+        safeVal(rowData[12]), safeVal(rowData[13]), safeVal(rowData[14]), safeVal(rowData[51]),
+        safeVal(rowData[52]), safeVal(rowData[53]), safeVal(rowData[54]), safeVal(rowData[55]),
+        safeVal(rowData[56]), safeVal(rowData[57]), safeVal(rowData[58]), safeVal(rowData[2]),
+        safeVal(rowData[59])
+      ];
+
+      if (dataSop.values) {
+        for (let i = dataSop.values.length - 1; i >= 1; i--) {
+          const r = dataSop.values[i];
+          if (padronizarData(r[0]) === dataBusca && limpaTexto(r[2]) === hubBusca && limpaTexto(r[3]) === turnoBusca) {
+            encontrouSop = true;
+            console.log(`✅ [PUT - PASSO 3] Linha encontrada na SOP (Linha ${i + 1}). Sobrescrevendo...`);
+            const payloadSop = [{ range: `CONTROLE!A${i + 1}`, values: [linhaControle] }];
+            const reqSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
+              method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadSop })
+            });
+            if (!reqSop.ok) throw new Error(await reqSop.text());
+            break;
+          }
+        }
+      }
+
+      if (!encontrouSop) {
+        console.warn("⚠️ [PUT - PASSO 3] Linha NÃO encontrada na SOP. Fazendo append no final...");
+        const urlAppendSop = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+        const reqAppendSop = await fetch(urlAppendSop, {
+          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ values: [linhaControle] })
+        });
+        if (!reqAppendSop.ok) throw new Error(await reqAppendSop.text());
+      }
+    } catch (e) { throw new Error(`Falha na SOP: ${e.message}`); }
+
+    console.log("✅ [PUT] Todas as etapas concluídas com sucesso. Chamando log...");
+    registrarLog("EDITAR", dataBusca, hubBusca, turnoBusca, "Editado nas origens com sucesso", rowData);
+    
+    return { success: true };
+  } catch (error) {
+    console.error("❌ [PUT ERRO CRÍTICO]:", error);
+    const dataAlvoErr = oldRowData ? oldRowData[3] : rowData[3];
+    const hubAlvoErr = oldRowData ? oldRowData[4] : rowData[4];
+    const turnoAlvoErr = oldRowData ? oldRowData[5] : rowData[5];
+    registrarLog("ERRO_EDITAR", dataAlvoErr, hubAlvoErr, turnoAlvoErr, String(error.message));
+    throw error;
   }
 };
 
@@ -149,32 +397,7 @@ export const getConsolidadoData = async () => {
   }
 };
 
-// =================================================================
-// POST (Criar Nova Linha - Via API Oficial)
-// =================================================================
-export const insertRowData = async (rowData) => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${ABA_NOME}!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [rowData] })
-    });
-
-    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-    const jsonResult = await response.json();
-    registrarLog("CRIAR", rowData[3], rowData[4], rowData[5], "Salvo no Consolidado Principal", rowData);
-    return jsonResult;
-  } catch (error) {
-    console.error("Erro na API (POST append):", error);
-    registrarLog("ERRO_CRIAR", rowData[3], rowData[4], rowData[5], String(error.message), rowData);
-    throw error;
-  }
-};
 
 // =================================================================
 // SALVAR DIRETO NAS PLANILHAS DE ORIGEM
@@ -211,130 +434,7 @@ export const salvarNasOrigens = async (payload) => {
   }
 };
 
-// =================================================================
-// PUT (Edição em Bloco Cirúrgico com Auto-Cura / Upsert)
-// =================================================================
-export const updateRowData = async (rowIndex, rowData, oldRowData) => {
-  try {
-    const token = localStorage.getItem("spiToken");
-    if (!token) throw new Error("Usuário não autenticado.");
 
-    const safeVal = (v) => (v === undefined || v === null) ? "" : v;
-    
-    // ATENÇÃO: Garanta que padronizarData e limpaTexto são à prova de falhas
-    // e conseguem comparar o que vem do Sheets com o que vem do seu Frontend.
-    const dataAlvo = padronizarData(oldRowData ? oldRowData[3] : rowData[3]);
-    const hubAlvo = limpaTexto(oldRowData ? oldRowData[4] : rowData[4]);
-    const turnoAlvo = limpaTexto(oldRowData ? oldRowData[5] : rowData[5]);
-
-    console.log("🚀 INICIANDO EDIÇÃO TRIPLA EM BLOCO...");
-
-    // 1. ATUALIZA O CONSOLIDADO (VIA INDEX - NÃO CAUSA DUPLICIDADE)
-    try {
-      const payloadConsolidado = [{ range: `'${ABA_NOME}'!A${rowIndex}`, values: [rowData.map(safeVal)] }];
-      const reqConsol = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`, {
-        method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadConsolidado })
-      });
-      if (!reqConsol.ok) throw new Error(await reqConsol.text());
-    } catch (e) { throw new Error(`Falha no Consolidado: ${e.message}`); }
-
-    // 2. ATUALIZA O REPORT DIARIO (ONDE OCORRE O RISCO DE DUPLICIDADE)
-    try {
-      // CORREÇÃO: Quebra de cache inserida na URL e no Header
-      const urlGetRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/${encodeURIComponent("'REPORT DIARIO'!A:G")}?t=${Date.now()}`;
-      const respRep = await fetchWithQueue(urlGetRep, { 
-        headers: { "Authorization": `Bearer ${token}` },
-        cache: "no-store" // Bloqueia o cache do navegador
-      });
-      
-      const dataRep = await respRep.json();
-      let encontrouReport = false;
-      const linhaGestao = rowData.slice(0, 47).map(safeVal);
-
-      if (dataRep.values) {
-        for (let i = dataRep.values.length - 1; i >= 1; i--) {
-          const r = dataRep.values[i];
-          if (padronizarData(r[3]) === dataAlvo && limpaTexto(r[4]) === hubAlvo && limpaTexto(r[5]) === turnoAlvo) {
-            encontrouReport = true;
-            const payloadRep = [{ range: `'REPORT DIARIO'!A${i + 1}`, values: [linhaGestao] }];
-            const reqRep = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values:batchUpdate`, {
-              method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadRep })
-            });
-            if (!reqRep.ok) throw new Error(await reqRep.text());
-            break; // Para no primeiro que encontrar (o mais recente)
-          }
-        }
-      }
-
-      if (!encontrouReport) {
-        const urlAppendRep = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_REPORTS}/values/'REPORT DIARIO'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-        const reqAppend = await fetch(urlAppendRep, {
-          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ values: [linhaGestao] })
-        });
-        if (!reqAppend.ok) throw new Error(await reqAppend.text());
-      }
-    } catch (e) { throw new Error(`Falha no Report: ${e.message}`); }
-
-    // 3. ATUALIZA O CONTROLE / SOP
-    try {
-      // CORREÇÃO: Quebra de cache inserida na URL e no Header
-      const urlGetSop = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/${encodeURIComponent("CONTROLE!A:E")}?t=${Date.now()}`;
-      const respSop = await fetchWithQueue(urlGetSop, { 
-        headers: { "Authorization": `Bearer ${token}` },
-        cache: "no-store" // Bloqueia o cache do navegador
-      });
-      
-      const dataSop = await respSop.json();
-      let encontrouSop = false;
-      
-      const linhaControle = [
-        safeVal(rowData[3]), safeVal(rowData[1]), safeVal(rowData[4]), safeVal(rowData[5]),
-        safeVal(rowData[12]), safeVal(rowData[13]), safeVal(rowData[14]), safeVal(rowData[51]),
-        safeVal(rowData[52]), safeVal(rowData[53]), safeVal(rowData[54]), safeVal(rowData[55]),
-        safeVal(rowData[56]), safeVal(rowData[57]), safeVal(rowData[58]), safeVal(rowData[2]),
-        safeVal(rowData[59])
-      ];
-
-      if (dataSop.values) {
-        for (let i = dataSop.values.length - 1; i >= 1; i--) {
-          const r = dataSop.values[i];
-          if (padronizarData(r[0]) === dataAlvo && limpaTexto(r[2]) === hubAlvo && limpaTexto(r[3]) === turnoAlvo) {
-            encontrouSop = true;
-            const payloadSop = [{ range: `CONTROLE!A${i + 1}`, values: [linhaControle] }];
-            const reqSop = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values:batchUpdate`, {
-              method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: payloadSop })
-            });
-            if (!reqSop.ok) throw new Error(await reqSop.text());
-            break;
-          }
-        }
-      }
-
-      if (!encontrouSop) {
-        const urlAppendSop = `https://sheets.googleapis.com/v4/spreadsheets/${ID_PLANILHA_SOP}/values/CONTROLE!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-        const reqAppendSop = await fetch(urlAppendSop, {
-          method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ values: [linhaControle] })
-        });
-        if (!reqAppendSop.ok) throw new Error(await reqAppendSop.text());
-      }
-    } catch (e) { throw new Error(`Falha na SOP: ${e.message}`); }
-
-    registrarLog("EDITAR", dataAlvo, hubAlvo, turnoAlvo, "Editado nas origens com sucesso", rowData);
-    return { success: true };
-  } catch (error) {
-    console.error("❌ Erro Crítico na Edição:", error);
-    const dataAlvoErr = oldRowData ? oldRowData[3] : rowData[3];
-    const hubAlvoErr = oldRowData ? oldRowData[4] : rowData[4];
-    const turnoAlvoErr = oldRowData ? oldRowData[5] : rowData[5];
-    registrarLog("ERRO_EDITAR", dataAlvoErr, hubAlvoErr, turnoAlvoErr, String(error.message));
-    throw error;
-  }
-};
 
 // =================================================================
 // DELETE (Exclusão)

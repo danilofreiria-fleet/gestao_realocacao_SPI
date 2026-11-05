@@ -467,8 +467,22 @@ const DataTable = () => {
       carregarDados(); 
       
     } catch (error) {
-      console.error(error);
-      alert("Falha na conexão. Verifique sua internet.");
+      console.error("Erro capturado no frontend:", error);
+      
+      // Verifica se o erro é a trava de colisão que enviamos do backend
+      if (error.message && error.message.includes("CONFLITO DE DADOS")) {
+        // Opção 1: Exibir o modal bonitinho que você já tem
+        let payload = [...editFormData];
+        payload[3] = formatDataForGoogle(payload[3]);
+        setDuplicateAlert({ station: payload[4], turno: payload[5], data: payload[3] });
+        
+        // Opção 2: Se preferir apenas o alert nativo do navegador, descomente a linha abaixo e apague as 4 de cima:
+        // alert(error.message);
+      } else {
+        // Se for outro erro (ex: internet caiu, Google fora do ar), mantém a sua mensagem original
+        alert("Falha na conexão. Verifique sua internet.");
+      }
+      
       setIsSaving(false);
     }
   };
