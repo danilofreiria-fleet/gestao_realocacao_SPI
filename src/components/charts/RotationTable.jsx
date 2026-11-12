@@ -332,7 +332,7 @@ export default function RotationTable() {
     return { headers: activeDateCols, rows: finalRows, availableTrips: availableTripsList, wksPast };
   }, [rawData, viewMode, targetWeek, dateRange, searchTerm, selectedHubs, selectedModal, selectedStatus, selectedTrips, selectedClassificacao, sortConfig, regEscolhida, dsMap, cadastroMap]);
 
-  // 🔥 MOTOR DE CÁLCULO E ARREDONDAMENTO
+  // MOTOR DE CÁLCULO E ARREDONDAMENTO
   const summaryMetrics = useMemo(() => {
     let rodou = 0;
     let recusou = 0;

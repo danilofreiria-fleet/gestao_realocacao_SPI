@@ -320,7 +320,7 @@ export default function Premissas() {
               </ul>
             </div>
 
-            {/* 🔥 NOVO: CARD DE DELIVERY SUCCESS */}
+            {/* CARD DE DELIVERY SUCCESS */}
             <div className="flex flex-col bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700 h-full md:col-span-2 xl:col-span-1">
               <div className="flex items-center gap-2 mb-1"><Award size={18} className="text-[#EE4D2D] shrink-0"/><h3 className="font-black text-slate-800 dark:text-white text-sm uppercase">Delivery Success (DS)</h3></div>
               <p className="text-[10px] text-slate-500 font-bold mb-3 uppercase tracking-wider">Taxa de Sucesso na Entrega</p>

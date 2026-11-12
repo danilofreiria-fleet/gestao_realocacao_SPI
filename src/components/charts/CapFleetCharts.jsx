@@ -341,7 +341,7 @@ export default function CapFleetCharts({ data }) {
         </div>
       </div>
 
-      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      {/* BANNER DE STORYTELLING PARA A GESTÃO */}
       <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
           

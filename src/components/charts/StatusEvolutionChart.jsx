@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Cell } from 'recharts';
 import { Calendar, TrendingUp, CalendarDays, Filter, ChevronDown } from 'lucide-react';
 
-// 🔥 IMPORTAÇÃO DO MAPA UNIVERSAL
+// IMPORTAÇÃO DO MAPA DAS REGIONAIS COMPLETO (MAPA_REGIONAL_COMPLETO) PARA USO NO FILTRO DE REGIONAL
 import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
 const STATUS_OPTIONS = ['Ativos', 'Novos', 'Dormentes', 'Risco', 'Churn'];

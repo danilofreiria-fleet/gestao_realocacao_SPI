@@ -34,7 +34,7 @@ const MAPA_REGIONAL = {
   "LM Hub_SP_Presidente Prudente": "SPO3"
 };
 
-// 🔥 DICIONÁRIO DE TRADUÇÃO DOS MESES
+// TRADUÇÃO DOS MESES
 const TRADUZ_MES = {
   'M-01': 'JAN', 'M-02': 'FEV', 'M-03': 'MAR', 'M-04': 'ABR',
   'M-05': 'MAI', 'M-06': 'JUN', 'M-07': 'JUL', 'M-08': 'AGO',
@@ -96,7 +96,7 @@ export default function FirstTripsChart({ firstTripsData, filtrosGlobais = {} })
       }
 
       dadosFinais.push({
-        // 🔥 A MÁGICA: Se for mês, traduz o nome usando o dicionário. Se for semana, deixa "W-XX"
+        // Se for mês, traduz o nome usando o dicionário. Se for semana, deixa "W-XX"
         name: periodo === 'mes' ? (TRADUZ_MES[col.nome] || col.nome) : col.nome,
         quantidade: qtdAtual,
         variacao: Number(variacao.toFixed(1)),

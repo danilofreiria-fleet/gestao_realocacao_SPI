@@ -7,7 +7,7 @@ export default function TimeAnalysisCharts({ data }) {
   const [expandedReg, setExpandedReg] = useState({});
   const [activePizzaDetails, setActivePizzaDetails] = useState(null); 
   
-  // 🔥 TRUQUE DE PERFORMANCE (Debounce Visual para evitar Lag)
+  // Debounce Visual para evitar Lag
   const [isRendering, setIsRendering] = useState(false);
 
   useEffect(() => {
@@ -238,7 +238,7 @@ export default function TimeAnalysisCharts({ data }) {
   return (
     <div className="space-y-6 relative">
       
-      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      {/* BANNER DE STORYTELLING PARA A GESTÃO */}
       <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
           
@@ -342,7 +342,7 @@ export default function TimeAnalysisCharts({ data }) {
                   label={{fontSize: 12, fontWeight: 'bold'}}
                   className="cursor-pointer"
                   onClick={(entry) => handlePizzaClick(entry, 'INÍCIO')}
-                  isAnimationActive={isRendering} // 🔥 Trava do FPS
+                  isAnimationActive={isRendering} // Trava do FPS
                 >
                   {chartInicio.map((entry, index) => <Cell key={`cell-ini-${index}`} fill={entry.fill} className="hover:opacity-80 transition-opacity" />)}
                 </Pie>
@@ -367,7 +367,7 @@ export default function TimeAnalysisCharts({ data }) {
                   label={{fontSize: 12, fontWeight: 'bold'}}
                   className="cursor-pointer"
                   onClick={(entry) => handlePizzaClick(entry, 'FIM')}
-                  isAnimationActive={isRendering} // 🔥 Trava do FPS
+                  isAnimationActive={isRendering} // Trava do FPS
                 >
                   {chartFim.map((entry, index) => <Cell key={`cell-fim-${index}`} fill={entry.fill} className="hover:opacity-80 transition-opacity" />)}
                 </Pie>
@@ -422,7 +422,7 @@ export default function TimeAnalysisCharts({ data }) {
       </div>
 
 
-      {/* 4. 🔥 TABELA DE ATRASOS CRÍTICOS 🔥 */}
+      {/* 4. TABELA DE ATRASOS CRÍTICOS */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 flex flex-col print:break-inside-avoid" style={{ maxHeight: '600px' }}>
         
         {/* BARRA VERMELHA */}

@@ -2,14 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
 import { Database, Calculator, TrendingUp, Maximize2, Minimize2, X, Info, Filter } from 'lucide-react';
 
-// 🔥 IMPORTAÇÃO DO MAPA UNIVERSAL
+// IMPORTAÇÃO DO MAPA UNIVERSAL
 import { MAPA_REGIONAL_COMPLETO } from '../../constants/regionais';
 
 export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
   const [fullscreenChart, setFullscreenChart] = useState(null);
   const [localTurno, setLocalTurno] = useState('ALL'); 
 
-  // 🔥 CORREÇÃO 1: Os filtros agora nascem como Arrays vazios
+  // Os filtros agora nascem como Arrays vazios
   const { regional = [], station = [], turno = [] } = filtrosGlobais;
 
   const parseNum = (val) => {
@@ -63,7 +63,7 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
 
   const filteredChartData = useMemo(() => {
     return chartData.filter(item => {
-      // 🔥 AGORA ELE LÊ DO MAPA COMPLETO
+      // LÊ DO MAPA COMPLETO
       const regDoItem = MAPA_REGIONAL_COMPLETO[item.fullName] || "";
       
       let matchTurno = true;
@@ -73,7 +73,7 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
         matchTurno = turno.includes(item.turno);
       }
 
-      // 🔥 CORREÇÃO 2: Lendo os Arrays de Filtro Múltiplo
+      // Lendo os Arrays de Filtro Múltiplo
       const matchRegional = regional.length === 0 || regional.includes(regDoItem);
       const matchStation = station.length === 0 || station.includes(item.fullName); 
       
@@ -166,7 +166,7 @@ export default function FleetGapCharts({ baseData, filtrosGlobais = {} }) {
   return (
     <div className="mt-6 flex flex-col gap-6">
       
-      {/* 🔥 BANNER DE STORYTELLING: GESTÃO DE FROTA */}
+      {/* BANNER DE STORYTELLING: GESTÃO DE FROTA */}
       <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
           

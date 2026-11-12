@@ -67,7 +67,7 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
           realocPre: 0, realocDur: 0, realocTotal: 0,
           naoExpCoube: 0, naoExpOutros: 0, naoExpTotal: 0,
           ofertaCap: 0, carregadoCap: 0,
-          volProc: 0, volExp: 0, // 🔥 Adicionado para matemática absoluta
+          volProc: 0, volExp: 0, 
           taxaCorrecao: 0, desvioFleet: 0, desvioHub: 0,
           eficiencia: 0, count: 0
         };
@@ -86,7 +86,7 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
       d.ofertaCap += (parseNum(row[20]) + parseNum(row[23])); 
       d.carregadoCap += (parseNum(row[25]) + parseNum(row[28]));
 
-      // 🔥 PUXA OS VOLUMES CRUS PARA MATEMÁTICA PERFEITA
+      // PUXA OS VOLUMES CRUS PARA CALCULO
       d.volProc += parseNum(row[13]); 
       d.volExp += parseNum(row[14]); 
 
@@ -99,7 +99,7 @@ export default function PackagesAndReallocation({ rawData, filtrosGlobais = {} }
     let prevNaoExp = null;
 
     return result.map(d => {
-      // 🔥 MATEMÁTICA ABSOLUTA: Abandona o average e usa = (A / B) * 100
+      // Abandonei o average e usei na mão = (A / B) * 100
       d.eficiencia = d.volProc > 0 ? (d.volExp / d.volProc) * 100 : 0;
       d.desvioFleet = d.volProc > 0 ? (d.naoExpCoube / d.volProc) * 100 : 0;
       d.desvioHub = d.volProc > 0 ? (d.naoExpOutros / d.volProc) * 100 : 0;
@@ -219,7 +219,7 @@ return (
         </div>
       </div>
 
-      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      {/*  BANNER DE STORYTELLING PARA A GESTÃO */}
       <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
           

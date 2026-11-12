@@ -967,7 +967,7 @@ export const getOfertasDriversData = async () => {
                 fetchAllAbas(idSPI, abasSPI),
                 fetchAllAbas(idSPM, abasSPM)
             ]);
-            // 🔥 Sem fatiamento (slice), empilhamos todos os dados
+            // empilhamento dos dados 
             result = resSPI.concat(resSPM);
         }
 

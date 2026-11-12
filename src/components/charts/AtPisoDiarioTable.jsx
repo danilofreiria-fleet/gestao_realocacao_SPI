@@ -13,7 +13,7 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
 
   const formatInt = (val) => new Intl.NumberFormat('pt-BR').format(Math.round(val || 0));
 
-  // 🔥 EXTRATOR MATEMÁTICO BLINDADO
+  // EXTRATOR MATEMÁTICO 
   const extractWeekNumber = (str) => {
     const match = String(str || "").trim().match(/^W[- ]?0*(\d+)$/i);
     return match ? parseInt(match[1], 10) : -1;
@@ -105,7 +105,7 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
       }
     }
 
-    // 🔥 NOVO: O Cabeçalho na planilha nova é sempre a linha 0!
+    // O Cabeçalho na planilha é sempre a linha 0
     const headerRowIdx = 0; 
     const headerRow = atPisoData[headerRowIdx];
 
@@ -142,13 +142,13 @@ export default function AtPisoDiarioTable({ data, rawData, atPisoData, filtrosGl
 
     for (let i = headerRowIdx + 1; i < atPisoData.length; i++) {
       const row = atPisoData[i];
-      // 🔥 A Planilha nova tem o Hub na Coluna C (Índice 2)
+      // Hub na Coluna C (Índice 2)
       const rawHubName = String(row[2] || "").trim(); 
       if (!rawHubName) continue;
 
       if (validHubs.size > 0 && !validHubs.has(rawHubName)) continue;
 
-      // 🔥 A Planilha nova tem a Subregional na Coluna B (Índice 1)
+      // Subregional na Coluna B (Índice 1)
       const subregional = String(row[1] || "Sem Subregional").trim();
       
       let total = 0, seg = 0, ter = 0, qua = 0, qui = 0, sex = 0, sab = 0, dom = 0;

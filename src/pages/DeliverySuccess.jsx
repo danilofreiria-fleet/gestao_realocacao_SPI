@@ -491,7 +491,7 @@ export default function DeliverySuccess() {
         return { id: d.id, nome: d.nome, veiculo: d.veiculo, regional: d.regional, scoresTotal, scoresD0, scoresMesTotal, scoresMesD0 };
       });
 
-      // 🔥 FILTRO DE CLASSIFICAÇÃO DS (Analisa a coluna mais recente visível)
+      // (Analisa a coluna mais recente visível)
       if (selectedClassificacao !== 'ALL') {
           const colsToUse = driverViewMode.includes('MONTH') ? colMeses : colSemanasFiltradas;
           const refCol = colsToUse.length > 0 ? colsToUse[colsToUse.length - 1].id : null;

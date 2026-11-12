@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Database, ShieldAlert, Settings, Target, Zap, ChevronDown, ChevronRight, CalendarDays, Calendar, Filter } from 'lucide-react';
 
-// 🔥 IMPORTAÇÃO DINÂMICA DA FONTE ÚNICA DA VERDADE
+// IMPORTAÇÃO DINÂMICA DA FONTE 
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../../constants/regionais';
 
 const TRADUZ_MES = { '01':'JAN', '02':'FEV', '03':'MAR', '04':'ABR', '05':'MAI', '06':'JUN', '07':'JUL', '08':'AGO', '09':'SET', '10':'OUT', '11':'NOV', '12':'DEZ' };
@@ -10,7 +10,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
   const [viewMode, setViewMode] = useState('semana'); 
   const [expandedReg, setExpandedReg] = useState({});
 
-  // 🔥 DESCOBRE QUAIS REGIONAIS ESTÃO PERMITIDAS PARA ESTE USUÁRIO (ex: SPM01, SPM02...)
+  // DESCOBRE REGIONAIS PERMITIDAS PARA ESTE USUÁRIO (ex: SPM01, SPM02...)
   const regionaisPermitidas = useMemo(() => {
     const regEscolhida = localStorage.getItem("selectedRegional");
     const hubs = getHubsPermitidos(regEscolhida);
@@ -82,7 +82,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
 
   const isGlobalFiltroActive = (arr) => arr && arr.length > 0 && !arr.some(v => String(v).toLowerCase().includes('todas') || String(v).toLowerCase().includes('todos'));
 
-  // 🔥 MOTOR DE PROCESSAMENTO UNIFICADO HÍBRIDO
+  // MOTOR DE PROCESSAMENTO UNIFICADO HÍBRIDO
   const onePageData = useMemo(() => {
     const aggs = {};
     
@@ -103,7 +103,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
 
     opSet.forEach(row => {
       const station = String(row[4] || "").trim();
-      // 🔥 Usa o MAPA_REGIONAL_COMPLETO para achar a qual regional esse hub pertence
+      // Usa o MAPA_REGIONAL_COMPLETO para achar a qual regional esse hub pertence
       const regional = MAPA_REGIONAL_COMPLETO[station];
       
       // Só processa se a regional existir no grupo de aggs (que já foi filtrado por SPI/SPM no começo)
@@ -183,7 +183,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
       });
 
       firstTripsData.slice(1).forEach(row => {
-        const st = String(row[2] || "").trim(); // 🔥 Lembrar que aqui o Station está no índice 2
+        const st = String(row[2] || "").trim(); // o Station está no índice 2
         const regional = MAPA_REGIONAL_COMPLETO[st];
         if (!regional || !aggs[regional]) return;
 
@@ -217,7 +217,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
 
   const toggleExpandReg = (id) => setExpandedReg(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // 🔥 VARIÁVEIS DINÂMICAS DE TÍTULO
+  // VARIÁVEIS DINÂMICAS DE TÍTULO
   let bannerTitle = "";
   let colSuffix = "";
   if (viewMode === 'semana') {
@@ -253,7 +253,7 @@ export default function OnePageSPI({ rawData, data, baseData, historicoFrotaData
         </div>
       </div>
 
-      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO: AT NO PISO */}
+      {/* BANNER DE STORYTELLING PARA A GESTÃO: AT NO PISO */}
       <div className="p-5 md:p-6 bg-white dark:bg-[#1f232d] border-b border-slate-200 dark:border-gray-800">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
           

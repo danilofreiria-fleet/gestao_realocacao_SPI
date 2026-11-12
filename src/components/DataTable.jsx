@@ -36,7 +36,7 @@ const DataTable = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [duplicateAlert, setDuplicateAlert] = useState(null); 
 
-  // 🔥 ESTADO ÚNICO DE FILTROS (Sem Rascunho!)
+  // ESTADO ÚNICO DE FILTROS
   const initialFilters = { regional: [], ano: '', mes: '', semana: [], station: [], dataInicio: '', dataFim: '' };
   const [appliedFilters, setAppliedFilters] = useState(initialFilters);
   

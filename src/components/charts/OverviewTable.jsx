@@ -86,7 +86,7 @@ export default function OverviewTable({ data, rawData, baseData, historicoFrotaD
   }, [filtrosGlobais, currentWeekStr]);
 
   const actualMonthStr = useMemo(() => {
-    // 🔥 DICIONÁRIO DE MESES TURBINADO (Lida com o nome inteiro também)
+    // DICIONÁRIO DE MESES 
     const TR_REV = { 'JAN':'01', 'JANEIRO':'01', 'FEV':'02', 'FEVEREIRO':'02', 'MAR':'03', 'MARÇO':'03', 'ABR':'04', 'ABRIL':'04', 'MAI':'05', 'MAIO':'05', 'JUN':'06', 'JUNHO':'06', 'JUL':'07', 'JULHO':'07', 'AGO':'08', 'AGOSTO':'08', 'SET':'09', 'SETEMBRO':'09', 'OUT':'10', 'OUTUBRO':'10', 'NOV':'11', 'NOVEMBRO':'11', 'DEZ':'12', 'DEZEMBRO':'12' };
     if (filtrosGlobais?.mes && !String(filtrosGlobais.mes).toLowerCase().includes('mês')) {
       const mesStr = String(filtrosGlobais.mes).trim().toUpperCase();
@@ -419,7 +419,7 @@ export default function OverviewTable({ data, rawData, baseData, historicoFrotaD
   return (
     <div className="flex flex-col gap-6 mt-6">
       
-      {/* 1. 🔥 BANNERS INFORMATIVOS (Movidos para o topo, sozinhos) 🔥 */}
+      {/* 1. BANNERS INFORMATIVOS */}
       <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-5 md:p-6 print:hidden animate-in fade-in duration-500">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
           <div className="flex gap-3 items-start">

@@ -151,7 +151,7 @@ export default function VolumeDispatchCharts({ data }) {
 
           const gapSpr = Number((sprAvg - sprPlannedAvg).toFixed(2));
 
-          // 🔥 CÁLCULO DE PROPORÇÃO (%) DOS MODAIS
+          // CÁLCULO DE PROPORÇÃO (%) DOS MODAIS
           const pctUtil = d.cargTotal > 0 ? Number(((d.cargUtil / d.cargTotal) * 100).toFixed(1)) : 0;
           const pctPass = d.cargTotal > 0 ? Number(((d.cargPass / d.cargTotal) * 100).toFixed(1)) : 0;
           const pctMoto = d.cargTotal > 0 ? Number(((d.cargMoto / d.cargTotal) * 100).toFixed(1)) : 0;
@@ -558,7 +558,7 @@ export default function VolumeDispatchCharts({ data }) {
         </div>
       </div>
 
-      {/* 🔥 BANNER DE STORYTELLING PARA A GESTÃO */}
+      {/* BANNER DE STORYTELLING PARA A GESTÃO */}
       <div className="bg-white dark:bg-[#1f232d] p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 shrink-0 print:hidden">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50 dark:bg-[#15171e] p-5 rounded-xl border border-slate-200 dark:border-gray-700">
           
@@ -617,7 +617,7 @@ export default function VolumeDispatchCharts({ data }) {
         {/* GRÁFICO ABSOLUTO DE MODAIS */}
         <ToggleableChartCard id="modais" titleBase="ROTAS CARREGADAS [POR MODAL]" isModal={true} colSpan="xl:col-span-2" />
         
-        {/* 🔥 NOVO GRÁFICO DE PROPORÇÃO DE MODAIS */}
+        {/* GRÁFICO DE PROPORÇÃO DE MODAIS */}
         <ToggleableChartCard id="modaisProportion" titleBase="PROPORÇÃO DE MODAIS EXPEDIDOS (%)" isProportion={true} colSpan="xl:col-span-2" />
       </div>
     </div>

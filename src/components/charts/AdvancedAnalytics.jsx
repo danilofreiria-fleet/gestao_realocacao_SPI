@@ -252,7 +252,7 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
     }
 
     // ==========================================
-    // 🔥 GERADOR HTML BLINDADO (SEATALK FRIENDLY)
+    // GERADOR HTML BLINDADO (SEATALK FRIENDLY)
     // ==========================================
     // SeaTalk ignora <br> e \n soltos. A única forma de forçar a quebra é usando blocos <div> e &nbsp;
     const getRowHtml = (emoji, nome, util, spr) => {
@@ -291,11 +291,11 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
 
   const DOW_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  // 🔥 TRAVA DE BLOQUEIO SE NÃO SELECIONAR TURNO/HUB
+  // TRAVA DE BLOQUEIO SE NÃO SELECIONAR TURNO/HUB
   const targetStation = station || (filtrosGlobais.station && filtrosGlobais.station[0]);
   const isCalculadoraBloqueada = !targetStation || localTurno === 'ALL';
 
-  // 🔥 CÓPIA DE RICH TEXT (Forçando preserveção de quebras)
+  // CÓPIA DE RICH TEXT (Forçando preserveção de quebras)
   const handleCopy = async () => {
     try {
       const el = document.createElement('div');
@@ -396,7 +396,7 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
 
           <div className="bg-white dark:bg-[#1f232d] rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 p-6 flex flex-col gap-6 relative overflow-hidden">
             
-            {/* 🔥 OVERLAY DE BLOQUEIO SE NÃO SELECIONAR TURNO */}
+            {/* OVERLAY DE BLOQUEIO SE NÃO SELECIONAR TURNO */}
             {isCalculadoraBloqueada && (
               <div className="absolute inset-0 z-20 bg-white/80 dark:bg-[#1f232d]/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
                 <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 p-4 rounded-full mb-4">
@@ -523,7 +523,7 @@ export default function AdvancedAnalytics({ rawData, baseData, filtrosGlobais = 
         {/* LADO DIREITO: LAUDO E TICKET DA SOLICITAÇÃO (col-span-7) */}
         <div className="xl:col-span-7 flex flex-col gap-6 relative">
           
-          {/* 🔥 OVERLAY DE BLOQUEIO SE NÃO SELECIONAR TURNO */}
+          {/* OVERLAY DE BLOQUEIO SE NÃO SELECIONAR TURNO */}
           {isCalculadoraBloqueada && (
             <div className="absolute inset-0 z-20 bg-white/80 dark:bg-[#1f232d]/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center rounded-2xl border border-blue-200">
               <div className="bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 p-4 rounded-full mb-4 shadow-sm border border-blue-100">

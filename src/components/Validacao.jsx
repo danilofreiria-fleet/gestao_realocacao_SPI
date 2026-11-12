@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getConsolidadoData, getBaseReferenceData } from '../api/googleSheets';
 import { AlertCircle, CheckCircle2, Search, Filter, ShieldCheck, AlertTriangle, ArrowRightCircle, CalendarDays, MapPin, Clock, Download, ChevronDown, X } from 'lucide-react';
 
-// 🔥 IMPORTAÇÃO DINÂMICA
+// IMPORTAÇÃO DINÂMICA
 import { MAPA_REGIONAL_COMPLETO, getHubsPermitidos } from '../constants/regionais';
 
 const TURNOS_ESPERADOS = ['AM', 'PM1', 'PM2']; 
@@ -58,7 +58,7 @@ export default function Validacao() {
   const [buscaHub, setBuscaHub] = useState('');
   const [isDropdownHubOpen, setIsDropdownHubOpen] = useState(false);
 
-  // 🔥 DESCOBRINDO HUBS E REGIONAIS PERMITIDOS DO USUÁRIO LOGADO
+  // HUBS E REGIONAIS PERMITIDOS DO USUÁRIO LOGADO
   const regEscolhida = localStorage.getItem("selectedRegional");
   
   const STATIONS_ESPERADAS = useMemo(() => {
@@ -85,7 +85,7 @@ export default function Validacao() {
       
       const allowedHubs = getHubsPermitidos(regEscolhida);
 
-      // 🔥 FILTRAGEM NA RAIZ: Só guarda no estado os hubs permitidos
+      // Só guarda no estado os hubs permitidos
       if (data && data.length > 0) {
         setRawData(data.slice(1).filter(r => allowedHubs.includes(String(r[4]).trim())));
       }
